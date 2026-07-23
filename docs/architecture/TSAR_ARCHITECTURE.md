@@ -1125,6 +1125,159 @@ Phase 6: WARM-UP TRADING (25min+)
 
 ---
 
+## 13. LLM PROVIDER ABSTRACTION
+
+### 13.1 Architecture
+
+All LLM calls go through a `BaseLLMProvider` abstract class. No direct provider SDK calls anywhere in the codebase. Providers are discovered via `ProviderRegistry` and configured via `config/llm_providers.yaml`.
+
+```
+┌──────────────────┐    ┌──────────────────┐    ┌──────────────────┐
+│  BaseLLMProvider │◄───│  ProviderRegistry│───►│  ModelRouter     │
+│  (abstract)      │    │  (discovery)     │    │  (config-driven  │
+│                  │    └──────────────────┘    │   fallback chains)│
+│  • OllamaProvider│                             └──────────┬───────┘
+│  • OpenAIProvider│                                        │
+│  • AnthropicProv │                                        ▼
+└──────────────────┘                             ┌──────────────────┐
+                                                 │  All Agents      │
+                                                 │  (via task_type) │
+                                                 └──────────────────┘
+```
+
+### 13.2 Provider Interface
+
+```python
+class BaseLLMProvider(ABC):
+    def descriptor(self) -> ModelDescriptor: ...
+    async def generate(self, prompt, **kwargs) -> LLMResponse: ...
+    async def stream(self, prompt, **kwargs) -> AsyncIterator[str]: ...
+    async def count_tokens(self, text) -> int: ...
+    async def health_check(self) -> bool: ...
+```
+
+### 13.3 Task-Type Routing
+
+No model names in agent code. Agents call `router.generate(task_type="trade_narrative", prompt=...)` and the router selects the best available provider from the config-defined fallback chain.
+
+### 13.4 Configuration
+
+All model names, API keys, and fallback chains defined in `config/llm_providers.yaml`. **No model names in Python source code.**
+
+---
+
+## 14. CLOUDEVENTS MESSAGING PROTOCOL
+
+### 14.1 Standard
+
+All inter-agent messages use **CloudEvents v1.0** (CNCF standard) as the envelope format.
+
+### 14.2 Envelope Format
+
+```
+CloudEvent:
+  specversion: "1.0"              # CloudEvents version
+  id: ULID                        # Globally unique, time-sortable
+  source: "tsar/agent/{name}"     # Event source
+  type: "tsar.{domain}.{action}.v1"  # Event type
+  time: RFC3339                   # Event timestamp
+  datacontenttype: "application/json"
+  data: dict                      # Event payload
+  trace_id: string                # Distributed tracing (TSAR extension)
+  priority: int                   # 0=critical, 1=high, 2=normal, 3=low
+  agent: string                   # Publishing agent name
+```
+
+### 14.3 Canonical Event Types
+
+| Domain | Event Types |
+|--------|-------------|
+| Regime | `tsar.regime.change.v1`, `tsar.regime.update.v1` |
+| Signal | `tsar.signal.generated.v1`, `tsar.signal.validated.v1` |
+| Risk | `tsar.risk.decision.v1`, `tsar.risk.veto_all.v1`, `tsar.risk.kill_switch.v1` |
+| Order | `tsar.order.placed.v1`, `tsar.order.filled.v1`, `tsar.order.cancelled.v1` |
+| Position | `tsar.position.opened.v1`, `tsar.position.closed.v1`, `tsar.portfolio.snapshot.v1` |
+| Analytics | `tsar.analytics.trade_analysis.v1`, `tsar.analytics.lesson_created.v1` |
+| Strategy | `tsar.strategy.mutation.v1`, `tsar.strategy.retired.v1` |
+| Health | `tsar.health.heartbeat.v1`, `tsar.health.dying.v1` |
+
+### 14.4 Serialization
+
+- **Wire format:** MessagePack (binary, 30-50% smaller than JSON)
+- **Debug format:** JSON (via `redis-cli`)
+- **Transport:** Redis Streams (unchanged)
+
+---
+
+## 15. IMPROVEMENT MEASUREMENT FRAMEWORK
+
+### 15.1 Purpose
+
+Prove the system is getting better with every trade. Baseline metrics recorded after first 30 trades, daily snapshots track trends.
+
+### 15.2 Core Metrics
+
+| Metric | Description | Target Direction |
+|--------|-------------|-----------------|
+| Sharpe Ratio (30d) | Rolling risk-adjusted return | ↑ Increasing |
+| Win Rate (30d) | Rolling win percentage | ↑ Increasing |
+| Lesson Application Rate | % of trades where lessons were applied | ↑ Increasing |
+| Knowledge Density | Total patterns + lessons + mutations | ↑ Growing |
+| Strategy Fitness | Average Sharpe of active strategies | ↑ Increasing |
+
+### 15.3 Baseline Recording
+
+After 30 trades, record baseline metrics. All future improvement is measured against this baseline.
+
+### 15.4 Daily Snapshots
+
+Daily snapshot stored in `improvement_snapshots` table. Includes:
+- Performance metrics (Sharpe, win rate, profit factor, drawdown)
+- Learning metrics (lessons created/applied/violated, patterns)
+- Strategy metrics (active, retired, mutations, diversity)
+- Knowledge density (total items, growth rate)
+- Delta from baseline
+
+### 15.5 Verdict Engine
+
+The system produces an **IMPROVING / STABLE / DECLINING** verdict based on trend analysis across all metrics.
+
+---
+
+## 16. TOOL RESOURCE LIMITS
+
+### 16.1 Enforcement
+
+Every tool invocation passes through `ResourceGuard` before execution. Limits enforced via:
+- **Wall-clock timeout** — automatic kill after configured seconds
+- **Memory cap** — monitored per invocation
+- **Concurrency limit** — semaphore per tool
+- **Rate limit** — calls per minute per tool
+- **Circuit breaker** — disabled after repeated violations
+
+### 16.2 Configuration
+
+Resource limits defined in `config/tool_resources.yaml`. Per-tool overrides supported.
+
+### 16.3 Default Limits
+
+| Limit | Default | Rationale |
+|-------|---------|----------|
+| Max memory per tool | 512MB | Prevent runaway allocations |
+| Max wall time | 60s | Prevent hung tools |
+| Max concurrent | 10 | Prevent resource exhaustion |
+| Max calls/min | 1200 | Match exchange rate limits |
+
+### 16.4 Violation Handling
+
+| Violations | Action |
+|-----------|--------|
+| 1-2 | Log warning |
+| 3-4 | Log error, alert |
+| 5+ | Circuit breaker: disable tool |
+
+---
+
 ## APPENDIX A: CANONICAL VALUES REFERENCE
 
 | Parameter | Canonical Value | Source |
@@ -1137,6 +1290,11 @@ Phase 6: WARM-UP TRADING (25min+)
 | Kelly fraction | 0.25 (Half-Kelly) | This document |
 | Max correlation | 0.7 | This document |
 | Message format | MessagePack (JSON fallback) | This document |
+| Message envelope | CloudEvents v1.0 | This document §14 |
+| LLM provider | BaseLLMProvider abstract class | This document §13 |
+| Model config | config/llm_providers.yaml | This document §13.4 |
+| Improvement baseline | After 30 trades | This document §15.3 |
+| Tool resource guard | ResourceGuard + ToolExecutor | This document §16 |
 | Rust version | 1.79 | This document |
 | Python version | 3.12 | This document |
 | FastAPI port | 8000 | This document |
