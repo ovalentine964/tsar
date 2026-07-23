@@ -76,3 +76,38 @@ redis-flush: ## Flush Redis (DEV ONLY — destroys all data!)
 	@echo "⚠️  This will delete ALL Redis data. Press Ctrl+C to abort."
 	@sleep 3
 	docker compose exec redis redis-cli -a $${REDIS_PASSWORD:-tsar_dev_password} FLUSHDB
+
+# --- One-Command Setup ---
+
+setup: ## 🚀 One-command setup — install, configure, test, run
+	@echo ""
+	@echo "╔══════════════════════════════════════════════════════╗"
+	@echo "║         TSAR — Trading Super Agent for Returns      ║"
+	@echo "║                 One-Command Setup                    ║"
+	@echo "╚══════════════════════════════════════════════════════╝"
+	@echo ""
+	@echo "Step 1/5: Installing dependencies..."
+	@pip install -e ".[dev]" 2>&1 | tail -3
+	@echo ""
+	@echo "Step 2/5: Checking Python version..."
+	@python -c "import sys; v=sys.version_info; assert v >= (3,12), f'Need Python 3.12+, got {v.major}.{v.minor}'; print(f'  ✅ Python {v.major}.{v.minor}.{v.micro}')"
+	@echo ""
+	@echo "Step 3/5: Creating data directory..."
+	@mkdir -p data
+	@echo "  ✅ data/ created"
+	@echo ""
+	@echo "Step 4/5: Running setup wizard..."
+	@python scripts/setup.py
+	@echo ""
+	@echo "Step 5/5: Running tests..."
+	@python -m pytest tests/ -v --tb=short -q 2>&1 | tail -5
+	@echo ""
+	@echo "╔══════════════════════════════════════════════════════╗"
+	@echo "║                 Setup Complete!                      ║"
+	@echo "╠══════════════════════════════════════════════════════╣"
+	@echo "║  Start trading:    make run                          ║"
+	@echo "║  Paper trading:    make run-dry                      ║"
+	@echo "║  Run tests:        make test                         ║"
+	@echo "║  Docker:           make docker-up                    ║"
+	@echo "╚══════════════════════════════════════════════════════╝"
+	@echo ""
