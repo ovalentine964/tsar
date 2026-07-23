@@ -1,55 +1,108 @@
-# Python
+# ============================================================
+# TSAR — .gitignore
+# ============================================================
+
+# --- Environment & Secrets ---
+.env
+.env.local
+.env.*.local
+*.key
+*.pem
+*.p12
+
+# --- Python ---
 __pycache__/
 *.py[cod]
 *$py.class
+*.so
 *.egg-info/
+*.egg
 dist/
 build/
-.eggs/
-*.egg
-.venv/
+eggs/
+*.whl
+pip-log.txt
+pip-delete-this-directory.txt
+.tox/
+.nox/
+.coverage
+.coverage.*
+htmlcov/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+*.pyo
+*.pyd
+.Python
 venv/
+.venv/
 env/
+ENV/
 
-# Rust
+# --- Rust ---
 target/
 Cargo.lock
+**/*.rs.bk
+*.pdb
 
-# IDE
+# --- C++ ---
+*.o
+*.obj
+*.so
+*.dylib
+*.dll
+*.lib
+*.a
+*.out
+*.exe
+CMakeCache.txt
+CMakeFiles/
+cmake-build-*/
+Makefile.local
+
+# --- Docker ---
+.docker/
+
+# --- IDE ---
 .idea/
 .vscode/
 *.swp
 *.swo
 *~
+.project
+.classpath
+.settings/
+*.sublime-project
+*.sublime-workspace
+*.code-workspace
 
-# Environment
-.env
-.env.local
-*.env
-
-# Database
-*.db
-*.db-journal
-*.db-wal
-
-# Logs
-*.log
-logs/
-
-# OS
+# --- OS ---
 .DS_Store
 Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
 
-# Docker
-.docker/
+# --- Data (generated, not source) ---
+data/*.db
+data/*.db-journal
+data/*.db-wal
+data/backups/
+data/audit/
+logs/
+*.log
 
-# Monitoring
-grafana/data/
+# --- TSAR Runtime ---
+/tmp/tsar_kill_switch
+*.pid
 
-# Node
-node_modules/
+# --- Jupyter ---
+.ipynb_checkpoints/
+*.ipynb
 
-# Misc
-*.tmp
-*.bak
-.cache/
+# --- Coverage & Reports ---
+coverage.xml
+*.cover
+*.py,cover
+.hypothesis/
+reports/

@@ -1,0 +1,249 @@
+# ============================================================
+# TSAR — LLM Model Configuration
+# ============================================================
+# Zero model names in source code. All routing via task_type.
+# See TSAR_ARCHITECTURE.md §8
+
+# --- Provider Definitions ---
+providers:
+  ollama:
+    type: "ollama"
+    base_url: "http://localhost:11434"
+    timeout_s: 30
+    max_concurrent: 4
+
+  deepseek:
+    type: "openai_compatible"
+    api_key: "${DEEPSEEK_API_KEY}"
+    base_url: "https://api.deepseek.com"
+    timeout_s: 60
+    max_concurrent: 2
+
+  openai:
+    type: "openai_compatible"
+    api_key: "${OPENAI_API_KEY}"
+    base_url: "https://api.openai.com/v1"
+    timeout_s: 60
+    max_concurrent: 2
+
+  nvidia_nim:
+    type: "openai_compatible"
+    api_key: "${NVIDIA_API_KEY}"
+    base_url: "https://integrate.api.nvidia.com/v1"
+    timeout_s: 60
+    max_concurrent: 2
+
+# --- Model Definitions ---
+models:
+  ollama/qwen2.5:7b:
+    display_name: "Qwen 2.5 7B (Local)"
+    provider: "ollama"
+    capabilities:
+      - text_generation
+      - streaming
+      - tool_use
+      - json_mode
+    max_context_tokens: 32768
+    max_output_tokens: 8192
+    cost_per_1k_input_tokens: 0.0
+    cost_per_1k_output_tokens: 0.0
+
+  ollama/qwen2.5:32b:
+    display_name: "Qwen 2.5 32B (Local)"
+    provider: "ollama"
+    capabilities:
+      - text_generation
+      - streaming
+      - tool_use
+      - json_mode
+      - reasoning
+    max_context_tokens: 32768
+    max_output_tokens: 8192
+    cost_per_1k_input_tokens: 0.0
+    cost_per_1k_output_tokens: 0.0
+
+  ollama/llama3.1:8b:
+    display_name: "Llama 3.1 8B (Local)"
+    provider: "ollama"
+    capabilities:
+      - text_generation
+      - streaming
+      - tool_use
+      - json_mode
+    max_context_tokens: 131072
+    max_output_tokens: 8192
+    cost_per_1k_input_tokens: 0.0
+    cost_per_1k_output_tokens: 0.0
+
+  ollama/all-minilm-l6-v2:
+    display_name: "All-MiniLM L6 v2 (Embeddings)"
+    provider: "ollama"
+    capabilities:
+      - embeddings
+    max_context_tokens: 512
+    cost_per_1k_input_tokens: 0.0
+    cost_per_1k_output_tokens: 0.0
+
+  deepseek/deepseek-reasoner:
+    display_name: "DeepSeek Reasoner"
+    provider: "deepseek"
+    capabilities:
+      - text_generation
+      - streaming
+      - tool_use
+      - reasoning
+    max_context_tokens: 65536
+    max_output_tokens: 8192
+    cost_per_1k_input_tokens: 0.00055
+    cost_per_1k_output_tokens: 0.00219
+
+  nvidia_nim/deepseek-ai/deepseek-r1:
+    display_name: "DeepSeek R1 via NVIDIA NIM"
+    provider: "nvidia_nim"
+    capabilities:
+      - text_generation
+      - streaming
+      - tool_use
+      - reasoning
+    max_context_tokens: 65536
+    max_output_tokens: 8192
+    cost_per_1k_input_tokens: 0.0
+    cost_per_1k_output_tokens: 0.0
+
+  openai/gpt-4o-mini:
+    display_name: "GPT-4o Mini"
+    provider: "openai"
+    capabilities:
+      - text_generation
+      - streaming
+      - tool_use
+      - json_mode
+    max_context_tokens: 128000
+    max_output_tokens: 16384
+    cost_per_1k_input_tokens: 0.00015
+    cost_per_1k_output_tokens: 0.0006
+
+# --- Task Type Routing ---
+# Agents call: router.generate(task_type="t2_signal_narrative")
+# No model names in agent code.
+
+routing:
+  # --- Tier 1: Embeddings (local only) ---
+  t1_pattern_embedding:
+    primary: "ollama/all-minilm-l6-v2"
+    fallback: []
+    params: {}
+
+  # --- Tier 2: Routine tasks (local preferred) ---
+  t2_regime_explanation:
+    primary: "ollama/qwen2.5:7b"
+    fallback:
+      - "ollama/llama3.1:8b"
+    params:
+      max_tokens: 1024
+      temperature: 0.3
+
+  t2_signal_narrative:
+    primary: "ollama/qwen2.5:7b"
+    fallback:
+      - "ollama/llama3.1:8b"
+    params:
+      max_tokens: 1024
+      temperature: 0.3
+
+  t2_risk_explanation:
+    primary: "ollama/qwen2.5:7b"
+    fallback:
+      - "ollama/llama3.1:8b"
+    params:
+      max_tokens: 512
+      temperature: 0.2
+
+  t2_trade_summary:
+    primary: "ollama/qwen2.5:7b"
+    fallback:
+      - "ollama/llama3.1:8b"
+    params:
+      max_tokens: 1024
+      temperature: 0.3
+
+  t2_news_sentiment:
+    primary: "ollama/qwen2.5:7b"
+    fallback:
+      - "ollama/llama3.1:8b"
+    params:
+      max_tokens: 512
+      temperature: 0.1
+
+  t2_daily_summary:
+    primary: "ollama/qwen2.5:7b"
+    fallback:
+      - "ollama/llama3.1:8b"
+    params:
+      max_tokens: 2048
+      temperature: 0.3
+
+  t2_anomaly_explanation:
+    primary: "ollama/qwen2.5:7b"
+    fallback:
+      - "ollama/llama3.1:8b"
+    params:
+      max_tokens: 1024
+      temperature: 0.3
+
+  t2_strategy_evaluation:
+    primary: "ollama/qwen2.5:7b"
+    fallback:
+      - "ollama/llama3.1:8b"
+    params:
+      max_tokens: 2048
+      temperature: 0.3
+
+  # --- Tier 3: Complex reasoning (cloud preferred) ---
+  t3_trade_narrative:
+    primary: "deepseek/deepseek-reasoner"
+    fallback:
+      - "nvidia_nim/deepseek-ai/deepseek-r1"
+      - "ollama/qwen2.5:32b"
+    params:
+      max_tokens: 4096
+      temperature: 0.3
+
+  t3_strategy_synthesis:
+    primary: "deepseek/deepseek-reasoner"
+    fallback:
+      - "nvidia_nim/deepseek-ai/deepseek-r1"
+      - "ollama/qwen2.5:32b"
+    params:
+      max_tokens: 4096
+      temperature: 0.5
+
+  t3_risk_scenario:
+    primary: "deepseek/deepseek-reasoner"
+    fallback:
+      - "nvidia_nim/deepseek-ai/deepseek-r1"
+      - "ollama/qwen2.5:7b"
+    params:
+      max_tokens: 4096
+      temperature: 0.2
+
+  t3_bias_detection:
+    primary: "deepseek/deepseek-reasoner"
+    fallback:
+      - "nvidia_nim/deepseek-ai/deepseek-r1"
+      - "ollama/qwen2.5:32b"
+    params:
+      max_tokens: 2048
+      temperature: 0.3
+
+# --- Budget Limits ---
+budget:
+  daily_limit_usd: 1.00
+  monthly_limit_usd: 20.00
+  alert_threshold_pct: 80  # Alert at 80% of budget
+
+# --- Circuit Breaker ---
+circuit_breaker:
+  failure_threshold: 5       # Open after 5 consecutive failures
+  recovery_timeout_s: 60     # Try again after 60s
+  half_open_max_calls: 1     # Probe with 1 call

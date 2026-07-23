@@ -1,0 +1,52 @@
+# ============================================================
+# TSAR — Backend Configuration
+# ============================================================
+# Maps abstract interfaces to concrete implementations.
+# Change primary → hot-swap backend. No agent code changes.
+# See TSAR_ARCHITECTURE.md §2.3
+
+exchange_gateway:
+  primary: "src.backends.python.ccxt_gateway.CcxtGateway"
+  fallback:
+    - path: "src.interfaces.exchange.rust_gateway.RustGateway"
+      priority: 200
+  config:
+    sandbox: true
+    rate_limit_per_minute: 1200
+    timeout_s: 15
+
+pricing_engine:
+  primary: "src.interfaces.pricing.pandas_ta_engine.PandasTA"
+  fallback:
+    - path: "src.interfaces.pricing.rust_tick_engine.RustTick"
+      priority: 200
+  config:
+    default_timeframe: "1h"
+
+execution_engine:
+  primary: "src.backends.python.ccxt_exec_engine.CcxtExecEngine"
+  fallback:
+    - path: "src.interfaces.execution.rust_exec_engine.RustExecEngine"
+      priority: 200
+  config:
+    slippage_model: "realistic"  # zero | fixed | realistic
+    slippage_mean_bps: 3
+    slippage_std_bps: 2
+
+risk_engine:
+  primary: "src.interfaces.risk.py_risk_engine.PyRiskEngine"
+  fallback:
+    - path: "src.interfaces.risk.rust_risk_engine.RustRiskEngine"
+      priority: 200
+  config:
+    config_path: "config/risk.yaml"
+
+llm_provider:
+  primary: "src.interfaces.llm.ollama_provider.OllamaProvider"
+  fallback:
+    - path: "src.interfaces.llm.openai_provider.OpenAIProvider"
+      priority: 200
+    - path: "src.interfaces.llm.deepseek_provider.DeepSeekProvider"
+      priority: 300
+  config:
+    config_path: "config/models.yaml"

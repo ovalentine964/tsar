@@ -1,0 +1,172 @@
+# ============================================================
+# TSAR — Mean Reversion Strategy Genome
+# ============================================================
+# Day1 strategy. Thesis: BTC mean-reverts after RSI extremes.
+# See TSAR_ARCHITECTURE.md §7.1
+
+name: "mean_reversion"
+version: 1
+thesis: "BTC mean-reverts after RSI extremes. Buy oversold, sell overbought."
+status: ACTIVE
+
+# --- Entry Rules ---
+entry_rules:
+  conditions:
+    - indicator: "rsi"
+      period: 14
+      operator: "lt"
+      value: 30
+      description: "RSI(14) < 30 (oversold)"
+      weight: 0.25
+
+    - indicator: "support_proximity"
+      threshold_pct: 2.0
+      operator: "lt"
+      description: "Price within 2% of support level"
+      weight: 0.20
+
+    - indicator: "volume_ratio"
+      period: 20
+      multiplier: 1.5
+      operator: "gt"
+      description: "Volume > 1.5x 20-period average"
+      weight: 0.10
+
+    - indicator: "fear_greed_index"
+      operator: "lt"
+      value: 30
+      description: "Fear & Greed Index < 30"
+      weight: 0.15
+
+    - indicator: "macro_alignment"
+      operator: "gte"
+      value: 0.5
+      description: "Macro regime alignment >= 0.5"
+      weight: 0.10
+
+    - indicator: "onchain_metrics"
+      operator: "gte"
+      value: 0.5
+      description: "On-chain metrics favorable"
+      weight: 0.05
+
+    - indicator: "order_flow"
+      operator: "gte"
+      value: 0.5
+      description: "Order flow supportive"
+      weight: 0.05
+
+    - indicator: "seasonal_pattern"
+      operator: "gte"
+      value: 0.5
+      description: "Seasonal pattern favorable"
+      weight: 0.05
+
+    - indicator: "cross_asset_alignment"
+      operator: "gte"
+      value: 0.5
+      description: "Cross-asset alignment >= 0.5"
+      weight: 0.05
+
+  min_signal_score: 0.6
+
+# --- Exit Rules ---
+exit_rules:
+  take_profit:
+    - type: "rsi_threshold"
+      rsi_value: 70
+      description: "RSI > 70 (overbought)"
+    - type: "percentage"
+      pct: 2.0
+      description: "+2% from entry"
+
+  stop_loss:
+    type: "percentage"
+    pct: -1.0
+    description: "-1% from entry (hard stop)"
+
+  time_stop:
+    hours: 4
+    description: "Close after 4 hours if neither TP nor SL hit"
+
+# --- Sizing ---
+sizing:
+  method: "half_kelly"
+  kelly_fraction: 0.25
+  max_position_pct: 0.15
+  risk_per_trade_pct: 0.02
+
+# --- Risk Constraints ---
+risk_constraints:
+  max_stop_loss_pct: 0.02
+  min_rr_ratio: 2.0
+  max_correlation: 0.7
+  required_stop_loss: true
+
+# --- Mutable Parameters (evolved by Strategy Geneticist) ---
+mutable_parameters:
+  rsi_oversold:
+    current: 30
+    min: 20
+    max: 40
+    step: 5
+    description: "RSI oversold threshold"
+
+  rsi_overbought:
+    current: 70
+    min: 60
+    max: 80
+    step: 5
+    description: "RSI overbought threshold"
+
+  support_proximity_pct:
+    current: 2.0
+    min: 0.5
+    max: 5.0
+    step: 0.5
+    description: "Max distance from support (%)"
+
+  volume_multiplier:
+    current: 1.5
+    min: 1.0
+    max: 3.0
+    step: 0.25
+    description: "Volume vs average multiplier"
+
+  fear_greed_threshold:
+    current: 30
+    min: 15
+    max: 45
+    step: 5
+    description: "Fear & Greed entry threshold"
+
+  take_profit_pct:
+    current: 2.0
+    min: 1.0
+    max: 5.0
+    step: 0.5
+    description: "Take profit percentage"
+
+  stop_loss_pct:
+    current: 1.0
+    min: 0.5
+    max: 2.0
+    step: 0.25
+    description: "Stop loss percentage"
+
+  time_stop_hours:
+    current: 4
+    min: 1
+    max: 24
+    step: 1
+    description: "Time stop in hours"
+
+# --- Backtesting ---
+backtesting:
+  walk_forward:
+    train_pct: 70
+    validation_pct: 15
+    test_pct: 15
+  fee_model: "binance"           # 0.1% maker/taker
+  slippage_model: "realistic"    # mean 3bps, std 2bps
+  significance_threshold: 0.05   # t-test p < 0.05

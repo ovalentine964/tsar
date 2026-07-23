@@ -1,0 +1,217 @@
+# ============================================================
+# TSAR — Momentum + Funding Rates Strategy Genome
+# ============================================================
+# Level 2 strategy. Capture trend continuation when funding
+# rates signal directional bias.
+# See TSAR_ARCHITECTURE.md §7.2
+
+name: "momentum_funding"
+version: 1
+thesis: "Capture trend continuation when funding rates signal directional bias. EMA crossover confirms trend, funding rate provides directional edge."
+status: ACTIVE
+
+# --- Entry Rules ---
+entry_rules:
+  long_conditions:
+    - indicator: "ema_crossover"
+      fast_period: 21
+      slow_period: 55
+      operator: "fast_gt_slow"
+      description: "EMA(21) > EMA(55) for longs"
+      weight: 0.25
+
+    - indicator: "funding_rate"
+      operator: "lt"
+      value: 0.0
+      description: "Funding rate negative for longs (shorts pay longs)"
+      weight: 0.20
+
+    - indicator: "adx"
+      period: 14
+      operator: "gt"
+      value: 25
+      description: "ADX > 25 (trending market)"
+      weight: 0.25
+
+    - indicator: "volume_confirmation"
+      period: 20
+      operator: "gt"
+      multiplier: 1.2
+      description: "Volume > 1.2x 20-period average"
+      weight: 0.10
+
+    - indicator: "macro_alignment"
+      operator: "gte"
+      value: 0.5
+      description: "Macro regime supports direction"
+      weight: 0.10
+
+    - indicator: "cross_asset_alignment"
+      operator: "gte"
+      value: 0.5
+      description: "Cross-asset alignment"
+      weight: 0.05
+
+    - indicator: "order_flow"
+      operator: "gte"
+      value: 0.5
+      description: "Order flow supportive"
+      weight: 0.05
+
+  short_conditions:
+    - indicator: "ema_crossover"
+      fast_period: 21
+      slow_period: 55
+      operator: "fast_lt_slow"
+      description: "EMA(21) < EMA(55) for shorts"
+      weight: 0.25
+
+    - indicator: "funding_rate"
+      operator: "gt"
+      value: 0.0
+      description: "Funding rate positive for shorts (longs pay shorts)"
+      weight: 0.20
+
+    - indicator: "adx"
+      period: 14
+      operator: "gt"
+      value: 25
+      description: "ADX > 25 (trending market)"
+      weight: 0.25
+
+    - indicator: "volume_confirmation"
+      period: 20
+      operator: "gt"
+      multiplier: 1.2
+      description: "Volume > 1.2x 20-period average"
+      weight: 0.10
+
+    - indicator: "macro_alignment"
+      operator: "gte"
+      value: 0.5
+      description: "Macro regime supports direction"
+      weight: 0.10
+
+    - indicator: "cross_asset_alignment"
+      operator: "gte"
+      value: 0.5
+      description: "Cross-asset alignment"
+      weight: 0.05
+
+    - indicator: "order_flow"
+      operator: "gte"
+      value: 0.5
+      description: "Order flow supportive"
+      weight: 0.05
+
+  min_signal_score: 0.65
+
+# --- Exit Rules ---
+exit_rules:
+  trailing_stop:
+    type: "atr_multiple"
+    multiplier: 1.5
+    description: "Trailing stop at 1.5x ATR"
+
+  take_profit:
+    type: "atr_multiple"
+    multiplier: 3.0
+    description: "Take profit at 3x ATR from entry"
+
+  stop_loss:
+    type: "atr_multiple"
+    multiplier: 1.0
+    description: "Stop loss at 1x ATR from entry (hard stop)"
+
+  funding_rate_flip:
+    enabled: true
+    description: "Close if funding rate reverses sign"
+
+# --- Sizing ---
+sizing:
+  method: "half_kelly"
+  kelly_fraction: 0.25
+  max_position_pct: 0.15
+  risk_per_trade_pct: 0.02
+
+# --- Risk Constraints ---
+risk_constraints:
+  max_stop_loss_pct: 0.02
+  min_rr_ratio: 2.0
+  max_correlation: 0.7
+  required_stop_loss: true
+
+# --- Mutable Parameters (evolved by Strategy Geneticist) ---
+mutable_parameters:
+  ema_fast_period:
+    current: 21
+    min: 10
+    max: 30
+    step: 1
+    description: "Fast EMA period"
+
+  ema_slow_period:
+    current: 55
+    min: 40
+    max: 100
+    step: 5
+    description: "Slow EMA period"
+
+  adx_threshold:
+    current: 25
+    min: 20
+    max: 35
+    step: 5
+    description: "ADX trend strength threshold"
+
+  trailing_stop_atr_mult:
+    current: 1.5
+    min: 1.0
+    max: 3.0
+    step: 0.25
+    description: "Trailing stop ATR multiplier"
+
+  take_profit_atr_mult:
+    current: 3.0
+    min: 2.0
+    max: 6.0
+    step: 0.5
+    description: "Take profit ATR multiplier"
+
+  stop_loss_atr_mult:
+    current: 1.0
+    min: 0.5
+    max: 2.0
+    step: 0.25
+    description: "Stop loss ATR multiplier"
+
+  volume_multiplier:
+    current: 1.2
+    min: 1.0
+    max: 2.5
+    step: 0.1
+    description: "Volume vs average multiplier"
+
+  min_signal_score:
+    current: 0.65
+    min: 0.5
+    max: 0.8
+    step: 0.05
+    description: "Minimum signal score for entry"
+
+# --- Backtesting ---
+backtesting:
+  walk_forward:
+    train_pct: 70
+    validation_pct: 15
+    test_pct: 15
+  fee_model: "binance"           # 0.1% maker/taker
+  slippage_model: "realistic"    # mean 3bps, std 2bps
+  significance_threshold: 0.05   # t-test p < 0.05
+
+# --- Retirement Gates ---
+retirement_gates:
+  rolling_sharpe_30d_min: 0.5    # Retire if < 0.5 for 30 days
+  max_drawdown_pause: 0.15       # Pause if > 15% drawdown
+  max_drawdown_retire: 0.20      # Retire if > 20% drawdown
+  min_win_rate_50_trades: 0.40   # Retire if < 40% over 50 trades

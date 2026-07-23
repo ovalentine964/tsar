@@ -1,0 +1,75 @@
+# ============================================================
+# TSAR — Docker Compose (Production-Ready)
+# ============================================================
+# Services: Redis 7 + TSAR App (Python 3.12)
+# Usage:
+#   cp .env.example .env   # Configure environment
+#   make docker-build       # Build images
+#   make docker-up          # Start services
+#   make docker-down        # Stop services
+
+services:
+  redis:
+    image: redis:7-alpine
+    container_name: tsar-redis
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    volumes:
+      - redis-data:/data
+    command: >
+      redis-server
+      --appendonly yes
+      --maxmemory 256mb
+      --maxmemory-policy allkeys-lru
+      --requirepass ${REDIS_PASSWORD:-tsar_dev_password}
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD:-tsar_dev_password}", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 5s
+    restart: unless-stopped
+    networks:
+      - tsar-net
+
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: production
+    container_name: tsar-app
+    ports:
+      - "${TSAR_API_PORT:-8000}:8000"
+    env_file:
+      - .env
+    environment:
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+    volumes:
+      - tsar-data:/app/data
+      - tsar-logs:/app/logs
+      - ./config:/app/config:ro
+    depends_on:
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
+    restart: unless-stopped
+    networks:
+      - tsar-net
+
+volumes:
+  redis-data:
+    driver: local
+  tsar-data:
+    driver: local
+  tsar-logs:
+    driver: local
+
+networks:
+  tsar-net:
+    driver: bridge

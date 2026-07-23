@@ -1,0 +1,110 @@
+# ============================================================
+# TSAR — Default Application Configuration
+# ============================================================
+# Main config for app, database, Redis, and logging.
+# See TSAR_ARCHITECTURE.md §11
+
+# --- Application ---
+app:
+  name: "TSAR"
+  version: "3.0.0"
+  environment: "development"     # development | staging | production
+  trading_mode: "paper"          # paper | live
+  log_level: "INFO"
+
+# --- Database ---
+database:
+  path: "data/tsar.db"
+  echo: false                    # SQLAlchemy SQL logging
+  pool_size: 5
+  max_overflow: 10
+  backup:
+    hot_interval_minutes: 15
+    hot_retention_hours: 24
+    warm_cron: "0 0 * * *"      # Daily at midnight UTC
+    warm_retention_days: 30
+    cold_cron: "0 0 * * 0"      # Weekly on Sunday
+    cold_retention_days: 365
+
+# --- Redis ---
+redis:
+  host: "localhost"
+  port: 6379
+  db: 0
+  password: "${REDIS_PASSWORD}"
+  decode_responses: true
+  socket_timeout: 5
+  socket_connect_timeout: 5
+  retry_on_timeout: true
+  health_check_interval: 30
+  key_prefix: "tsar:"
+
+# --- Logging ---
+logging:
+  format: "json"                 # json | console
+  level: "INFO"
+  file:
+    enabled: true
+    path: "logs/tsar.log"
+    rotation: "daily"
+    retention_days: 30
+    compression: true
+  console:
+    enabled: true
+    colorize: true
+  structlog:
+    processors:
+      - "structlog.processors.TimeStamper"
+      - "structlog.processors.add_log_level"
+      - "structlog.processors.StackInfoRenderer"
+      - "structlog.processors.format_exc_info"
+      - "structlog.processors.JSONRenderer"
+
+# --- API Server (Day30+) ---
+api:
+  host: "0.0.0.0"
+  port: 8000
+  cors_origins: ["*"]
+  api_key: "${TSAR_API_KEY}"
+
+# --- Agent Supervisor ---
+supervisor:
+  host: "0.0.0.0"
+  port: 8001
+  heartbeat_interval_s: 5
+  stale_threshold_s: 15
+
+# --- Telegram ---
+telegram:
+  bot_token: "${TELEGRAM_BOT_TOKEN}"
+  chat_id: "${TELEGRAM_CHAT_ID}"
+  alert_levels:
+    critical: true
+    warning: true
+    info: false
+
+# --- Exchanges ---
+exchanges:
+  primary: "binance"
+  sandbox: true
+  rate_limit_per_minute: 1200
+  symbols:
+    - "BTC/USDT"
+    # - "ETH/USDT"    # Level 2+
+
+# --- Monitoring (Day30+) ---
+monitoring:
+  prometheus:
+    enabled: false
+    port: 9090
+  grafana:
+    enabled: false
+    port: 3000
+
+# --- Watchdog ---
+watchdog:
+  enabled: true
+  tier1_heartbeat_s: 5
+  tier2_heartbeat_s: 5
+  tier3_check_interval_s: 10
+  stale_threshold_s: 15

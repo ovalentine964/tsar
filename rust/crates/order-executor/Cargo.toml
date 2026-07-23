@@ -1,0 +1,16 @@
+[package]
+name = "tsar-order-executor"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "Low-latency order execution engine for TSAR"
+
+[dependencies]
+tsar-core = { workspace = true }
+tokio = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+tracing = { workspace = true }
+chrono = { workspace = true }
+uuid = { workspace = true }

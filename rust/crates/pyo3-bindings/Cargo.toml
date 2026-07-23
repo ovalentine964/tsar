@@ -1,0 +1,24 @@
+[package]
+name = "tsar-pyo3"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "PyO3 Python bindings for TSAR Rust performance layer"
+
+[lib]
+name = "trading_rs"
+crate-type = ["cdylib"]
+
+[dependencies]
+tsar-core = { workspace = true }
+tsar-ws-manager = { workspace = true }
+tsar-tick-processor = { workspace = true }
+tsar-order-executor = { workspace = true }
+pyo3 = { workspace = true }
+tokio = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+tracing = { workspace = true }
+chrono = { workspace = true }
+uuid = { workspace = true }

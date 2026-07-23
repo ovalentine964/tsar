@@ -1,0 +1,127 @@
+# ============================================================
+# TSAR — Risk Parameters (CANONICAL)
+# ============================================================
+# All values sourced from FIX_A_PARAMETERS.md reconciliation.
+# These are the HARD limits. No agent can override.
+# See TSAR_ARCHITECTURE.md §6
+
+# --- Drawdown & Loss Limits ---
+# Progressive circuit breaker levels:
+#   GREEN  → normal operation
+#   YELLOW → reduce position sizes 50%
+#   ORANGE → close new trades only, no new entries
+#   RED    → KILL SWITCH — flatten everything
+
+daily_loss_flatten: -0.02       # -2%  → halt new trades (ORANGE)
+daily_loss_kill: -0.03          # -3%  → flatten all positions (RED)
+max_drawdown_halt: -0.05        # -5%  → halt new trades (ORANGE)
+max_drawdown_flatten: -0.15     # -15% → flatten all positions (RED)
+
+# --- Position Limits ---
+max_open_positions: 10          # Day1 override: 3
+max_single_position_pct: 0.15   # 15% of capital per position
+max_sector_concentration_pct: 0.30  # 30% per sector
+max_correlation: 0.7            # Max correlation to portfolio
+max_daily_trades: 30            # Prevent overtrading
+
+# --- Sizing ---
+kelly_fraction: 0.25            # Half-Kelly (fixed)
+risk_per_trade_pct: 0.02        # 2% risk per trade
+min_rr_ratio: 2.0               # Minimum 2:1 risk-reward
+
+# --- Anti-Behavioral Guards ---
+anti_revenge_cooldown_minutes: 60   # 60-min cooldown after loss streak
+anti_revenge_loss_streak: 3         # 3 consecutive losses triggers cooldown
+anti_greed_sizing_factor: 0.7       # Cap sizing at 70% base after win streak
+anti_greed_win_streak: 5            # 5 consecutive wins triggers greed guard
+anti_fomo_min_signal_score: 0.6     # Block trades below 0.6 signal score
+anti_overconfidence_win_streak: 5    # Warn + cap after 5+ wins with size increase
+
+# --- Stop-Loss ---
+max_stop_loss_pct: 0.02         # 2% max stop-loss from entry
+stop_loss_required: true        # Every trade MUST have stop-loss
+
+# --- Economic Calendar Blackout ---
+blackout_events:
+  FOMC_RATE_DECISION:
+    before_minutes: 60
+    after_minutes: 60
+    size_multiplier: 0.0        # Block completely
+  CPI:
+    before_minutes: 30
+    after_minutes: 30
+    size_multiplier: 0.0        # Block completely
+  NFP:
+    before_minutes: 30
+    after_minutes: 30
+    size_multiplier: 0.0        # Block completely
+  FOMC_MINUTES:
+    before_minutes: 30
+    after_minutes: 30
+    size_multiplier: 0.5        # 50% size
+  ECB:
+    before_minutes: 30
+    after_minutes: 30
+    size_multiplier: 0.5
+  BOJ:
+    before_minutes: 30
+    after_minutes: 30
+    size_multiplier: 0.5
+  GDP:
+    before_minutes: 15
+    after_minutes: 15
+    size_multiplier: 0.5
+  PCE:
+    before_minutes: 30
+    after_minutes: 30
+    size_multiplier: 0.5
+
+# --- Recovery Protocol ---
+recovery:
+  orange:
+    phases:
+      - duration_hours: 24
+        allocation_pct: 10
+        gate: "regime_check"
+      - duration_hours: 48
+        allocation_pct: 25
+        gate: "positive_pnl"
+      - duration_hours: 48
+        allocation_pct: 50
+        gate: "win_rate_above_40"
+      - duration_hours: 0
+        allocation_pct: 100
+        gate: "full"
+  red:
+    phases:
+      - duration_hours: 24
+        allocation_pct: 5
+        gate: "regime_check_and_manual_ok"
+      - duration_hours: 48
+        allocation_pct: 10
+        gate: "positive_pnl"
+      - duration_hours: 72
+        allocation_pct: 25
+        gate: "win_rate_above_40"
+      - duration_hours: 72
+        allocation_pct: 50
+        gate: "sharpe_above_0"
+      - duration_hours: 0
+        allocation_pct: 100
+        gate: "full_with_report"
+
+# --- Leverage Limits (Level 2+) ---
+max_leverage:
+  forex_major: 20
+  forex_minor: 10
+  gold: 10
+  crypto_perp: 3
+margin_utilization_cap: 0.60       # Never use >60% margin
+pre_liquidation_buffer: 0.70       # Act at 70% maintenance margin
+
+# --- Kill Switch ---
+kill_switch:
+  file_path: "/tmp/tsar_kill_switch"
+  redis_key: "tsar:risk:kill_switch"
+  dual_write: true                 # Write to both file + Redis
+  file_is_primary: true            # File survives Redis failure

@@ -1,0 +1,574 @@
+"""
+Risk Guardian — Gatekeeper agent that approves or rejects every trade.
+
+Role: TRADE_ADMIN
+Deterministic. NO LLM involvement. Zero exceptions.
+
+Evaluation checklist (ALL must pass):
+  1. Kill switch not active
+  2. Circuit breaker not RED
+  3. Position size ≤ max_position_pct (15% of equity)
+  4. Daily P&L not below daily_loss_limit (-2%)
+  5. Open positions < max_open_positions (Day1: 3)
+  6. Stop-loss is set and reasonable (≤ 2% from entry)
+  7. Risk-reward ratio ≥ min_risk_reward (2:1)
+  8. Symbol cooldown not active (30 min)
+  9. No conflicting positions (same symbol opposite direction)
+  10. Signal score meets minimum threshold
+
+VETO Protocol:
+  NONE:   All checks pass — trade approved
+  SOFT:   Advisory warning — trade proceeds with warnings
+  FIRM:   Trade blocked — can be overridden by admin
+  HARD:   Trade blocked — cannot override
+  NUCLEAR: Kill switch — halt all trading
+
+Subscribes to: tsar:stream:signals
+Publishes to:  tsar:stream:risk_decisions
+"""
+
+from __future__ import annotations
+
+import logging
+import time
+import uuid
+from datetime import datetime, timezone
+from typing import Any
+
+from src.agents.base import BaseAgent
+from src.comms.events import CloudEvent
+from src.interfaces.types import (
+    DrawdownLevel,
+    DrawdownState,
+    OrderSide,
+    Portfolio,
+    RiskCheckResult,
+    RiskDecision,
+    Signal,
+    VetoLevel,
+)
+
+logger = logging.getLogger(__name__)
+
+
+class RiskGuardian(BaseAgent):
+    """Gatekeeper — approves or rejects every trade signal.
+
+    Pure deterministic risk engine. No LLM calls. No heuristics.
+    Every trade must pass ALL checks or it gets vetoed.
+
+    The Risk Guardian has VETO power — it can reject any trade.
+    This is the safety harness that prevents the intelligence layer
+    from making catastrophic decisions.
+    """
+
+    AGENT_NAME = "risk_guardian"
+    ROLE = "TRADE_ADMIN"
+
+    PUBLISH_STREAM = "risk_decisions"
+    SUBSCRIBE_STREAMS = ["signals"]
+
+    # Risk limits from TSAR_ARCHITECTURE.md §6.1
+    DEFAULT_LIMITS = {
+        "max_daily_loss_pct": 2.0,        # -2% daily loss limit
+        "max_drawdown_pct": 5.0,          # 5% max drawdown from HWM
+        "max_open_positions": 3,          # Day1: 3 (prod: 10)
+        "max_single_position_pct": 15.0,  # 15% of equity per position
+        "min_risk_reward": 2.0,           # 2:1 minimum R:R
+        "max_stop_loss_pct": 2.0,         # 2% max stop-loss from entry
+        "cooldown_seconds": 1800,         # 30-minute symbol cooldown
+        "min_signal_score": 0.6,          # Minimum signal score
+    }
+
+    def __init__(
+        self,
+        config: dict[str, Any],
+        trading_mode: str = "paper",
+        **kwargs: Any,
+    ) -> None:
+        super().__init__(config, trading_mode, **kwargs)
+
+        # Merge config overrides
+        risk_config = config.get("risk", {})
+        self._limits = {**self.DEFAULT_LIMITS, **risk_config}
+
+        # State tracking
+        self._symbol_cooldowns: dict[str, float] = {}  # symbol → last trade timestamp
+        self._daily_pnl: float = 0.0
+        self._high_water_mark: float = 0.0
+        self._current_equity: float = 0.0
+
+        # Engine reference (lazy-initialized)
+        self._risk_engine = None
+
+    async def on_initialize(self) -> None:
+        """Initialize the risk engine backend."""
+        from src.interfaces import get_risk_engine
+
+        self._risk_engine = get_risk_engine()
+        logger.info(
+            "RiskGuardian initialized: limits=%s",
+            {k: v for k, v in self._limits.items()},
+        )
+
+    async def handle_event(self, stream: str, event: CloudEvent) -> None:
+        """Handle incoming signal.detected events.
+
+        Args:
+            stream: Event stream name.
+            event: CloudEvent containing signal data.
+        """
+        if stream == "signals" and event.type == "tsar.signal.detected.v1":
+            await self._evaluate_signal(event)
+        else:
+            logger.debug("RiskGuardian ignoring event: %s on %s", event.type, stream)
+
+    async def run_cycle(self) -> None:
+        """Process incoming signals — main logic is event-driven.
+
+        The RiskGuardian primarily reacts to signal.detected events.
+        The run_cycle is kept for heartbeat and periodic maintenance.
+        """
+        # Periodic maintenance: clean expired cooldowns
+        now = time.time()
+        expired = [
+            sym for sym, ts in self._symbol_cooldowns.items()
+            if now - ts > self._limits["cooldown_seconds"] * 2
+        ]
+        for sym in expired:
+            del self._symbol_cooldowns[sym]
+
+    async def _evaluate_signal(self, event: CloudEvent) -> None:
+        """Evaluate a trading signal against all risk rules.
+
+        This is THE GATEKEEPER. Every trade must pass ALL checks.
+
+        Args:
+            event: CloudEvent containing the signal data.
+        """
+        data = event.data
+        trace_id = event.traceid
+
+        signal = Signal(
+            signal_id=data["signal_id"],
+            symbol=data["symbol"],
+            side=OrderSide(data["side"]),
+            score=data["score"],
+            entry_price=data["entry_price"],
+            stop_loss=data["stop_loss"],
+            take_profit=data["take_profit"],
+            strategy=data.get("strategy", "unknown"),
+            reasoning=data.get("reasoning", ""),
+            metadata=data.get("metadata", {}),
+        )
+
+        logger.info(
+            "🛡️ Evaluating signal: %s %s %s score=%.3f (trace=%s)",
+            signal.signal_id, signal.symbol, signal.side.value,
+            signal.score, trace_id,
+        )
+
+        # Run all checks
+        decision = self._run_all_checks(signal)
+
+        if decision.approved:
+            # Calculate position size
+            position_size = self._calculate_position_size(signal)
+
+            # Update cooldown
+            self._symbol_cooldowns[signal.symbol] = time.time()
+
+            logger.info(
+                "✅ APPROVED: %s %s %s qty=%.6f (veto=%s, warnings=%d)",
+                signal.signal_id, signal.symbol, signal.side.value,
+                position_size, decision.veto_level, len(decision.warnings),
+            )
+        else:
+            logger.warning(
+                "❌ VETOED [%s]: %s %s — reasons: %s",
+                decision.veto_level, signal.signal_id, signal.symbol,
+                decision.rejection_reasons,
+            )
+
+        # Publish risk decision event
+        event_type = "tsar.risk.approved.v1" if decision.approved else "tsar.risk.vetoed.v1"
+        await self.publish_event(
+            stream="risk_decisions",
+            event_type=event_type,
+            data=self._decision_to_dict(decision, signal),
+            priority=1 if decision.approved else 2,
+            risk_level="NONE" if decision.approved else decision.veto_level,
+            trace_id=trace_id,
+        )
+
+    def _run_all_checks(self, signal: Signal) -> RiskDecision:
+        """Run the full 10-point risk evaluation checklist.
+
+        Args:
+            signal: The trading signal to evaluate.
+
+        Returns:
+            RiskDecision with approval status and details.
+        """
+        checks_passed: list[str] = []
+        checks_failed: list[str] = []
+        warnings: list[str] = []
+
+        # ── Check 1: Kill Switch ──────────────────────────────────
+        if self._risk_engine and self._risk_engine.get_kill_switch_status():
+            checks_failed.append("KILL_SWITCH_ACTIVE: Trading is halted")
+            return RiskDecision(
+                signal_id=signal.signal_id,
+                approved=False,
+                position_size=0.0,
+                rejection_reasons=tuple(checks_failed),
+                warnings=tuple(warnings),
+                veto_level=VetoLevel.NUCLEAR.value,
+                timestamp=datetime.now(timezone.utc),
+            )
+        checks_passed.append("kill_switch")
+
+        # ── Check 2: Circuit Breaker ──────────────────────────────
+        drawdown = self._get_drawdown_state()
+        if drawdown.circuit_breaker_level == DrawdownLevel.RED.value:
+            checks_failed.append(
+                f"CIRCUIT_BREAKER_RED: Drawdown {drawdown.current_drawdown_pct:.1f}% > 5%"
+            )
+            return RiskDecision(
+                signal_id=signal.signal_id,
+                approved=False,
+                position_size=0.0,
+                rejection_reasons=tuple(checks_failed),
+                warnings=tuple(warnings),
+                veto_level=VetoLevel.HARD.value,
+                timestamp=datetime.now(timezone.utc),
+            )
+
+        if drawdown.circuit_breaker_level == DrawdownLevel.ORANGE.value:
+            checks_failed.append(
+                f"CIRCUIT_BREAKER_ORANGE: Drawdown {drawdown.current_drawdown_pct:.1f}% — no new entries"
+            )
+            return RiskDecision(
+                signal_id=signal.signal_id,
+                approved=False,
+                position_size=0.0,
+                rejection_reasons=tuple(checks_failed),
+                warnings=tuple(warnings),
+                veto_level=VetoLevel.FIRM.value,
+                timestamp=datetime.now(timezone.utc),
+            )
+
+        if drawdown.circuit_breaker_level == DrawdownLevel.YELLOW.value:
+            warnings.append(
+                f"CIRCUIT_BREAKER_YELLOW: Drawdown {drawdown.current_drawdown_pct:.1f}% — reduced sizing"
+            )
+        checks_passed.append("circuit_breaker")
+
+        # ── Check 3: Daily Loss Limit ─────────────────────────────
+        if self._current_equity > 0:
+            daily_loss_pct = (self._daily_pnl / self._current_equity) * 100
+            if daily_loss_pct < -self._limits["max_daily_loss_pct"]:
+                checks_failed.append(
+                    f"DAILY_LOSS_LIMIT: Daily P&L {daily_loss_pct:.2f}% "
+                    f"< -{self._limits['max_daily_loss_pct']}%"
+                )
+                return RiskDecision(
+                    signal_id=signal.signal_id,
+                    approved=False,
+                    position_size=0.0,
+                    rejection_reasons=tuple(checks_failed),
+                    warnings=tuple(warnings),
+                    veto_level=VetoLevel.HARD.value,
+                    timestamp=datetime.now(timezone.utc),
+                )
+        checks_passed.append("daily_loss_limit")
+
+        # ── Check 4: Max Open Positions ───────────────────────────
+        open_positions = signal.metadata.get("open_position_count", 0)
+        if open_positions >= self._limits["max_open_positions"]:
+            checks_failed.append(
+                f"MAX_POSITIONS: {open_positions} open >= {self._limits['max_open_positions']} max"
+            )
+            return RiskDecision(
+                signal_id=signal.signal_id,
+                approved=False,
+                position_size=0.0,
+                rejection_reasons=tuple(checks_failed),
+                warnings=tuple(warnings),
+                veto_level=VetoLevel.FIRM.value,
+                timestamp=datetime.now(timezone.utc),
+            )
+        checks_passed.append("max_open_positions")
+
+        # ── Check 5: Stop-Loss Validation ─────────────────────────
+        if signal.entry_price <= 0:
+            checks_failed.append("INVALID_ENTRY: Entry price must be > 0")
+            return RiskDecision(
+                signal_id=signal.signal_id,
+                approved=False,
+                position_size=0.0,
+                rejection_reasons=tuple(checks_failed),
+                warnings=tuple(warnings),
+                veto_level=VetoLevel.HARD.value,
+                timestamp=datetime.now(timezone.utc),
+            )
+
+        stop_loss_distance_pct = abs(signal.entry_price - signal.stop_loss) / signal.entry_price * 100
+        if stop_loss_distance_pct > self._limits["max_stop_loss_pct"]:
+            checks_failed.append(
+                f"STOP_LOSS_TOO_WIDE: {stop_loss_distance_pct:.2f}% > "
+                f"{self._limits['max_stop_loss_pct']}%"
+            )
+            return RiskDecision(
+                signal_id=signal.signal_id,
+                approved=False,
+                position_size=0.0,
+                rejection_reasons=tuple(checks_failed),
+                warnings=tuple(warnings),
+                veto_level=VetoLevel.FIRM.value,
+                timestamp=datetime.now(timezone.utc),
+            )
+
+        if signal.stop_loss == 0:
+            checks_failed.append("NO_STOP_LOSS: Stop-loss is required")
+            return RiskDecision(
+                signal_id=signal.signal_id,
+                approved=False,
+                position_size=0.0,
+                rejection_reasons=tuple(checks_failed),
+                warnings=tuple(warnings),
+                veto_level=VetoLevel.HARD.value,
+                timestamp=datetime.now(timezone.utc),
+            )
+        checks_passed.append("stop_loss_validation")
+
+        # ── Check 6: Risk-Reward Ratio ────────────────────────────
+        risk = abs(signal.entry_price - signal.stop_loss)
+        reward = abs(signal.take_profit - signal.entry_price)
+        if risk > 0:
+            rr_ratio = reward / risk
+            if rr_ratio < self._limits["min_risk_reward"]:
+                checks_failed.append(
+                    f"RISK_REWARD: {rr_ratio:.2f} < {self._limits['min_risk_reward']} minimum"
+                )
+                return RiskDecision(
+                    signal_id=signal.signal_id,
+                    approved=False,
+                    position_size=0.0,
+                    rejection_reasons=tuple(checks_failed),
+                    warnings=tuple(warnings),
+                    veto_level=VetoLevel.FIRM.value,
+                    timestamp=datetime.now(timezone.utc),
+                )
+        checks_passed.append("risk_reward_ratio")
+
+        # ── Check 7: Symbol Cooldown ──────────────────────────────
+        last_trade = self._symbol_cooldowns.get(signal.symbol, 0)
+        elapsed = time.time() - last_trade
+        if elapsed < self._limits["cooldown_seconds"]:
+            remaining = self._limits["cooldown_seconds"] - elapsed
+            checks_failed.append(
+                f"COOLDOWN: {signal.symbol} traded {elapsed:.0f}s ago "
+                f"({remaining:.0f}s remaining)"
+            )
+            return RiskDecision(
+                signal_id=signal.signal_id,
+                approved=False,
+                position_size=0.0,
+                rejection_reasons=tuple(checks_failed),
+                warnings=tuple(warnings),
+                veto_level=VetoLevel.FIRM.value,
+                timestamp=datetime.now(timezone.utc),
+            )
+        checks_passed.append("symbol_cooldown")
+
+        # ── Check 8: Conflicting Positions ────────────────────────
+        # Check if we have an opposite position on the same symbol
+        existing_side = signal.metadata.get("existing_position_side")
+        if existing_side and existing_side != signal.side.value:
+            checks_failed.append(
+                f"CONFLICTING_POSITION: Existing {existing_side} position "
+                f"on {signal.symbol}"
+            )
+            return RiskDecision(
+                signal_id=signal.signal_id,
+                approved=False,
+                position_size=0.0,
+                rejection_reasons=tuple(checks_failed),
+                warnings=tuple(warnings),
+                veto_level=VetoLevel.FIRM.value,
+                timestamp=datetime.now(timezone.utc),
+            )
+        checks_passed.append("no_conflicting_positions")
+
+        # ── Check 9: Signal Score ─────────────────────────────────
+        if signal.score < self._limits["min_signal_score"]:
+            checks_failed.append(
+                f"LOW_SCORE: {signal.score:.3f} < {self._limits['min_signal_score']} minimum"
+            )
+            return RiskDecision(
+                signal_id=signal.signal_id,
+                approved=False,
+                position_size=0.0,
+                rejection_reasons=tuple(checks_failed),
+                warnings=tuple(warnings),
+                veto_level=VetoLevel.SOFT.value,
+                timestamp=datetime.now(timezone.utc),
+            )
+        checks_passed.append("signal_score")
+
+        # ── Check 10: Position Size Limit ─────────────────────────
+        # (Actual sizing check happens in _calculate_position_size)
+        checks_passed.append("position_size_limit")
+
+        # ── All Checks Passed ─────────────────────────────────────
+        veto_level = VetoLevel.SOFT.value if warnings else VetoLevel.NONE.value
+
+        return RiskDecision(
+            signal_id=signal.signal_id,
+            approved=True,
+            position_size=0.0,  # Will be calculated separately
+            rejection_reasons=(),
+            warnings=tuple(warnings),
+            veto_level=veto_level,
+            timestamp=datetime.now(timezone.utc),
+        )
+
+    def _calculate_position_size(self, signal: Signal) -> float:
+        """Calculate position size using Half-Kelly with 0.25 fraction.
+
+        Args:
+            signal: Approved trading signal.
+
+        Returns:
+            Position quantity in base asset units.
+        """
+        if self._current_equity <= 0 or signal.entry_price <= 0:
+            return 0.0
+
+        # Half-Kelly sizing
+        risk_per_trade_pct = 0.02  # 2% risk per trade
+        risk_amount = self._current_equity * risk_per_trade_pct
+
+        # Distance to stop-loss
+        stop_distance = abs(signal.entry_price - signal.stop_loss)
+        if stop_distance <= 0:
+            return 0.0
+
+        # Position size = risk_amount / stop_distance
+        quantity = risk_amount / stop_distance
+
+        # Cap at max single position %
+        max_notional = self._current_equity * (self._limits["max_single_position_pct"] / 100)
+        max_quantity = max_notional / signal.entry_price
+        quantity = min(quantity, max_quantity)
+
+        # Apply circuit breaker multiplier
+        drawdown = self._get_drawdown_state()
+        quantity *= drawdown.position_size_multiplier
+
+        logger.info(
+            "Position sizing: equity=%.2f risk=%.2f stop_dist=%.2f qty=%.6f multiplier=%.2f",
+            self._current_equity, risk_amount, stop_distance,
+            quantity, drawdown.position_size_multiplier,
+        )
+
+        return quantity
+
+    def _get_drawdown_state(self) -> DrawdownState:
+        """Get current drawdown state.
+
+        Returns:
+            DrawdownState with circuit breaker level.
+        """
+        if self._risk_engine:
+            # Use the engine if available
+            portfolio = Portfolio(
+                equity=self._current_equity,
+                high_water_mark=self._high_water_mark,
+                cash=self._current_equity,
+            )
+            return self._risk_engine.get_drawdown_state(portfolio)
+
+        # Fallback: calculate locally
+        if self._high_water_mark > 0:
+            drawdown_pct = ((self._high_water_mark - self._current_equity) / self._high_water_mark) * 100
+        else:
+            drawdown_pct = 0.0
+
+        if drawdown_pct < 2.0:
+            level = DrawdownLevel.GREEN.value
+            trading_allowed = True
+            multiplier = 1.0
+        elif drawdown_pct < 3.0:
+            level = DrawdownLevel.YELLOW.value
+            trading_allowed = True
+            multiplier = 0.5
+        elif drawdown_pct < 5.0:
+            level = DrawdownLevel.ORANGE.value
+            trading_allowed = False
+            multiplier = 0.0
+        else:
+            level = DrawdownLevel.RED.value
+            trading_allowed = False
+            multiplier = 0.0
+
+        return DrawdownState(
+            current_drawdown_pct=drawdown_pct,
+            high_water_mark=self._high_water_mark,
+            current_equity=self._current_equity,
+            daily_pnl=self._daily_pnl,
+            daily_pnl_pct=(self._daily_pnl / self._current_equity * 100) if self._current_equity > 0 else 0,
+            circuit_breaker_level=level,
+            trading_allowed=trading_allowed,
+            position_size_multiplier=multiplier,
+        )
+
+    def update_portfolio_state(
+        self,
+        equity: float,
+        high_water_mark: float,
+        daily_pnl: float,
+    ) -> None:
+        """Update portfolio state for risk calculations.
+
+        Called by the Orchestrator or execution feedback loop.
+
+        Args:
+            equity: Current total equity.
+            high_water_mark: Peak equity value.
+            daily_pnl: Today's realized P&L.
+        """
+        self._current_equity = equity
+        self._high_water_mark = high_water_mark
+        self._daily_pnl = daily_pnl
+
+    @staticmethod
+    def _decision_to_dict(decision: RiskDecision, signal: Signal) -> dict[str, Any]:
+        """Convert a RiskDecision to a serializable dict.
+
+        Args:
+            decision: RiskDecision instance.
+            signal: Original signal.
+
+        Returns:
+            Dict suitable for CloudEvents data payload.
+        """
+        return {
+            "signal_id": decision.signal_id,
+            "approved": decision.approved,
+            "position_size": decision.position_size,
+            "rejection_reasons": list(decision.rejection_reasons),
+            "warnings": list(decision.warnings),
+            "veto_level": decision.veto_level,
+            "timestamp": decision.timestamp.isoformat() if decision.timestamp else None,
+            # Carry forward signal data for downstream agents
+            "symbol": signal.symbol,
+            "side": signal.side.value,
+            "entry_price": signal.entry_price,
+            "stop_loss": signal.stop_loss,
+            "take_profit": signal.take_profit,
+            "score": signal.score,
+            "strategy": signal.strategy,
+            "reasoning": signal.reasoning,
+        }

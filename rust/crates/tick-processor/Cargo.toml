@@ -1,0 +1,15 @@
+[package]
+name = "tsar-tick-processor"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "High-performance tick processing: OHLCV aggregation, order book updates, spread calculation"
+
+[dependencies]
+tsar-core = { workspace = true }
+tokio = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+tracing = { workspace = true }
+chrono = { workspace = true }

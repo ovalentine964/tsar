@@ -1,0 +1,48 @@
+[workspace]
+resolver = "2"
+members = [
+    "crates/core",
+    "crates/ws-manager",
+    "crates/tick-processor",
+    "crates/order-executor",
+    "crates/pyo3-bindings",
+]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.79"
+license = "MIT"
+repository = "https://github.com/your-org/tsar"
+
+[workspace.dependencies]
+# === Async Runtime ===
+tokio = { version = "1.36", features = ["full"] }
+
+# === WebSocket ===
+tokio-tungstenite = { version = "0.21", features = ["native-tls"] }
+
+# === Serialization ===
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+
+# === Error Handling ===
+thiserror = "1.0"
+
+# === Logging ===
+tracing = "0.1"
+
+# === Time ===
+chrono = { version = "0.4", features = ["serde"] }
+
+# === PyO3 ===
+pyo3 = { version = "0.21", features = ["extension-module"] }
+
+# === Utils ===
+uuid = { version = "1.8", features = ["v4", "serde"] }
+
+# === Internal Crates ===
+tsar-core = { path = "crates/core" }
+tsar-ws-manager = { path = "crates/ws-manager" }
+tsar-tick-processor = { path = "crates/tick-processor" }
+tsar-order-executor = { path = "crates/order-executor" }
