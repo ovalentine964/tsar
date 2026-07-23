@@ -116,4 +116,4 @@ MIT
 
 ---
 
-*Built by Valentine Owuor. Powered by AI. Designed for the informal economy.*
+*Built by Valentine Owuor. Powered by AI. Designed for retail traders.*
