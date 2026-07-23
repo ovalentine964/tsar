@@ -115,6 +115,46 @@ Reviewed against Jensen Huang's super agent vision (10 capabilities):
 
 TSAR passes all 10 criteria of the Super Agent Test.
 
+## Council Verdict
+
+4 specialized council members reviewed the architecture:
+
+| Member | Verdict | Score |
+|--------|---------|-------|
+| Chief Architect | CONDITIONAL PASS | 8.4/10 |
+| Chief Risk Officer | CONDITIONAL PASS | 7.5/10 |
+| Chief Strategist | CONDITIONAL PASS | — |
+| Chief Engineer | CONDITIONAL PASS | — |
+
+**55 issues found. All addressed by fixing team.**
+
+## Tech Stack (Final)
+
+| Layer | Technology | Purpose |
+|-------|-----------|---------|
+| Brain | Python 3.12 | Agent orchestration, LLM, strategy, risk |
+| Muscle | Rust 1.79 | WebSocket, tick processing, order execution |
+| Specialist | C++ (Level 3+) | QuantLib derivatives, FIX protocol, CUDA |
+| Bridge | PyO3 + C FFI | Python ↔ Rust ↔ C++ interop |
+| Database | SQLite + FTS5 | Trade memory, lessons, patterns |
+| Cache | Redis | Regime state, real-time cache |
+| Vectors | ChromaDB | Pattern similarity search |
+| Exchange | ccxt | 100+ exchanges |
+| LLM | LiteLLM + Ollama + DeepSeek-R1 | Model-agnostic routing |
+| API | FastAPI | REST + WebSocket (port 8000) |
+| Telegram | python-telegram-bot | Commands + alerts |
+| Monitoring | Prometheus + Grafana | Metrics + dashboards |
+| Container | Docker Compose | Full stack orchestration |
+| CI/CD | GitHub Actions | lint → test → build → deploy |
+
+### Hybrid Architecture Path
+
+```
+Python (Day1) → +Rust (Level 2) → +C++ (Level 3+)
+```
+
+C++ enters when capital reaches $10K+ (QuantLib for derivatives, FIX for forex).
+
 ## Project Structure
 
 ```
@@ -201,16 +241,38 @@ tsar/
 - [Fix 04: Improvement Measurement](analysis/fixes/FIX_04_IMPROVEMENT_MEASUREMENT.md) — Flywheel health tracking
 - [Fix 05: Resource Limits](analysis/fixes/FIX_05_RESOURCE_LIMITS.md) — Tool resource enforcement
 
+### Council Reviews
+- [Council Issues](analysis/council/COUNCIL_ISSUES.md) — 55 issues catalogued
+- [Chief Architect Review](analysis/council/CHIEF_ARCHITECT_REVIEW.md) — System design assessment
+- [Chief Risk Officer Review](analysis/council/CHIEF_RISK_OFFICER_REVIEW.md) — Safety assessment
+- [Chief Strategist Review](analysis/council/CHIEF_STRATEGIST_REVIEW.md) — Trading alpha assessment
+- [Chief Engineer Review](analysis/council/CHIEF_ENGINEER_REVIEW.md) — Buildability assessment
+
+### Hybrid Architecture Reviews
+- [Hybrid Architect Review](analysis/council/HYBRID_ARCHITECT_REVIEW.md) — Rust + C++ integration
+- [Hybrid Risk Review](analysis/council/HYBRID_RISK_REVIEW.md) — C++ safety in money systems
+- [Hybrid Strategy Review](analysis/council/HYBRID_STRATEGY_REVIEW.md) — QuantLib/FIX/CUDA value
+- [Hybrid Engineer Review](analysis/council/HYBRID_ENGINEER_REVIEW.md) — Build system complexity
+
+### Council Fix Reports
+- [Fix A: Parameters](analysis/fixes/FIX_A_PARAMETERS.md) — 18 cross-doc conflicts resolved
+- [Fix B: Day30 Architecture](analysis/fixes/FIX_B_DAY30.md) — Intermediate build stage
+- [Fix C: Day1 Simplified](analysis/fixes/FIX_C_DAY1_SIMPLE.md) — 25 files, zero Rust
+- [Fix D: Risk Hardening](analysis/fixes/FIX_D_RISK_HARDENING.md) — Kill switch fallback, stress tests
+- [Fix E: Strategy Updates](analysis/fixes/FIX_E_STRATEGY.md) — Momentum, funding rates, walk-forward
+- [Fix F: Dependencies](analysis/fixes/FIX_F_DEPENDENCIES.md) — 19 packages, each justified
+
 ## Status
 
 ```
-1. ✅ VALIDATE    — COMPLETE (14 research reports, 747KB)
-2. ✅ ARCHITECT   — COMPLETE (17 specs + 3 reviews, 1.1MB)
+1. ✅ VALIDATE    — COMPLETE (14 research reports)
+2. ✅ ARCHITECT   — COMPLETE (17 specs + 3 reviews)
 3. ✅ REVIEW      — COMPLETE (Super Agent Test: PASS 8.8/10)
-4. ✅ FIX GAPS    — COMPLETE (5 fix specs, 747KB)
-5. ⬜ ENGINEER    — Ready to start
-6. ⬜ REVIEW & TEST
-7. ⬜ DEPLOY
+4. ✅ COUNCIL     — COMPLETE (4 members, 55 issues found & fixed)
+5. ✅ FIX GAPS    — COMPLETE (6 fix specs + hybrid architecture approved)
+6. ⬜ ENGINEER    — Ready to start
+7. ⬜ REVIEW & TEST
+8. ⬜ DEPLOY
 ```
 
 ## License
