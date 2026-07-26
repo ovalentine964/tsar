@@ -23,7 +23,6 @@ class TsarTheme {
   }
 
   static ThemeData get darkTheme {
-    final monoText = _mono();
     return ThemeData(
       useMaterial3: true,
       brightness: Brightness.dark,
@@ -34,7 +33,7 @@ class TsarTheme {
         error: loss,
       ),
       scaffoldBackgroundColor: surface,
-      cardTheme: const CardThemeData(
+      cardTheme: const CardTheme(
         color: card,
         elevation: 0,
         shape: RoundedRectangleBorder(

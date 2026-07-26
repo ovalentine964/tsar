@@ -103,7 +103,7 @@ class _RiskScreenState extends State<RiskScreen> {
                         if (isActive && rs?.killSwitchReason != null)
                           Text(
                             rs!.killSwitchReason!,
-                            style: const TextStyle(color: Colors.white54, fontSize: 12),
+                            style: TextStyle(color: Colors.white54, fontSize: 12),
                           ),
                       ],
                     ),
@@ -157,7 +157,7 @@ class _RiskScreenState extends State<RiskScreen> {
               Expanded(
                 child: Text(
                   _breakerDescription(rs?.circuitBreaker),
-                  style: const TextStyle(color: Colors.white54, fontSize: 13),
+                  style: TextStyle(color: Colors.white54, fontSize: 13),
                 ),
               ),
             ],
@@ -292,7 +292,7 @@ class _RiskScreenState extends State<RiskScreen> {
                     Expanded(
                       child: Text(
                         '${pos.quantity.toStringAsFixed(2)} qty',
-                        style: const TextStyle(color: Colors.white54, fontSize: 12),
+                        style: TextStyle(color: Colors.white54, fontSize: 12),
                         textAlign: TextAlign.right,
                       ),
                     ),
@@ -345,7 +345,7 @@ class _RiskScreenState extends State<RiskScreen> {
                     Expanded(
                       child: Text(
                         alert.message,
-                        style: const TextStyle(color: Colors.white70, fontSize: 13),
+                        style: TextStyle(color: Colors.white70, fontSize: 13),
                       ),
                     ),
                   ],

@@ -174,7 +174,7 @@ class _FactorsScreenState extends State<FactorsScreen>
                 const SizedBox(height: 4),
                 Text(
                   cat.description,
-                  style: const TextStyle(color: Colors.white54, fontSize: 13),
+                  style: TextStyle(color: Colors.white54, fontSize: 13),
                 ),
               ],
             ),
@@ -207,7 +207,7 @@ class _FactorsScreenState extends State<FactorsScreen>
                 const Spacer(),
                 Text(
                   '${sorted.length} factors',
-                  style: const TextStyle(color: Colors.white24, fontSize: 12),
+                  style: TextStyle(color: Colors.white24, fontSize: 12),
                 ),
               ],
             ),
@@ -244,7 +244,7 @@ class _FactorsScreenState extends State<FactorsScreen>
                               ),
                               Text(
                                 factor.category,
-                                style: const TextStyle(
+                                style: TextStyle(
                                     color: Colors.white30, fontSize: 11),
                               ),
                             ],
@@ -331,7 +331,7 @@ class _FactorTile extends StatelessWidget {
                     ),
                     child: Text(
                       factor.category,
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontFamily: GoogleFonts.jetBrainsMono().fontFamily,
                         fontSize: 10,
                         color: TsarTheme.accent,
@@ -343,7 +343,7 @@ class _FactorTile extends StatelessWidget {
               const SizedBox(height: 8),
               Text(
                 factor.description,
-                style: const TextStyle(color: Colors.white54, fontSize: 12),
+                style: TextStyle(color: Colors.white54, fontSize: 12),
                 maxLines: 2,
                 overflow: TextOverflow.ellipsis,
               ),
@@ -368,7 +368,7 @@ class _FactorTile extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(label, style: const TextStyle(fontSize: 10, color: Colors.white24)),
+        Text(label, style: TextStyle(fontSize: 10, color: Colors.white24)),
         Text(
           value,
           style: TsarTheme.numberStyle.copyWith(
@@ -422,7 +422,7 @@ class _FactorTile extends StatelessWidget {
               ),
               child: Text(
                 factor.category,
-                style: const TextStyle(
+                style: TextStyle(
                   fontFamily: GoogleFonts.jetBrainsMono().fontFamily,
                   fontSize: 12,
                   color: TsarTheme.accent,
@@ -431,7 +431,7 @@ class _FactorTile extends StatelessWidget {
             ),
             const SizedBox(height: 20),
             Text(factor.description,
-                style: const TextStyle(color: Colors.white70, fontSize: 15)),
+                style: TextStyle(color: Colors.white70, fontSize: 15)),
             const Divider(height: 32),
             _detailRow('IC (Information Coefficient)', factor.icFormatted),
             _detailRow('IR (Information Ratio)', factor.irFormatted),
@@ -454,7 +454,7 @@ class _FactorTile extends StatelessWidget {
               ),
               child: Text(
                 factor.computation,
-                style: const TextStyle(
+                style: TextStyle(
                   fontFamily: GoogleFonts.jetBrainsMono().fontFamily,
                   fontSize: 12,
                   color: Colors.white60,
@@ -473,7 +473,7 @@ class _FactorTile extends StatelessWidget {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Text(label, style: const TextStyle(color: Colors.white38, fontSize: 13)),
+          Text(label, style: TextStyle(color: Colors.white38, fontSize: 13)),
           Text(value, style: TsarTheme.numberStyle.copyWith(fontSize: 14)),
         ],
       ),

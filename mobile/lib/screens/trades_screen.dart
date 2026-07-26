@@ -273,7 +273,7 @@ class _TradeTile extends StatelessWidget {
                           ),
                           child: Text(
                             trade.status.name.toUpperCase(),
-                            style: const TextStyle(
+                            style: TextStyle(
                               fontFamily: GoogleFonts.jetBrainsMono().fontFamily,
                               fontSize: 10,
                               color: Colors.white38,
@@ -285,7 +285,7 @@ class _TradeTile extends StatelessWidget {
                     const SizedBox(height: 4),
                     Text(
                       DateFormat('MMM dd, HH:mm').format(trade.openedAt),
-                      style: const TextStyle(
+                      style: TextStyle(
                           color: Colors.white30, fontSize: 11),
                     ),
                   ],
@@ -391,7 +391,7 @@ class _TradeDetailSheet extends StatelessWidget {
           const Divider(height: 32),
           Text('Notes', style: TextStyle(color: Colors.white38, fontSize: 12)),
           const SizedBox(height: 8),
-          Text(trade.notes!, style: const TextStyle(color: Colors.white70)),
+          Text(trade.notes!, style: TextStyle(color: Colors.white70)),
         ],
       ],
     );
@@ -403,7 +403,7 @@ class _TradeDetailSheet extends StatelessWidget {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Text(label, style: const TextStyle(color: Colors.white38, fontSize: 13)),
+          Text(label, style: TextStyle(color: Colors.white38, fontSize: 13)),
           Text(
             value,
             style: TsarTheme.numberStyle.copyWith(
