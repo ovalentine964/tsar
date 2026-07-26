@@ -156,7 +156,7 @@ class _TradesScreenState extends State<TradesScreen> {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text('FILTERS', style: TextStyle(
+            Text('FILTERS',
               fontFamily: GoogleFonts.jetBrainsMono().fontFamily,
               fontWeight: FontWeight.w700,
               letterSpacing: 1.2,

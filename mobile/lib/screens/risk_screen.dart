@@ -183,7 +183,7 @@ class _RiskScreenState extends State<RiskScreen> {
                       size: 100,
                     ),
                     const SizedBox(height: 8),
-                    const Text('PORTFOLIO HEAT',
+                    Text('PORTFOLIO HEAT',
                         style: TextStyle(
                           fontFamily: GoogleFonts.jetBrainsMono().fontFamily,
                           fontSize: 10,

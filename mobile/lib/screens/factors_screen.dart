@@ -438,7 +438,7 @@ class _FactorTile extends StatelessWidget {
             _detailRow('Turnover', factor.turnover.toStringAsFixed(4)),
             _detailRow('Correlation', factor.correlation.toStringAsFixed(4)),
             const Divider(height: 32),
-            const Text('COMPUTATION',
+            Text('COMPUTATION',
                 style: TextStyle(
                   fontFamily: GoogleFonts.jetBrainsMono().fontFamily,
                   fontSize: 11,
