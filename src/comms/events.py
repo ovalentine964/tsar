@@ -281,6 +281,25 @@ def from_redis_fields(fields: dict[str, bytes | str]) -> CloudEvent:
 # ═══════════════════════════════════════════════════════════════════════
 
 
+# ═══════════════════════════════════════════════════════════════════════
+# TSAR Event Type Constants
+# ═══════════════════════════════════════════════════════════════════════
+
+# Shadow Account Loop events
+TSAR_SHADOW_EXTRACTED = "tsar.shadow.extracted.v1"
+TSAR_RULE_VALIDATED = "tsar.rule.validated.v1"
+
+# Strategy evolution events
+TSAR_STRATEGY_PROPOSAL = "tsar.strategy.proposal.v1"
+
+# Mandate lifecycle events
+TSAR_MANDATE_COMMITTED = "tsar.mandate.committed.v1"
+TSAR_MANDATE_REVOKED = "tsar.mandate.revoked.v1"
+
+# Factor benchmarking events
+TSAR_FACTOR_BENCHMARK = "tsar.factor.benchmark.v1"
+
+
 def _generate_ulid() -> str:
     """Generate a ULID (Universally Unique Lexicographically Sortable Identifier).
 

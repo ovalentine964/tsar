@@ -24,6 +24,8 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Any
 
+import pandas as pd
+
 from src.agents.base import BaseAgent
 from src.comms.events import CloudEvent
 from src.interfaces.types import (
@@ -36,6 +38,7 @@ from src.interfaces.types import (
     Signal,
     Timeframe,
 )
+from src.strategy.factor_library import FactorLibrary
 
 logger = logging.getLogger(__name__)
 
@@ -138,6 +141,21 @@ class SignalScout(BaseAgent):
         # Engine references (lazy-initialized)
         self._gateway = None
         self._pricing_engine = None
+
+        # Factor library integration (G5)
+        factor_config = config.get("factor_library", {})
+        if factor_config.get("enabled", False):
+            self._factor_library = FactorLibrary(
+                db_path=factor_config.get("db_path", ":memory:")
+            )
+            self._use_factors = True
+            logger.info(
+                "FactorLibrary enabled with %d factors",
+                len(self._factor_library.list_factors()),
+            )
+        else:
+            self._factor_library = None
+            self._use_factors = False
 
     async def on_initialize(self) -> None:
         """Initialize exchange gateway and pricing engine."""
@@ -285,6 +303,26 @@ class SignalScout(BaseAgent):
             ema_trend=ema_trend,
             side=signal_side,
         )
+
+        # ── Factor-Enhanced Scoring (G5) ───────────────────────────
+        if self._use_factors and self._factor_library:
+            try:
+                ohlcv_df = pd.DataFrame([
+                    {"open": b.open, "high": b.high, "low": b.low,
+                     "close": b.close, "volume": b.volume}
+                    for b in ohlcv
+                ])
+                factor_adj = self._compute_factor_adjustment(ohlcv_df, signal_side)
+                adjusted_score = score * (1.0 + 0.2 * factor_adj)
+                adjusted_score = max(0.0, min(1.0, adjusted_score))
+                score_breakdown["factor_adjustment"] = round(factor_adj * 0.2, 4)
+                score = adjusted_score
+                logger.info(
+                    "  %s: Factor adjustment=%.4f, score %.3f → %.3f",
+                    symbol, factor_adj, score / (1.0 + 0.2 * factor_adj), score,
+                )
+            except Exception:
+                logger.warning("Factor computation failed for %s", symbol, exc_info=True)
 
         logger.info(
             "  %s: Signal candidate %s score=%.3f breakdown=%s",
@@ -485,6 +523,56 @@ class SignalScout(BaseAgent):
                 best = level
 
         return best
+
+    def _compute_factor_adjustment(
+        self,
+        ohlcv_df: "pd.DataFrame",
+        side: OrderSide,
+    ) -> float:
+        """Compute factor-based signal adjustment in [-1, 1].
+
+        Uses RSI, BB %B, MFI, and ADX from FactorLibrary.
+        Positive adjustment = reinforces the signal direction.
+        Negative adjustment = contradicts the signal.
+
+        Args:
+            ohlcv_df: OHLCV DataFrame for factor computation.
+            side: Signal direction (BUY or SELL).
+
+        Returns:
+            Composite factor signal in [-1, 1].
+        """
+        lib = self._factor_library
+        assert lib is not None
+
+        # Compute key factors
+        rsi_val = float(lib.compute("rsi", ohlcv_df).iloc[-1])
+        bb_val = float(lib.compute("bb_pct_b", ohlcv_df).iloc[-1])
+        mfi_val = float(lib.compute("mfi", ohlcv_df).iloc[-1])
+        adx_val = float(lib.compute("adx", ohlcv_df).iloc[-1])
+
+        # Normalize to [-1, 1]
+        rsi_signal = (rsi_val - 50.0) / 50.0       # -1 oversold, +1 overbought
+        bb_signal = (bb_val - 0.5) * 2.0            # -1 lower band, +1 upper band
+        mfi_signal = (mfi_val - 50.0) / 50.0        # -1 oversold, +1 overbought
+
+        # For mean reversion: contrarian signals are bullish for BUY
+        # ADX > 25 means trending (bad for mean reversion) → penalize
+        adx_penalty = max(0.0, (adx_val - 25.0) / 75.0)  # 0 at 25, 1 at 100
+
+        # Composite: mean-reversion is contrarian
+        # For BUY: low RSI/BB/MFI = good (negative values = positive signal)
+        # For SELL: high RSI/BB/MFI = good (positive values = positive signal)
+        raw_composite = -(rsi_signal * 0.4 + bb_signal * 0.3 + mfi_signal * 0.3)
+
+        # Flip sign for SELL signals
+        if side == OrderSide.SELL:
+            raw_composite = -raw_composite
+
+        # Penalize if market is trending (mean reversion works in ranges)
+        composite = raw_composite * (1.0 - 0.5 * adx_penalty)
+
+        return max(-1.0, min(1.0, composite))
 
     @staticmethod
     def _signal_to_dict(signal: Signal) -> dict[str, Any]:

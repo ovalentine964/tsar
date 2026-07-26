@@ -8,6 +8,23 @@ from src.knowledge.strategy_genomes import StrategyGenomes
 from src.knowledge.regime_state import RegimeStateStore
 from src.knowledge.pattern_library import PatternLibrary
 from src.knowledge.lesson_archive import LessonArchive
+from src.knowledge.fts_search import MemoryRecall, SearchResult, format_fts_query
+
+# Heavy imports (require ccxt, openai, etc.) — wrapped in try/except so
+# the core knowledge stores remain importable without those dependencies.
+try:
+    from src.knowledge.shadow_extractor import ShadowExtractor, TradingRule, ExtractionResult
+    from src.knowledge.rule_validator import RuleValidator, ValidatedRule
+    from src.knowledge.genome_mutator import GenomeMutator, MutationProposal, MutatorConfig
+except ImportError:
+    ShadowExtractor = None  # type: ignore[assignment,misc]
+    TradingRule = None  # type: ignore[assignment,misc]
+    ExtractionResult = None  # type: ignore[assignment,misc]
+    RuleValidator = None  # type: ignore[assignment,misc]
+    ValidatedRule = None  # type: ignore[assignment,misc]
+    GenomeMutator = None  # type: ignore[assignment,misc]
+    MutationProposal = None  # type: ignore[assignment,misc]
+    MutatorConfig = None  # type: ignore[assignment,misc]
 
 __all__ = [
     "TradeMemory",
@@ -15,4 +32,15 @@ __all__ = [
     "RegimeStateStore",
     "PatternLibrary",
     "LessonArchive",
+    "MemoryRecall",
+    "SearchResult",
+    "format_fts_query",
+    "ShadowExtractor",
+    "TradingRule",
+    "ExtractionResult",
+    "RuleValidator",
+    "ValidatedRule",
+    "GenomeMutator",
+    "MutationProposal",
+    "MutatorConfig",
 ]

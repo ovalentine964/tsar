@@ -27,7 +27,12 @@ from datetime import datetime, timezone
 from typing import Any
 
 from src.agents.base import BaseAgent
-from src.comms.events import CloudEvent
+from src.comms.events import (
+    CloudEvent,
+    TSAR_SHADOW_EXTRACTED,
+    TSAR_RULE_VALIDATED,
+    TSAR_STRATEGY_PROPOSAL,
+)
 from src.comms.publisher import EventPublisher
 from src.comms.subscriber import EventSubscriber
 
@@ -81,6 +86,12 @@ class Orchestrator(BaseAgent):
         self._trades_executed = 0
         self._trades_failed = 0
 
+        # Shadow extraction loop (initialized in on_initialize)
+        self._shadow_extractor = None
+        self._rule_validator = None
+        self._genome_mutator = None
+        self._last_shadow_extraction: float = 0
+
         # Graceful shutdown
         self._shutdown_event = asyncio.Event()
 
@@ -113,6 +124,9 @@ class Orchestrator(BaseAgent):
 
         # Register signal handlers for graceful shutdown
         self._register_signal_handlers()
+
+        # Initialize shadow extraction loop
+        await self._initialize_shadow_loop()
 
         logger.info(
             "🏰 Orchestrator ready: %d agents active, scan interval=%ds",
@@ -191,6 +205,176 @@ class Orchestrator(BaseAgent):
         except NotImplementedError:
             logger.warning("Signal handlers not supported on this platform")
 
+    async def _initialize_shadow_loop(self) -> None:
+        """Initialize the shadow extraction → validation → mutation pipeline.
+
+        Sets up ShadowExtractor, RuleValidator (with OHLCVProvider adapter),
+        and GenomeMutator. Only activates if shadow_extractor is enabled in config.
+        """
+        shadow_config = self.config.get("shadow_extractor", {})
+        if not shadow_config.get("enabled", False):
+            logger.info("Shadow extraction loop: disabled")
+            return
+
+        try:
+            from src.knowledge.shadow_extractor import ShadowExtractor
+            from src.knowledge.rule_validator import RuleValidator
+            from src.knowledge.genome_mutator import GenomeMutator, MutatorConfig
+            from src.knowledge.ohlcv_adapter import ExchangeGatewayOHLCVAdapter
+            from src.knowledge.trade_memory import TradeMemory
+            from src.interfaces import get_llm_provider, get_exchange_gateway
+
+            db_path = self.config.get("database", {}).get("db_path", "data/tsar.db")
+
+            # TradeMemory for reading closed trades
+            trade_memory = TradeMemory(db_path)
+
+            # LLM provider for rule extraction
+            llm_provider = get_llm_provider()
+            self._shadow_extractor = ShadowExtractor(
+                trade_memory=trade_memory,
+                llm_provider=llm_provider,
+            )
+
+            # OHLCV adapter wrapping ExchangeGateway
+            gateway = get_exchange_gateway()
+            ohlcv_adapter = ExchangeGatewayOHLCVAdapter(gateway)
+            self._rule_validator = RuleValidator(
+                ohlcv_provider=ohlcv_adapter,
+                db_path=db_path,
+            )
+
+            # Genome mutator for proposing strategy mutations
+            from src.knowledge.strategy_genomes import StrategyGenomes
+            genomes = StrategyGenomes(db_path)
+            mutator_config = MutatorConfig(
+                min_confidence=shadow_config.get("min_confidence", 0.6),
+                min_sharpe=shadow_config.get("min_sharpe", 0.5),
+                max_proposals_per_run=shadow_config.get("max_proposals", 5),
+                allow_new_genomes=shadow_config.get("allow_new_genomes", False),
+            )
+            self._genome_mutator = GenomeMutator(
+                strategy_genomes=genomes,
+                config=mutator_config,
+            )
+
+            logger.info(
+                "🔄 Shadow extraction loop initialized (interval=%dh, min_trades=%d)",
+                shadow_config.get("cycle_interval_hours", 24),
+                shadow_config.get("min_trades", 10),
+            )
+
+        except Exception as e:
+            logger.error("Failed to initialize shadow loop: %s", e)
+            self._shadow_extractor = None
+            self._rule_validator = None
+            self._genome_mutator = None
+
+    async def _run_shadow_extraction(self) -> None:
+        """Run the full shadow extraction → validation → mutation pipeline.
+
+        Steps:
+        1. Extract rules from closed trade history via ShadowExtractor
+        2. Validate rules via RuleValidator (OHLCV backtest)
+        3. Propose genome mutations via GenomeMutator
+        4. Publish mutation proposals for Strategy Geneticist
+        """
+        logger.info("🔄 Starting shadow extraction cycle...")
+
+        try:
+            shadow_config = self.config.get("shadow_extractor", {})
+
+            # Step 1: Extract rules from trade history
+            extraction = await self._shadow_extractor.extract(
+                min_trades=shadow_config.get("min_trades", 10),
+                min_win_rate=shadow_config.get("min_win_rate", 0.55),
+                lookback_days=shadow_config.get("lookback_days", 90),
+            )
+            if not extraction.rules:
+                logger.info("Shadow extraction: no rules found")
+                return
+
+            logger.info(
+                "Shadow extraction: %d rules from %d trades (%d winners)",
+                len(extraction.rules), extraction.source_trade_count,
+                extraction.winning_trade_count,
+            )
+
+            # Publish extraction event
+            await self.publish_event(
+                stream="commands",
+                event_type=TSAR_SHADOW_EXTRACTED,
+                data={
+                    "rules": [r.to_dict() for r in extraction.rules],
+                    "source_trade_count": extraction.source_trade_count,
+                    "winning_trade_count": extraction.winning_trade_count,
+                    "losing_trade_count": extraction.losing_trade_count,
+                },
+                priority=3,
+                agent_role="ANALYSIS",
+            )
+
+            # Step 2: Validate rules via backtest
+            timeframe = shadow_config.get("timeframe", "1h")
+            lookback = shadow_config.get("lookback_candles", 500)
+            validated = await self._rule_validator.validate_batch(
+                extraction.rules,
+                timeframe=timeframe,
+                lookback_candles=lookback,
+            )
+            passed = [r for r in validated if r.validation_status == "passed"]
+            logger.info(
+                "Rule validation: %d/%d passed",
+                len(passed), len(validated),
+            )
+
+            # Publish validation events
+            for vr in validated:
+                await self.publish_event(
+                    stream="commands",
+                    event_type=TSAR_RULE_VALIDATED,
+                    data={
+                        "rule_id": vr.rule_id,
+                        "source_rule_id": vr.source_rule_id,
+                        "status": vr.validation_status,
+                        "sharpe": vr.sharpe,
+                        "win_rate": vr.win_rate,
+                        "profit_factor": vr.profit_factor,
+                        "sample_size": vr.sample_size,
+                    },
+                    priority=3,
+                    agent_role="ANALYSIS",
+                )
+
+            if not passed:
+                return
+
+            # Step 3: Propose genome mutations
+            proposals = await self._genome_mutator.propose_mutations(passed)
+            logger.info(
+                "Genome mutations: %d proposals from %d validated rules",
+                len(proposals), len(passed),
+            )
+
+            # Step 4: Publish proposals for Strategy Geneticist
+            for proposal in proposals:
+                await self.publish_event(
+                    stream="strategy_proposals",
+                    event_type=TSAR_STRATEGY_PROPOSAL,
+                    data=proposal.to_dict(),
+                    priority=2,
+                    agent_role="ANALYSIS",
+                )
+
+            logger.info(
+                "🔄 Shadow extraction cycle complete: "
+                "%d rules → %d validated → %d proposals",
+                len(extraction.rules), len(passed), len(proposals),
+            )
+
+        except Exception as e:
+            logger.error("Shadow extraction cycle failed: %s", e)
+
     async def handle_event(self, stream: str, event: CloudEvent) -> None:
         """Handle events from subscribed streams.
 
@@ -228,7 +412,8 @@ class Orchestrator(BaseAgent):
         The cycle:
         1. Check if it's time for a scan
         2. Monitor agent health
-        3. Log pipeline status
+        3. Run shadow extraction if interval elapsed
+        4. Log pipeline status
 
         The actual trading pipeline is event-driven:
         - SignalScout detects signals → publishes signal.detected
@@ -244,6 +429,15 @@ class Orchestrator(BaseAgent):
             self._last_scan_time = now
             self._cycles_completed += 1
             await self._log_pipeline_status()
+
+        # ── Shadow Extraction Cycle ───────────────────────────────
+        if self._shadow_extractor:
+            shadow_interval = self.config.get("shadow_extractor", {}).get(
+                "cycle_interval_hours", 24
+            ) * 3600
+            if now - self._last_shadow_extraction >= shadow_interval:
+                self._last_shadow_extraction = now
+                await self._run_shadow_extraction()
 
         # ── Health Monitoring ─────────────────────────────────────
         await self._check_agent_health()

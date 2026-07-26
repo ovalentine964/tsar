@@ -37,6 +37,7 @@ from typing import Any
 
 from src.agents.base import BaseAgent
 from src.comms.events import CloudEvent
+from src.risk.mandate_gate import MandateGate
 from src.interfaces.types import (
     DrawdownLevel,
     DrawdownState,
@@ -101,15 +102,35 @@ class RiskGuardian(BaseAgent):
         # Engine reference (lazy-initialized)
         self._risk_engine = None
 
+        # Mandate Gate — pre-risk authorization (Check 0)
+        mandate_config = risk_config.get("mandate_gate", {})
+        if mandate_config.get("enabled", True):
+            self._mandate_gate = MandateGate(
+                config_path=mandate_config.get("config_path", "config/mandate.yaml")
+            )
+        else:
+            self._mandate_gate = None
+        self._is_live = trading_mode == "live"
+
     async def on_initialize(self) -> None:
         """Initialize the risk engine backend."""
         from src.interfaces import get_risk_engine
 
         self._risk_engine = get_risk_engine()
-        logger.info(
-            "RiskGuardian initialized: limits=%s",
-            {k: v for k, v in self._limits.items()},
-        )
+
+        if self._mandate_gate:
+            mandate_status = self._mandate_gate.get_status()
+            logger.info(
+                "RiskGuardian initialized: limits=%s, mandate=%s (active=%s)",
+                {k: v for k, v in self._limits.items()},
+                mandate_status["mandate_status"],
+                mandate_status["is_active"],
+            )
+        else:
+            logger.info(
+                "RiskGuardian initialized: limits=%s, mandate=DISABLED",
+                {k: v for k, v in self._limits.items()},
+            )
 
     async def handle_event(self, stream: str, event: CloudEvent) -> None:
         """Handle incoming signal.detected events.
@@ -168,7 +189,32 @@ class RiskGuardian(BaseAgent):
             signal.score, trace_id,
         )
 
-        # Run all checks
+        # ── Check 0: Mandate Gate (pre-risk authorization) ────
+        if self._mandate_gate and self._is_live:
+            mandate_decision = self._mandate_gate.check(
+                signal,
+                is_live=True,
+                daily_trade_count=signal.metadata.get("daily_trade_count", 0),
+            )
+            if not mandate_decision.approved:
+                logger.warning(
+                    "🔒 MANDATE GATE REJECTED [%s]: %s %s — %s",
+                    mandate_decision.veto_level,
+                    signal.signal_id,
+                    signal.symbol,
+                    mandate_decision.rejection_reasons,
+                )
+                await self.publish_event(
+                    stream="risk_decisions",
+                    event_type="tsar.risk.vetoed.v1",
+                    data=self._decision_to_dict(mandate_decision, signal),
+                    priority=2,
+                    risk_level="HARD",
+                    trace_id=trace_id,
+                )
+                return
+
+        # Run all remaining risk checks
         decision = self._run_all_checks(signal)
 
         if decision.approved:

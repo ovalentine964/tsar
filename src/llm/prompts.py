@@ -209,6 +209,57 @@ Assess:
 # PROMPT REGISTRY
 # ═══════════════════════════════════════════════════════════════════════
 
+# ═══════════════════════════════════════════════════════════════════════
+# SHADOW ACCOUNT — RULE EXTRACTION PROMPTS
+# ═══════════════════════════════════════════════════════════════════════
+
+SHADOW_RULE_EXTRACTION_SYSTEM = (
+    "You are a quantitative trading rule analyst. You analyze completed trades "
+    "to discover implicit if-then rules that distinguish winning trades from "
+    "losing ones. Every rule must be specific, testable, and backed by data. "
+    "Never invent rules without evidence in the trade data."
+)
+
+SHADOW_RULE_EXTRACTION = """Analyze these winning trades and extract implicit trading rules.
+
+Trade Group: {group_key}
+
+Trade Data:
+{trade_data}
+
+Your task:
+1. Identify 3-5 IF-THEN rules that explain WHY the winning trades won.
+2. Each rule must have specific, measurable conditions (price levels, indicators, volumes).
+3. Compare winners to losers — what's DIFFERENT about the winners?
+4. Rate each rule's confidence based on how many trades support it.
+
+Respond with a JSON object:
+{{
+  "rules": [
+    {{
+      "conditions": [
+        {{"type": "rsi_below", "value": 30}},
+        {{"type": "volume_above_avg", "multiplier": 1.5}}
+      ],
+      "action": "buy",
+      "confidence": 0.75,
+      "regime": "oversold_reversal",
+      "description": "Buy when RSI is oversold with above-average volume",
+      "rationale": "7 of 10 winning trades had RSI < 30 with volume spike"
+    }}
+  ]
+}}
+
+Supported condition types:
+- rsi_below / rsi_above (value: float)
+- price_above_ma / price_below_ma (period: int)
+- volume_above_avg (multiplier: float)
+- close_above_high / close_below_low (lookback: int)
+- price_change_above (pct: float)
+
+Be precise. Vague rules will be rejected."""
+
+
 PROMPT_TEMPLATES: dict[str, str] = {
     # Trade analysis
     "t2_signal_narrative": SIGNAL_NARRATIVE,
@@ -225,6 +276,8 @@ PROMPT_TEMPLATES: dict[str, str] = {
     # Regime explanation
     "t2_regime_explanation": REGIME_EXPLANATION,
     "t3_risk_scenario": RISK_SCENARIO,
+    # Shadow account
+    "t3_shadow_rule_extraction": SHADOW_RULE_EXTRACTION,
 }
 
 # Maps task types to their system prompt category
@@ -241,6 +294,7 @@ SYSTEM_PROMPTS: dict[str, str] = {
     "t3_bias_detection": TRADE_ANALYSIS_SYSTEM,
     "t2_regime_explanation": REGIME_EXPLANATION_SYSTEM,
     "t3_risk_scenario": REGIME_EXPLANATION_SYSTEM,
+    "t3_shadow_rule_extraction": SHADOW_RULE_EXTRACTION_SYSTEM,
 }
 
 
