@@ -84,13 +84,12 @@ Desktop.ini
 $RECYCLE.BIN/
 
 # --- Data (generated, not source) ---
-data/*.db
-data/*.db-journal
-data/*.db-wal
-data/backups/
-data/audit/
+data/
 logs/
 *.log
+
+# --- Vibe-Trading (cloned repo, not part of TSAR) ---
+Vibe-Trading/
 
 # --- TSAR Runtime ---
 /tmp/tsar_kill_switch

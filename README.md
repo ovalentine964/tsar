@@ -3,10 +3,10 @@
 > **Autonomous capital compounding under strict risk constraints.**
 
 [![Architecture](https://img.shields.io/badge/Architecture-v3.0.0-green?style=for-badge)]()
-[![Super Agent](https://img.shields.io/badge/Super%20Agent-PASS_8.8/10-green?style=for-badge)]()
-[![Future Ready](https://img.shields.io/badge/Future%20Ready-Python%2BRust%2BC++-blue?style=for-badge)]()
+[![Phases](https://img.shields.io/badge/Phases_1A--4-COMPLETE-green?style=for-badge)]()
+[![Mobile](https://img.shields.io/badge/Mobile-Flutter-blue?style=for-badge)]()
 [![License](https://img.shields.io/badge/License-MIT-blue?style=for-badge)]()
-[![Status](https://img.shields.io/badge/Status-Ready_for_Engineering-yellow?style=for-badge)]()
+[![Status](https://img.shields.io/badge/Status-Integration_Wiring_Complete-yellow?style=for-badge)]()
 
 ## What Is TSAR?
 
@@ -24,6 +24,20 @@ TSAR is a **self-improving market intelligence system** — not a trading bot, n
 TRADE → OBSERVE → REFLECT → EXTRACT → ADAPT → BETTER TRADE
   ↑                                                │
   └────────────────────────────────────────────────┘
+```
+
+## Status
+
+```
+ ✅ Phase 1A — FTS5 full-text search across all knowledge stores
+ ✅ Phase 1B — Shadow Account (paper trading mirror with lesson extraction)
+ ✅ Phase 2   — Backtest Engine (walk-forward, Monte Carlo, factor benchmarking)
+ ✅ Phase 3   — Mandate Gate (human authorization boundary for live trading)
+ ✅ Phase 4   — Factor Library (IC/IR scoring, category taxonomy, strategy factors)
+ ✅ Integration Wiring — All components connected via CloudEvents + FastAPI
+ ✅ Mobile App — Flutter app with full API integration (28+ endpoints)
+ ⬜ Engineering — Production hardening, deployment
+ ⬜ Live Trading — Paper validation → live with mandate
 ```
 
 ## Architecture (v3.0.0)
@@ -76,6 +90,18 @@ Future-ready from day one. Python + Rust + C++ via abstract interfaces.
 
 **Agent code calls the interface. YAML config selects the backend. No refactoring ever.**
 
+## Components
+
+### Core Systems
+
+| Component | Description |
+|-----------|-------------|
+| **FTS5 Search** | Full-text search across trade memory, lessons, patterns, and genomes |
+| **Shadow Account** | Paper trading mirror that extracts lessons from hypothetical trades |
+| **Backtest Engine** | Walk-forward validation, Monte Carlo simulation, factor benchmarking |
+| **Mandate Gate** | Human authorization boundary — no live trading without a committed mandate |
+| **Factor Library** | IC/IR scoring, category taxonomy, alpha factor discovery and ranking |
+
 ### 10 Agents
 
 | Agent | Role |
@@ -101,6 +127,33 @@ Future-ready from day one. Python + Rust + C++ via abstract interfaces.
 | Pattern Library | Discovered patterns with statistical validation |
 | Lesson Archive | Distilled wisdom from failures and successes |
 
+## Mobile App
+
+A Flutter mobile app for monitoring and controlling TSAR from anywhere.
+
+| Feature | Description |
+|---------|-------------|
+| Dashboard | Real-time P&L, win rate, equity curve, market regime, flywheel health |
+| Trades | History with symbol/status filters, infinite scroll, detail sheets |
+| Risk & Portfolio | Risk gauges, circuit breaker, open positions, alerts |
+| Factors | Library browser with category filter, IC/IR rankings |
+| Kill Switch | Floating action button with biometric confirmation |
+| Knowledge Search | FTS5 search across all knowledge stores |
+
+**Theme:** Dark terminal aesthetic — green (#00C853) for profit, red (#FF1744) for loss, JetBrains Mono for financial data.
+
+```bash
+cd mobile/
+flutter pub get
+flutter run
+```
+
+See [mobile/README.md](mobile/README.md) for full setup and API integration details.
+
+### Download
+
+Pre-built APK available on [GitHub Releases](../../releases).
+
 ## Tech Stack
 
 | Layer | Technology | Purpose |
@@ -115,44 +168,12 @@ Future-ready from day one. Python + Rust + C++ via abstract interfaces.
 | Exchange | ccxt | 100+ exchanges |
 | LLM | LiteLLM + Ollama + DeepSeek-R1 | Model-agnostic routing |
 | API | FastAPI | REST + WebSocket (port 8000) |
+| Mobile | Flutter + Dart | Cross-platform mobile app |
 | Telegram | python-telegram-bot | Commands + alerts |
 | Monitoring | Prometheus + Grafana | Metrics + dashboards |
 | Messaging | CloudEvents v1.0 | Standard event protocol |
 | Container | Docker Compose | Full stack orchestration |
 | CI/CD | GitHub Actions | lint → test → build → deploy |
-
-## Super Agent Scorecard
-
-| Capability | Score | Status |
-|-----------|-------|--------|
-| Harness | 9/10 | ✅ Strong |
-| Knowledge Grounding | 9/10 | ✅ Strong |
-| Tool Use | 9/10 | ✅ Strong |
-| Memory Management | 9/10 | ✅ Strong |
-| Safeguards | 9.5/10 | ✅ Exceptional |
-| Iteration | 8/10 | ✅ Good |
-| Domain Expertise | 8.5/10 | ✅ Strong |
-| Self-Improvement | 9/10 | ✅ Strong |
-| Model Agnosticism | 8.5/10 | ✅ Fixed |
-| Open Ecosystem | 7.5/10 | ✅ Fixed |
-| **Overall** | **8.8/10** | **PASS** |
-
-## Council Verdict
-
-| Member | Verdict | Score |
-|--------|---------|-------|
-| Chief Architect | CONDITIONAL PASS | 8.4/10 |
-| Chief Risk Officer | CONDITIONAL PASS | 7.5/10 |
-| Chief Strategist | CONDITIONAL PASS | — |
-| Chief Engineer | CONDITIONAL PASS | — |
-
-**55 issues found. All addressed.**
-
-## Markets
-
-- **Crypto:** Binance (BTC, ETH, SOL)
-- **Gold:** OANDA via MT5 (XAU/USD)
-- **Forex:** OANDA via MT5 (EUR/USD, GBP/USD)
 
 ## Project Structure
 
@@ -160,26 +181,24 @@ Future-ready from day one. Python + Rust + C++ via abstract interfaces.
 tsar/
 ├── src/                          # Python source
 │   ├── interfaces/              # Abstract base classes (THE CONTRACT)
-│   │   ├── exchange_gateway.py
-│   │   ├── pricing_engine.py
-│   │   ├── execution_engine.py
-│   │   ├── risk_engine.py
-│   │   ├── llm_provider.py
-│   │   └── backend_registry.py
-│   ├── backends/                # Implementations
-│   │   ├── python/              # Day 1 backends
-│   │   ├── rust/                # Level 2 backends (via PyO3)
-│   │   └── cpp/                 # Level 3+ backends (via C FFI)
+│   ├── backends/                # Implementations (Python/Rust/C++)
 │   ├── agents/                  # 10 agents
-│   ├── knowledge/               # 5 knowledge stores
-│   ├── risk/                    # Risk engine + guards
-│   ├── strategy/                # Strategies + evolution
+│   ├── knowledge/               # 5 knowledge stores + FTS5 + shadow account
+│   ├── risk/                    # Risk engine + guards + mandate gate
+│   ├── strategy/                # Strategies + backtest + factor library
 │   ├── llm/                     # LLM routing
 │   ├── comms/                   # CloudEvents messaging
 │   ├── metrics/                 # Improvement measurement
 │   ├── resources/               # Resource enforcement
 │   ├── api/                     # FastAPI endpoints
 │   └── bot/                     # Telegram commands
+├── mobile/                       # Flutter mobile app
+│   └── lib/
+│       ├── models/              # Data models
+│       ├── services/            # API client (28+ endpoints)
+│       ├── providers/           # State management
+│       ├── screens/             # Dashboard, Trades, Risk, Factors, Settings
+│       └── widgets/             # Cards, charts, kill switch FAB
 ├── rust/                         # Rust performance layer
 │   └── crates/
 │       ├── ws-manager/          # WebSocket connections
@@ -191,6 +210,8 @@ tsar/
 │   ├── fix-engine/              # FIX protocol
 │   └── cuda-kernels/            # GPU acceleration
 ├── config/                       # Configuration
+│   ├── tsar.yaml                # Main config (working defaults)
+│   ├── mandate.yaml             # Trading mandate (human authorization)
 │   ├── backends.yaml            # Backend selection
 │   ├── models.yaml              # LLM model config
 │   ├── risk.yaml                # Risk parameters
@@ -201,42 +222,61 @@ tsar/
 ├── docs/                         # Documentation
 │   ├── research/                # 14 research reports
 │   ├── architecture/            # Architecture specs
-│   └── reviews/                 # Council reviews
-├── analysis/                     # Analysis & fixes
 │   ├── council/                 # Council reviews
+│   └── reviews/                 # Architecture reviews
+├── analysis/                     # Analysis & research
 │   └── fixes/                   # Fix specs
 ├── docker-compose.yml
 ├── pyproject.toml
-├── Cargo.toml
 ├── Makefile
 └── README.md
 ```
+
+## Quick Start
+
+```bash
+# Clone and setup
+git clone <repo-url> && cd tsar
+make setup          # Install deps, create DB, verify
+
+# Run (paper mode)
+python3 -m src --paper
+
+# Run tests
+make test
+
+# Docker
+docker-compose up -d
+```
+
+## Configuration
+
+| File | Purpose |
+|------|---------|
+| `config/tsar.yaml` | Main config — exchange, risk, LLM, strategy defaults |
+| `config/mandate.yaml` | Trading mandate — human authorization boundary |
+| `config/risk.yaml` | Risk parameters — limits, guards, kill switch |
+| `config/models.yaml` | LLM model routing and fallbacks |
+| `config/backends.yaml` | Backend selection per interface |
 
 ## Documentation
 
 - [TSAR Architecture v3.0.0](docs/architecture/TSAR_ARCHITECTURE.md) — Single source of truth
 - [Research Analysis](analysis/RESEARCH_ANALYSIS.md) — 14 reports analyzed
-- [Super Agent Capability Report](analysis/SUPER_AGENT_CAPABILITY_REPORT.md) — 10-criteria test
-- [Council Reviews](analysis/council/) — 4 members, 55 issues fixed
+- [Council Reviews](docs/council/) — 4 members, 55 issues fixed
 - [Fix Reports](analysis/fixes/) — 7 fix specs (A through G)
+- [Mobile App](mobile/README.md) — Flutter app setup and API docs
+- [Changelog](CHANGELOG.md) — Build history
 
-## Status
+## Markets
 
-```
-1. ✅ VALIDATE    — COMPLETE (14 research reports)
-2. ✅ ARCHITECT   — COMPLETE (v3.0.0 — future-ready, Python+Rust+C++)
-3. ✅ REVIEW      — COMPLETE (Super Agent Test: PASS 8.8/10)
-4. ✅ COUNCIL     — COMPLETE (4 members, 55 issues found & fixed)
-5. ✅ FIX GAPS    — COMPLETE (7 fix specs + hybrid architecture approved)
-6. ✅ INTERFACES  — COMPLETE (5 ABCs, BackendRegistry, config-driven)
-7. ⬜ ENGINEER    — Council designing engineering team
-8. ⬜ REVIEW & TEST
-9. ⬜ DEPLOY
-```
+- **Crypto:** Binance (BTC, ETH, SOL)
+- **Gold:** OANDA via MT5 (XAU/USD)
+- **Forex:** OANDA via MT5 (EUR/USD, GBP/USD)
 
 ## License
 
-MIT
+MIT — see [LICENSE](LICENSE)
 
 ---
 
