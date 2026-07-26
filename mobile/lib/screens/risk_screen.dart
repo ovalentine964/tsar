@@ -205,7 +205,7 @@ class _RiskScreenState extends State<RiskScreen> {
                       size: 100,
                     ),
                     const SizedBox(height: 8),
-                    const Text('DAILY LOSS LIMIT',
+                    Text('DAILY LOSS LIMIT',
                         style: TextStyle(
                           fontFamily: GoogleFonts.jetBrainsMono().fontFamily,
                           fontSize: 10,
@@ -228,7 +228,7 @@ class _RiskScreenState extends State<RiskScreen> {
                       size: 100,
                     ),
                     const SizedBox(height: 8),
-                    const Text('DRAWDOWN',
+                    Text('DRAWDOWN',
                         style: TextStyle(
                           fontFamily: GoogleFonts.jetBrainsMono().fontFamily,
                           fontSize: 10,
