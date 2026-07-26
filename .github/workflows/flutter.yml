@@ -60,6 +60,8 @@ jobs:
       - name: Pin Android SDK 34
         run: |
           yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager 'platforms;android-34' 'build-tools;34.0.0' || true
+          # Remove corrupted SDK 35
+          rm -rf $ANDROID_HOME/platforms/android-35 || true
 
       - uses: subosito/flutter-action@v2
         with:
