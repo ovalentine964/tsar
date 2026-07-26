@@ -57,6 +57,10 @@ jobs:
           distribution: 'zulu'
           java-version: '17'
 
+      - name: Pin Android SDK 34
+        run: |
+          yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager 'platforms;android-34' 'build-tools;34.0.0' || true
+
       - uses: subosito/flutter-action@v2
         with:
           flutter-version: ${{ env.FLUTTER_VERSION }}
