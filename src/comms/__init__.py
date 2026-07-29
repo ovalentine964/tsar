@@ -11,6 +11,7 @@ Components:
 """
 
 from src.comms.events import CloudEvent, create_event, decode_event, encode_event
+from src.comms.event_bus import EventBus
 from src.comms.publisher import EventPublisher, InMemoryBus
 from src.comms.subscriber import EventSubscriber
 
@@ -18,6 +19,7 @@ __all__: list[str] = [
     "CloudEvent",
     "EventPublisher",
     "EventSubscriber",
+    "EventBus",
     "InMemoryBus",
     "create_event",
     "decode_event",

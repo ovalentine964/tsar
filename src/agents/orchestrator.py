@@ -35,6 +35,7 @@ from src.comms.events import (
 )
 from src.comms.publisher import EventPublisher
 from src.comms.subscriber import EventSubscriber
+from src.comms.event_bus import EventBus
 
 logger = logging.getLogger(__name__)
 
@@ -91,6 +92,10 @@ class Orchestrator(BaseAgent):
         self._rule_validator = None
         self._genome_mutator = None
         self._last_shadow_extraction: float = 0
+
+        # Event bus for flywheel
+        self._event_bus = EventBus()
+        self._trade_count = 0
 
         # Graceful shutdown
         self._shutdown_event = asyncio.Event()
@@ -389,6 +394,7 @@ class Orchestrator(BaseAgent):
         elif stream == "trades":
             if event.type == "tsar.trade.executed.v1":
                 self._trades_executed += 1
+                self._trade_count += 1
                 logger.info(
                     "📊 Trade executed: %s %s qty=%s price=%s slippage=%s bps",
                     event.data.get("symbol"),
@@ -397,6 +403,23 @@ class Orchestrator(BaseAgent):
                     event.data.get("entry_price"),
                     event.data.get("slippage_bps"),
                 )
+
+                # Flywheel: publish trade event to event bus
+                await self._event_bus.publish("tsar.trade.executed", event.data)
+                await self._event_bus.publish("tsar.trade.recorded", event.data)
+
+                # Flywheel: periodic shadow extraction (every 10 trades)
+                if self._trade_count % 10 == 0 and self._shadow_extractor and self._rule_validator and self._genome_mutator:
+                    try:
+                        rules = await self._shadow_extractor.extract(min_trades=5, min_win_rate=0.55)
+                        if rules and rules.rules:
+                            for rule in rules.rules:
+                                validated = await self._rule_validator.validate_batch([rule])
+                                for vr in validated:
+                                    if vr.validation_status == "passed":
+                                        await self._genome_mutator.propose_mutations([vr])
+                    except Exception as e:
+                        logger.warning("Flywheel shadow extraction failed: %s", e)
             elif event.type == "tsar.trade.failed.v1":
                 self._trades_failed += 1
                 logger.warning(

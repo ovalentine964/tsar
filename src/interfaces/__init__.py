@@ -53,6 +53,7 @@ def _get_registry() -> "BackendRegistry":
     if _backend_registry is None:
         from src.interfaces.backend_registry import BackendRegistry
         _backend_registry = BackendRegistry()
+        _backend_registry._register_defaults()
     return _backend_registry
 
 

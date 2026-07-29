@@ -360,4 +360,62 @@ def create_app(config: Any = None) -> FastAPI:
             "last_cycle": datetime.now(timezone.utc).isoformat(),
         }
 
+    # ─── Mobile App Route Aliases ────────────────────────────────
+    @app.get("/api/dashboard")
+    async def api_dashboard_alias():
+        return await dashboard()
+
+    @app.get("/api/trades")
+    async def api_trades_alias():
+        return await get_trades()
+
+    @app.get("/api/risk")
+    async def api_risk_alias():
+        return await get_risk()
+
+    @app.get("/api/positions")
+    async def api_positions_alias():
+        return await get_positions()
+
+    @app.get("/api/pnl")
+    async def api_pnl_alias():
+        return await get_pnl()
+
+    @app.get("/api/mandate")
+    async def api_mandate_alias():
+        return await get_mandate()
+
+    @app.get("/api/factors")
+    async def api_factors_alias():
+        return await get_factors()
+
+    @app.get("/api/strategies")
+    async def api_strategies_alias():
+        return await get_strategies()
+
+    @app.get("/api/regime")
+    async def api_regime_alias():
+        return await get_regime()
+
+    @app.get("/api/backends")
+    async def api_backends_alias():
+        return await get_backends()
+
+    @app.get("/api/flywheel")
+    async def api_flywheel_alias():
+        return await get_flywheel()
+
+    @app.get("/api/patterns")
+    async def api_patterns_alias():
+        return await get_patterns()
+
+    @app.get("/api/lessons")
+    async def api_lessons_alias():
+        return await get_lessons()
+
+    @app.get("/api/health")
+    async def api_health_alias():
+        return await health()
+
+
     return app

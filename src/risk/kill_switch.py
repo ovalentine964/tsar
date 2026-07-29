@@ -197,10 +197,28 @@ class KillSwitch:
     # Internal: File operations
     # ------------------------------------------------------------------
 
+
+    def _write_atomic(self, content_str: str, path: str) -> None:
+        """Atomic file write — prevents partial writes."""
+        import os
+        import tempfile
+        dir_name = os.path.dirname(path) or "."
+        fd, tmp_path = tempfile.mkstemp(dir=dir_name)
+        try:
+            with os.fdopen(fd, 'w') as f:
+                f.write(content_str)
+            os.rename(tmp_path, path)  # Atomic on same filesystem
+        except Exception:
+            try:
+                os.unlink(tmp_path)
+            except OSError:
+                pass
+            raise
+
     def _write_file(self, payload: dict[str, Any]) -> None:
         """Write kill switch state to file (primary store)."""
         try:
-            self._file_path.write_text(json.dumps(payload, indent=2))
+            self._write_atomic(json.dumps(payload, indent=2), str(self._file_path))
         except Exception as e:
             logger.critical(f"FAILED to write kill switch file: {e}")
             # Try alternate location as last resort

@@ -20,6 +20,31 @@ from src.interfaces.types import Signal
 
 logger = logging.getLogger(__name__)
 
+# ═══════════════════════════════════════════════════════════════
+# Guard Base Classes (for extensible guard system)
+# ═══════════════════════════════════════════════════════════════
+
+
+@dataclass(frozen=True)
+class GuardResult:
+    """Result of a single guard check."""
+    passed: bool = True
+    guard_name: str = ""
+    reason: str = ""
+    severity: str = "INFO"  # INFO, WARNING, HIGH, CRITICAL
+
+
+class Guard:
+    """Base class for pluggable risk guards."""
+
+    def __init__(self, name: str) -> None:
+        self.name = name
+
+    def check(self, order: Any) -> GuardResult:
+        """Check an order against this guard. Override in subclasses."""
+        return GuardResult(passed=True, guard_name=self.name)
+
+
 
 @dataclass(frozen=True)
 class GuardsConfig:

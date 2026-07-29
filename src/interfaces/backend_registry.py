@@ -188,6 +188,25 @@ class BackendRegistry:
     # CONFIG LOADING
     # ═══════════════════════════════════════════════════════════════
 
+
+    def _register_defaults(self) -> None:
+        """Register all default Python backends."""
+        from src.backends.python.ccxt_gateway import CcxtGateway
+        from src.backends.python.ccxt_exec_engine import CcxtExecEngine
+        from src.backends.python.pandas_ta_engine import PandasTAEngine
+        from src.backends.python.python_risk_engine import PythonRiskEngine
+        from src.backends.python.ollama_provider import OllamaProvider
+        from src.backends.python.openai_provider import OpenAIProvider
+        from src.backends.python.deepseek_provider import DeepSeekProvider
+
+        self.register("exchange_gateway", CcxtGateway.__name__, CcxtGateway)
+        self.register("execution_engine", CcxtExecEngine.__name__, CcxtExecEngine)
+        self.register("pricing_engine", PandasTAEngine.__name__, PandasTAEngine)
+        self.register("risk_engine", PythonRiskEngine.__name__, PythonRiskEngine)
+        self.register("llm_provider", OllamaProvider.__name__, OllamaProvider)
+        self.register("llm_provider_openai", OpenAIProvider.__name__, OpenAIProvider)
+        self.register("llm_provider_deepseek", DeepSeekProvider.__name__, DeepSeekProvider)
+
     def load_from_config(self, config_path: str) -> None:
         """Load backend registrations from a YAML config file.
 

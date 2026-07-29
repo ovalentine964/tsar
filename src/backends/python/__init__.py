@@ -17,6 +17,7 @@ from src.backends.python.deepseek_provider import DeepSeekProvider
 from src.backends.python.ollama_provider import OllamaProvider
 from src.backends.python.openai_provider import OpenAIProvider
 from src.backends.python.pandas_ta_engine import PandasTAEngine
+from src.backends.python.python_risk_engine import PythonRiskEngine
 
 __all__: list[str] = [
     "CcxtGateway",
@@ -25,4 +26,5 @@ __all__: list[str] = [
     "OllamaProvider",
     "OpenAIProvider",
     "PandasTAEngine",
+    "PythonRiskEngine",
 ]
