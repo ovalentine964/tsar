@@ -5,12 +5,12 @@ All timestamps in TSAR are UTC internally. Display formatting
 handles timezone conversion for user-facing output.
 """
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 
 def utc_now() -> datetime:
     """Get current UTC time."""
-    return datetime.now(timezone.utc)
+    return datetime.now(UTC)
 
 
 def to_timestamp(dt: datetime) -> float:
@@ -20,7 +20,7 @@ def to_timestamp(dt: datetime) -> float:
 
 def from_timestamp(ts: float) -> datetime:
     """Convert Unix timestamp to UTC datetime."""
-    return datetime.fromtimestamp(ts, tz=timezone.utc)
+    return datetime.fromtimestamp(ts, tz=UTC)
 
 
 def format_ts(dt: datetime, fmt: str = "%Y-%m-%d %H:%M:%S UTC") -> str:

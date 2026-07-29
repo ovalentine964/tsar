@@ -9,12 +9,14 @@ Bridge: ExchangeGateway.get_ohlcv() → OHLCVProvider.get_candles()
 
 from __future__ import annotations
 
-from typing import Optional
+from typing import TYPE_CHECKING
 
-from src.interfaces.exchange_gateway import ExchangeGateway
 from src.interfaces.types import OHLCV, Timeframe
 from src.knowledge.rule_validator import OHLCVCandle
 from src.utils.logging import get_logger
+
+if TYPE_CHECKING:
+    from src.interfaces.exchange_gateway import ExchangeGateway
 
 logger = get_logger(__name__)
 
@@ -68,7 +70,7 @@ class ExchangeGatewayOHLCVAdapter:
         symbol: str,
         timeframe: str = "1h",
         limit: int = 500,
-        since: Optional[str] = None,
+        since: str | None = None,
     ) -> list[OHLCVCandle]:
         """Fetch historical OHLCV candles from the exchange gateway.
 

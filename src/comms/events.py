@@ -18,11 +18,10 @@ import json
 import time
 import uuid
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 import msgpack
-
 
 # ═══════════════════════════════════════════════════════════════════════
 # CloudEvent Dataclass
@@ -162,7 +161,7 @@ def create_event(
         id=_generate_ulid(),
         source=source,
         type=event_type,
-        time=datetime.now(timezone.utc).isoformat(),
+        time=datetime.now(UTC).isoformat(),
         data=data,
         traceid=trace_id or _generate_trace_id(),
         priority=priority,
@@ -218,10 +217,7 @@ def to_redis_fields(event: CloudEvent | dict[str, Any]) -> dict[str, str]:
     Returns:
         Dict of string key-value pairs for Redis XADD.
     """
-    if isinstance(event, CloudEvent):
-        d = event.to_dict()
-    else:
-        d = event
+    d = event.to_dict() if isinstance(event, CloudEvent) else event
 
     fields: dict[str, str] = {
         "ce_specversion": str(d["specversion"]),

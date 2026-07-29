@@ -12,14 +12,15 @@ Level 3: QuantLibEngine (C++ QuantLib via pybind11)
 from __future__ import annotations
 
 import abc
-from typing import Any
+from typing import TYPE_CHECKING
 
-from src.interfaces.types import (
-    BollingerResult,
-    MACDResult,
-    OHLCV,
-    SRLevels,
-)
+if TYPE_CHECKING:
+    from src.interfaces.types import (
+        OHLCV,
+        BollingerResult,
+        MACDResult,
+        SRLevels,
+    )
 
 
 class PricingEngine(abc.ABC):

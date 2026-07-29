@@ -11,7 +11,6 @@ Level 3: QuantLibEngine (C++ QuantLib via pybind11)
 from __future__ import annotations
 
 import logging
-from collections import Counter
 from typing import Any
 
 import numpy as np
@@ -19,9 +18,9 @@ import pandas as pd
 
 from src.interfaces.pricing_engine import PricingEngine
 from src.interfaces.types import (
+    OHLCV,
     BollingerResult,
     MACDResult,
-    OHLCV,
     SRLevel,
     SRLevels,
 )

@@ -11,22 +11,26 @@ Swappable to Rust WebSocket (Level 2) or C++ FIX (Level 4) via config.
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import logging
 import time
-from datetime import datetime, timezone
-from typing import Any, Callable
+from datetime import UTC, datetime
+from typing import TYPE_CHECKING, Any
 
 import ccxt.async_support as ccxt
 
 from src.interfaces.exchange_gateway import ExchangeGateway
 from src.interfaces.types import (
-    ConnectionStatus,
     OHLCV,
+    ConnectionStatus,
     OrderBook,
     OrderBookLevel,
     Price,
     Timeframe,
 )
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
 
 logger = logging.getLogger(__name__)
 
@@ -46,14 +50,14 @@ _CCXT_NOT_FOUND_ERRORS = (ccxt.ExchangeError,)
 
 def _utcnow() -> datetime:
     """Return timezone-aware UTC now."""
-    return datetime.now(timezone.utc)
+    return datetime.now(UTC)
 
 
 def _ts_to_dt(ts_ms: int | float | None) -> datetime:
     """Convert millisecond timestamp to timezone-aware datetime."""
     if ts_ms is None:
         return _utcnow()
-    return datetime.fromtimestamp(float(ts_ms) / 1000, tz=timezone.utc)
+    return datetime.fromtimestamp(float(ts_ms) / 1000, tz=UTC)
 
 
 class CcxtGateway(ExchangeGateway):
@@ -421,7 +425,7 @@ class CcxtGateway(ExchangeGateway):
             try:
                 await asyncio.wait_for(cancel.wait(), timeout=poll_interval)
                 break  # Cancelled during wait
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 continue  # Normal timeout — poll again
 
         logger.info("Ticker poll loop stopped for %s", symbol)
@@ -435,10 +439,8 @@ class CcxtGateway(ExchangeGateway):
             cancel_event.set()
         if task is not None:
             task.cancel()
-            try:
+            with contextlib.suppress(asyncio.CancelledError):
                 await task
-            except asyncio.CancelledError:
-                pass
 
         logger.debug("Unsubscribed from %s ticker", symbol)
 
@@ -488,10 +490,7 @@ class CcxtGateway(ExchangeGateway):
                 last_exc = exc
                 # Respect Retry-After header if available
                 retry_after = getattr(exc, "retry_after", None)
-                if retry_after:
-                    wait_s = float(retry_after)
-                else:
-                    wait_s = min(2.0 ** (attempt + 1), 30.0)
+                wait_s = float(retry_after) if retry_after else min(2.0 ** (attempt + 1), 30.0)
                 logger.warning(
                     "Rate limited (attempt %d/%d), waiting %.1fs: %s",
                     attempt + 1,

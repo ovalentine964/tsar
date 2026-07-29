@@ -23,19 +23,18 @@ import asyncio
 import logging
 import signal
 import time
-from datetime import datetime, timezone
 from typing import Any
 
 from src.agents.base import BaseAgent
+from src.comms.event_bus import EventBus
 from src.comms.events import (
-    CloudEvent,
-    TSAR_SHADOW_EXTRACTED,
     TSAR_RULE_VALIDATED,
+    TSAR_SHADOW_EXTRACTED,
     TSAR_STRATEGY_PROPOSAL,
+    CloudEvent,
 )
 from src.comms.publisher import EventPublisher
 from src.comms.subscriber import EventSubscriber
-from src.comms.event_bus import EventBus
 
 logger = logging.getLogger(__name__)
 
@@ -222,12 +221,12 @@ class Orchestrator(BaseAgent):
             return
 
         try:
-            from src.knowledge.shadow_extractor import ShadowExtractor
-            from src.knowledge.rule_validator import RuleValidator
+            from src.interfaces import get_exchange_gateway, get_llm_provider
             from src.knowledge.genome_mutator import GenomeMutator, MutatorConfig
             from src.knowledge.ohlcv_adapter import ExchangeGatewayOHLCVAdapter
+            from src.knowledge.rule_validator import RuleValidator
+            from src.knowledge.shadow_extractor import ShadowExtractor
             from src.knowledge.trade_memory import TradeMemory
-            from src.interfaces import get_llm_provider, get_exchange_gateway
 
             db_path = self.config.get("database", {}).get("db_path", "data/tsar.db")
 

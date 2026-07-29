@@ -6,11 +6,11 @@ Day1: dict-backed (in-process).  Level 2+: Redis-backed.
 
 from __future__ import annotations
 
+import contextlib
 import json
-import uuid
-from dataclasses import dataclass, field, asdict
-from datetime import datetime, timezone
-from typing import Any, Optional, Protocol
+from dataclasses import asdict, dataclass, field
+from datetime import UTC, datetime
+from typing import Any, Protocol
 
 from src.utils.logging import get_logger
 
@@ -18,7 +18,7 @@ logger = get_logger(__name__)
 
 
 def _utcnow_iso() -> str:
-    return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.%fZ")
+    return datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%S.%fZ")
 
 
 @dataclass
@@ -168,7 +168,7 @@ class RegimeStateStore:
         self._backend.set_hash(self._key("current"), mapping)
         logger.info("global_regime_updated", dominant=state.dominant_regime, confidence=state.confidence)
 
-    def get_global_regime(self) -> Optional[RegimeState]:
+    def get_global_regime(self) -> RegimeState | None:
         raw = self._backend.get_hash(self._key("current"))
         if not raw:
             return None
@@ -176,10 +176,8 @@ class RegimeStateStore:
         probs: dict[str, float] = {}
         for k, v in raw.items():
             if k not in scalar_keys:
-                try:
+                with contextlib.suppress(ValueError, TypeError):
                     probs[k] = float(v)
-                except (ValueError, TypeError):
-                    pass
         return RegimeState(
             probabilities=probs,
             dominant_regime=raw.get("dominant_regime", "unknown"),
@@ -199,7 +197,7 @@ class RegimeStateStore:
         self._backend.set_hash(self._key("asset", symbol), mapping)
         logger.debug("asset_regime_updated", symbol=symbol, dominant=state.dominant_regime)
 
-    def get_asset_regime(self, symbol: str) -> Optional[RegimeState]:
+    def get_asset_regime(self, symbol: str) -> RegimeState | None:
         raw = self._backend.get_hash(self._key("asset", symbol))
         if not raw:
             return None

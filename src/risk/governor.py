@@ -22,8 +22,7 @@ from __future__ import annotations
 
 import logging
 import os
-import time
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -31,7 +30,6 @@ import yaml
 
 from src.interfaces.risk_engine import RiskEngine
 from src.interfaces.types import (
-    DrawdownLevel,
     DrawdownState,
     OrderSide,
     Portfolio,
@@ -40,7 +38,7 @@ from src.interfaces.types import (
     VetoLevel,
 )
 from src.risk.drawdown import DrawdownConfig, DrawdownMonitor
-from src.risk.guards import AntiBehavioralGuards, GuardDecision, GuardsConfig
+from src.risk.guards import AntiBehavioralGuards, GuardsConfig
 from src.risk.kill_switch import KillSwitch
 from src.risk.position_sizer import PositionSizer, SizingConfig
 
@@ -126,7 +124,6 @@ class RiskGovernor(RiskEngine):
         Returns:
             RiskDecision with approval, position size, and details.
         """
-        reasons: list[str] = []
         warnings: list[str] = []
 
         # ── Layer 1: Kill Switch ──────────────────────────────────
@@ -229,7 +226,7 @@ class RiskGovernor(RiskEngine):
             rejection_reasons=(),
             warnings=tuple(warnings),
             veto_level=VetoLevel.NONE.value,
-            timestamp=datetime.now(timezone.utc),
+            timestamp=datetime.now(UTC),
         )
 
     # ═══════════════════════════════════════════════════════════════
@@ -433,7 +430,6 @@ class RiskGovernor(RiskEngine):
             if pos.symbol == signal.symbol:
                 # Already have a position — check if adding would exceed limits
                 existing_notional = abs(pos.quantity * pos.current_price)
-                new_notional = existing_notional  # Will be calculated with size
                 if existing_notional / portfolio.equity > self._max_single_position_pct:
                     return (
                         f"Position Limit: Existing position in {signal.symbol} "
@@ -527,5 +523,5 @@ class RiskGovernor(RiskEngine):
             rejection_reasons=(reason,),
             warnings=(),
             veto_level=veto_level.value,
-            timestamp=datetime.now(timezone.utc),
+            timestamp=datetime.now(UTC),
         )

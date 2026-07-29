@@ -3,19 +3,19 @@
 Knowledge store implementations for the TSAR trading system.
 """
 
-from src.knowledge.trade_memory import TradeMemory
-from src.knowledge.strategy_genomes import StrategyGenomes
-from src.knowledge.regime_state import RegimeStateStore
-from src.knowledge.pattern_library import PatternLibrary
-from src.knowledge.lesson_archive import LessonArchive
 from src.knowledge.fts_search import MemoryRecall, SearchResult, format_fts_query
+from src.knowledge.lesson_archive import LessonArchive
+from src.knowledge.pattern_library import PatternLibrary
+from src.knowledge.regime_state import RegimeStateStore
+from src.knowledge.strategy_genomes import StrategyGenomes
+from src.knowledge.trade_memory import TradeMemory
 
 # Heavy imports (require ccxt, openai, etc.) — wrapped in try/except so
 # the core knowledge stores remain importable without those dependencies.
 try:
-    from src.knowledge.shadow_extractor import ShadowExtractor, TradingRule, ExtractionResult
-    from src.knowledge.rule_validator import RuleValidator, ValidatedRule
     from src.knowledge.genome_mutator import GenomeMutator, MutationProposal, MutatorConfig
+    from src.knowledge.rule_validator import RuleValidator, ValidatedRule
+    from src.knowledge.shadow_extractor import ExtractionResult, ShadowExtractor, TradingRule
 except ImportError:
     ShadowExtractor = None  # type: ignore[assignment,misc]
     TradingRule = None  # type: ignore[assignment,misc]

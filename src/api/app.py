@@ -5,14 +5,11 @@ Full working API with real data from all components.
 """
 
 import logging
-import os
-import time
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
-from fastapi import FastAPI, Request, Response, HTTPException
+from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
 
 logger = logging.getLogger(__name__)
 
@@ -39,7 +36,7 @@ def create_app(config: Any = None) -> FastAPI:
     # ─── Health ───────────────────────────────────────────────
     @app.get("/health")
     async def health():
-        return {"status": "ok", "version": "0.5.0", "timestamp": datetime.now(timezone.utc).isoformat()}
+        return {"status": "ok", "version": "0.5.0", "timestamp": datetime.now(UTC).isoformat()}
 
     @app.get("/health/ready")
     async def ready():
@@ -61,7 +58,7 @@ def create_app(config: Any = None) -> FastAPI:
 
         try:
             from src.risk.kill_switch import KillSwitch
-            ks = KillSwitch()
+            KillSwitch()
             data["kill_switch"] = {"active": False}
         except Exception:
             data["kill_switch"] = {"active": False}
@@ -164,6 +161,7 @@ def create_app(config: Any = None) -> FastAPI:
         """Get mandate status."""
         try:
             from pathlib import Path
+
             from src.risk.mandate import Mandate
             m = Mandate(config_path=Path("config/mandate.yaml"))
             return {
@@ -178,6 +176,7 @@ def create_app(config: Any = None) -> FastAPI:
         """Commit the mandate (enables live trading)."""
         try:
             from pathlib import Path
+
             from src.risk.mandate import Mandate
             m = Mandate(config_path=Path("config/mandate.yaml"))
             m.commit("api_user")
@@ -190,6 +189,7 @@ def create_app(config: Any = None) -> FastAPI:
         """Revoke the mandate (blocks live trading)."""
         try:
             from pathlib import Path
+
             from src.risk.mandate import Mandate
             m = Mandate(config_path=Path("config/mandate.yaml"))
             m.revoke("api_user")
@@ -220,7 +220,7 @@ def create_app(config: Any = None) -> FastAPI:
         """Compute all factors for a symbol."""
         try:
             from src.strategy.factor_library import FactorLibrary
-            fl = FactorLibrary()
+            FactorLibrary()
             # Would compute from real data
             return {"symbol": symbol, "status": "computed", "factors": {}}
         except Exception as e:
@@ -231,7 +231,7 @@ def create_app(config: Any = None) -> FastAPI:
         """Run IC/IR benchmark on all factors."""
         try:
             from src.strategy.factor_bench import FactorBenchmarker
-            fb = FactorBenchmarker()
+            FactorBenchmarker()
             return {"status": "completed", "rankings": []}
         except Exception as e:
             return {"status": "error", "error": str(e)}
@@ -253,8 +253,8 @@ def create_app(config: Any = None) -> FastAPI:
     async def run_backtest(strategy: str = "mean_reversion", symbol: str = "BTC/USDT", days: int = 90):
         """Run a backtest."""
         try:
-            from src.strategy.backtest_engine import BacktestEngine, BacktestConfig
-            engine = BacktestEngine(BacktestConfig())
+            from src.strategy.backtest_engine import BacktestConfig, BacktestEngine
+            BacktestEngine(BacktestConfig())
             return {
                 "status": "completed",
                 "strategy": strategy,
@@ -271,7 +271,7 @@ def create_app(config: Any = None) -> FastAPI:
         """Get extracted shadow rules."""
         try:
             from src.knowledge.rule_validator import RuleValidator
-            rv = RuleValidator()
+            RuleValidator()
             return {"rules": [], "count": 0}
         except Exception:
             return {"rules": [], "count": 0}
@@ -312,7 +312,7 @@ def create_app(config: Any = None) -> FastAPI:
         """Get discovered patterns."""
         try:
             from src.knowledge.pattern_library import PatternLibrary
-            pl = PatternLibrary("data/tsar.db")
+            PatternLibrary("data/tsar.db")
             return {"patterns": [], "count": 0}
         except Exception:
             return {"patterns": [], "count": 0}
@@ -322,7 +322,7 @@ def create_app(config: Any = None) -> FastAPI:
         """Get trade lessons."""
         try:
             from src.knowledge.lesson_archive import LessonArchive
-            la = LessonArchive("data/tsar.db")
+            LessonArchive("data/tsar.db")
             return {"lessons": [], "count": 0}
         except Exception:
             return {"lessons": [], "count": 0}
@@ -357,7 +357,7 @@ def create_app(config: Any = None) -> FastAPI:
                 "backtest_engine": "ok",
                 "factor_library": "ok",
             },
-            "last_cycle": datetime.now(timezone.utc).isoformat(),
+            "last_cycle": datetime.now(UTC).isoformat(),
         }
 
     # ─── Mobile App Route Aliases ────────────────────────────────

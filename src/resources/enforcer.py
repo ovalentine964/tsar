@@ -15,7 +15,7 @@ import time
 from collections import defaultdict, deque
 from typing import Any
 
-from src.resources.profiles import get_limits, DEFAULT_LIMITS
+from src.resources.profiles import DEFAULT_LIMITS, get_limits
 
 logger = logging.getLogger(__name__)
 

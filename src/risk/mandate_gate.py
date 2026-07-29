@@ -19,12 +19,11 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 from src.interfaces.types import (
     Order,
-    OrderSide,
     OrderType,
     RiskDecision,
     Signal,
@@ -106,7 +105,7 @@ class MandateGate:
                 rejection_reasons=(),
                 warnings=("Paper mode — mandate checks bypassed.",),
                 veto_level=VetoLevel.NONE.value,
-                timestamp=datetime.now(timezone.utc),
+                timestamp=datetime.now(UTC),
             )
 
         # Check against mandate
@@ -132,7 +131,7 @@ class MandateGate:
                 rejection_reasons=(),
                 warnings=(),
                 veto_level=VetoLevel.NONE.value,
-                timestamp=datetime.now(timezone.utc),
+                timestamp=datetime.now(UTC),
             )
 
         # Mandate blocked
@@ -149,7 +148,7 @@ class MandateGate:
             ),
             warnings=(),
             veto_level=VetoLevel.HARD.value,
-            timestamp=datetime.now(timezone.utc),
+            timestamp=datetime.now(UTC),
         )
 
     async def check_async(

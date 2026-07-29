@@ -22,7 +22,6 @@ from __future__ import annotations
 import numpy as np
 import pandas as pd
 
-
 # ═══════════════════════════════════════════════════════════════════════
 # HELPERS
 # ═══════════════════════════════════════════════════════════════════════
@@ -135,7 +134,7 @@ def momentum(df: pd.DataFrame, period: int = 10, **kwargs: object) -> pd.Series:
 def cci(df: pd.DataFrame, period: int = 20, **kwargs: object) -> pd.Series:
     """Commodity Channel Index.
 
-    Measures price deviation from statistical mean. 
+    Measures price deviation from statistical mean.
     Typical range: [-100, +100]. Extreme readings > ±200.
     """
     tp = (df["high"] + df["low"] + df["close"]) / 3.0
@@ -176,7 +175,7 @@ def bb_pct_b(
 ) -> pd.Series:
     """Bollinger Band %B.
 
-    Shows where price sits within the bands. 
+    Shows where price sits within the bands.
     0 = at lower band, 1 = at upper band, < 0 = below lower, > 1 = above upper.
     """
     sma = _sma(df["close"], period)
@@ -190,7 +189,7 @@ def bb_pct_b(
 def zscore(df: pd.DataFrame, period: int = 20, **kwargs: object) -> pd.Series:
     """Z-Score.
 
-    Standard deviations from the rolling mean. 
+    Standard deviations from the rolling mean.
     |Z| > 2 is statistically extreme.
     """
     mean = _sma(df["close"], period)
@@ -364,7 +363,7 @@ def adx(df: pd.DataFrame, period: int = 14, **kwargs: object) -> pd.Series:
     Measures trend strength regardless of direction.
     ADX > 25 = trending, ADX < 20 = ranging. Range: [0, 100].
     """
-    high, low, close = df["high"], df["low"], df["close"]
+    high, low, _close = df["high"], df["low"], df["close"]
     plus_dm = high.diff()
     minus_dm = -low.diff()
     plus_dm = plus_dm.where((plus_dm > minus_dm) & (plus_dm > 0), 0.0)
@@ -500,7 +499,7 @@ def engulfing(df: pd.DataFrame, **kwargs: object) -> pd.Series:
     Bullish: prev candle bearish, current candle bullish, current body engulfs prev body.
     Bearish: prev candle bullish, current candle bearish, current body engulfs prev body.
     """
-    o, h, l, c = df["open"], df["high"], df["low"], df["close"]
+    o, _h, _l, c = df["open"], df["high"], df["low"], df["close"]
     prev_o, prev_c = o.shift(1), c.shift(1)
 
     prev_bearish = prev_c < prev_o

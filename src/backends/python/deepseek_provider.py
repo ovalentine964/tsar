@@ -10,8 +10,7 @@ from __future__ import annotations
 import logging
 import os
 import time
-from collections.abc import AsyncIterator
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from src.interfaces.llm_provider import LLMProvider
 from src.interfaces.types import (
@@ -19,6 +18,9 @@ from src.interfaces.types import (
     LLMResponse,
     ModelCapabilities,
 )
+
+if TYPE_CHECKING:
+    from collections.abc import AsyncIterator
 
 logger = logging.getLogger(__name__)
 

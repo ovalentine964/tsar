@@ -1,6 +1,6 @@
 """Simple in-process CloudEvents bus."""
-from collections import defaultdict
 import asyncio
+from collections import defaultdict
 
 
 class EventBus:

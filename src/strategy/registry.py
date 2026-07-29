@@ -9,9 +9,10 @@ Provides signal aggregation across all active strategies.
 from __future__ import annotations
 
 import logging
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
-from src.strategy.base import BaseStrategy
+if TYPE_CHECKING:
+    from src.strategy.base import BaseStrategy
 
 logger = logging.getLogger(__name__)
 

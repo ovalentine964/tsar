@@ -10,12 +10,12 @@ The flywheel step: TRADE → OBSERVE → REFLECT → EXTRACT → **ADAPT** → B
 from __future__ import annotations
 
 import json
+import math
 import uuid
-from dataclasses import dataclass, field, asdict
-from datetime import datetime, timezone
-from typing import Any, Optional
+from dataclasses import asdict, dataclass, field
+from datetime import UTC, datetime
+from typing import TYPE_CHECKING, Any
 
-from src.knowledge.rule_validator import ValidatedRule
 from src.knowledge.strategy_genomes import (
     StrategyGenome,
     StrategyGenomes,
@@ -23,7 +23,8 @@ from src.knowledge.strategy_genomes import (
 )
 from src.utils.logging import get_logger
 
-import math
+if TYPE_CHECKING:
+    from src.knowledge.rule_validator import ValidatedRule
 
 logger = get_logger(__name__)
 
@@ -33,7 +34,7 @@ def _ulid() -> str:
 
 
 def _utcnow_iso() -> str:
-    return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.%fZ")
+    return datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%S.%fZ")
 
 
 # ═══════════════════════════════════════════════════════════════════════
@@ -50,18 +51,18 @@ class MutationProposal:
     """
     proposal_id: str = field(default_factory=_ulid)
     source_rule_id: str = ""
-    target_genome_id: Optional[str] = None
-    target_genome_name: Optional[str] = None
+    target_genome_id: str | None = None
+    target_genome_name: str | None = None
     mutation_type: str = "rule_addition"  # rule_addition | param_tweak | rule_modification
     change_description: str = ""
-    proposed_entry_rules: Optional[str] = None
-    proposed_exit_rules: Optional[str] = None
-    proposed_risk_params: Optional[str] = None
+    proposed_entry_rules: str | None = None
+    proposed_exit_rules: str | None = None
+    proposed_risk_params: str | None = None
     confidence_score: float = 0.0
     expected_improvement: float = 0.0
     rationale: str = ""
     status: str = "pending_validation"  # pending_validation | accepted | rejected | applied
-    validated_rule_snapshot: Optional[str] = None  # JSON snapshot of the source ValidatedRule
+    validated_rule_snapshot: str | None = None  # JSON snapshot of the source ValidatedRule
     created_at: str = field(default_factory=_utcnow_iso)
 
     def to_dict(self) -> dict[str, Any]:
@@ -103,7 +104,7 @@ class GenomeMutator:
     def __init__(
         self,
         strategy_genomes: StrategyGenomes,
-        config: Optional[MutatorConfig] = None,
+        config: MutatorConfig | None = None,
     ) -> None:
         self._genomes = strategy_genomes
         self._config = config or MutatorConfig()
@@ -162,7 +163,7 @@ class GenomeMutator:
 
     async def _propose_for_rule(
         self, rule: ValidatedRule
-    ) -> Optional[MutationProposal]:
+    ) -> MutationProposal | None:
         """Create a mutation proposal for a single validated rule."""
         # Find the best matching genome
         genome = self._find_matching_genome(rule)
@@ -179,7 +180,7 @@ class GenomeMutator:
             )
             return None
 
-    def _find_matching_genome(self, rule: ValidatedRule) -> Optional[StrategyGenome]:
+    def _find_matching_genome(self, rule: ValidatedRule) -> StrategyGenome | None:
         """Find the best matching genome for a rule.
 
         Priority:
@@ -349,7 +350,7 @@ class GenomeMutator:
         return round(max(0.0, improvement), 4)
 
     @staticmethod
-    def _merge_entry_rules(existing: Optional[str], rule: ValidatedRule) -> str:
+    def _merge_entry_rules(existing: str | None, rule: ValidatedRule) -> str:
         """Merge validated rule conditions into existing entry rules."""
         new_conditions = rule.conditions
         if existing:
@@ -365,7 +366,7 @@ class GenomeMutator:
         return json.dumps(new_conditions, indent=2)
 
     @staticmethod
-    def _merge_exit_rules(existing: Optional[str], rule: ValidatedRule) -> Optional[str]:
+    def _merge_exit_rules(existing: str | None, rule: ValidatedRule) -> str | None:
         """Merge validated rule into exit rules (only for sell actions)."""
         if rule.action != "sell":
             return existing

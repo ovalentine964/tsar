@@ -13,16 +13,15 @@ Level 4: FixExecEngine (C++ QuickFIX)
 from __future__ import annotations
 
 import abc
-from typing import Any
+from typing import TYPE_CHECKING
 
-from src.interfaces.types import (
-    ExecutionResult,
-    Fill,
-    Order,
-    OrderSide,
-    OrderStatus,
-    OrderType,
-)
+if TYPE_CHECKING:
+    from src.interfaces.types import (
+        ExecutionResult,
+        Fill,
+        Order,
+        OrderStatus,
+    )
 
 
 class ExecutionEngine(abc.ABC):

@@ -29,12 +29,16 @@ After deactivation, Gated Recovery Protocol applies (see recovery config).
 
 from __future__ import annotations
 
+import contextlib
 import json
 import logging
 import os
 import time
 from pathlib import Path
-from typing import Any, Callable, Awaitable
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from collections.abc import Awaitable, Callable
 
 logger = logging.getLogger(__name__)
 
@@ -209,10 +213,8 @@ class KillSwitch:
                 f.write(content_str)
             os.rename(tmp_path, path)  # Atomic on same filesystem
         except Exception:
-            try:
+            with contextlib.suppress(OSError):
                 os.unlink(tmp_path)
-            except OSError:
-                pass
             raise
 
     def _write_file(self, payload: dict[str, Any]) -> None:

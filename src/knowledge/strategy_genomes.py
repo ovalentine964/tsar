@@ -9,16 +9,18 @@ Persistence: SQLite (WAL mode, tsar.db)
 from __future__ import annotations
 
 import hashlib
-import json
 import sqlite3
 import uuid
 from contextlib import contextmanager
-from dataclasses import dataclass, field, asdict
-from datetime import datetime, timezone
+from dataclasses import asdict, dataclass, field
+from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any, Generator, Optional
+from typing import TYPE_CHECKING, Any
 
 from src.utils.logging import get_logger
+
+if TYPE_CHECKING:
+    from collections.abc import Generator
 
 logger = get_logger(__name__)
 
@@ -28,28 +30,28 @@ def _ulid() -> str:
 
 
 def _utcnow_iso() -> str:
-    return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.%fZ")
+    return datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%S.%fZ")
 
 
 @dataclass
 class StrategyGenome:
     strategy_id: str = field(default_factory=_ulid)
     name: str = ""
-    parent_id: Optional[str] = None
+    parent_id: str | None = None
     version: int = 1
-    thesis: Optional[str] = None
-    genome_yaml: Optional[str] = None
-    genome_hash: Optional[str] = None
+    thesis: str | None = None
+    genome_yaml: str | None = None
+    genome_hash: str | None = None
     asset_class: str = "crypto"
-    symbols: Optional[str] = None
-    strategy_type: Optional[str] = None
-    entry_rules: Optional[str] = None
-    exit_rules: Optional[str] = None
-    risk_params: Optional[str] = None
+    symbols: str | None = None
+    strategy_type: str | None = None
+    entry_rules: str | None = None
+    exit_rules: str | None = None
+    risk_params: str | None = None
     status: str = "candidate"
-    activated_at: Optional[str] = None
-    retired_at: Optional[str] = None
-    retirement_reason: Optional[str] = None
+    activated_at: str | None = None
+    retired_at: str | None = None
+    retirement_reason: str | None = None
     total_trades: int = 0
     winning_trades: int = 0
     total_pnl: float = 0.0
@@ -61,12 +63,12 @@ class StrategyGenome:
     avg_holding_hours: float = 0.0
     consecutive_losses: int = 0
     max_consecutive_losses: int = 0
-    regime_performance: Optional[str] = None
+    regime_performance: str | None = None
     gates_passed: int = 0
-    gates_evaluated_at: Optional[str] = None
+    gates_evaluated_at: str | None = None
     created_at: str = field(default_factory=_utcnow_iso)
     updated_at: str = field(default_factory=_utcnow_iso)
-    last_evolved: Optional[str] = None
+    last_evolved: str | None = None
 
     def to_dict(self) -> dict[str, Any]:
         return {k: v for k, v in asdict(self).items() if v is not None}
@@ -82,25 +84,25 @@ class StrategyPerformance:
     strategy_id: str = ""
     period_start: str = ""
     period_end: str = ""
-    total_return: Optional[float] = None
-    annualized_return: Optional[float] = None
-    excess_return: Optional[float] = None
-    volatility: Optional[float] = None
-    max_drawdown: Optional[float] = None
-    var_95: Optional[float] = None
-    cvar_95: Optional[float] = None
-    sortino_ratio: Optional[float] = None
-    calmar_ratio: Optional[float] = None
-    sharpe_ratio: Optional[float] = None
-    avg_slippage_bps: Optional[float] = None
-    avg_latency_ms: Optional[float] = None
-    fill_rate: Optional[float] = None
-    total_trades: Optional[int] = None
-    winning_trades: Optional[int] = None
-    total_pnl: Optional[float] = None
-    win_rate: Optional[float] = None
-    regime_performance: Optional[str] = None
-    signal_accuracy: Optional[str] = None
+    total_return: float | None = None
+    annualized_return: float | None = None
+    excess_return: float | None = None
+    volatility: float | None = None
+    max_drawdown: float | None = None
+    var_95: float | None = None
+    cvar_95: float | None = None
+    sortino_ratio: float | None = None
+    calmar_ratio: float | None = None
+    sharpe_ratio: float | None = None
+    avg_slippage_bps: float | None = None
+    avg_latency_ms: float | None = None
+    fill_rate: float | None = None
+    total_trades: int | None = None
+    winning_trades: int | None = None
+    total_pnl: float | None = None
+    win_rate: float | None = None
+    regime_performance: str | None = None
+    signal_accuracy: str | None = None
     created_at: str = field(default_factory=_utcnow_iso)
 
     def to_dict(self) -> dict[str, Any]:
@@ -112,16 +114,16 @@ class StrategyMutation:
     mutation_id: str = field(default_factory=_ulid)
     strategy_name: str = ""
     parent_id: str = ""
-    child_id: Optional[str] = None
+    child_id: str | None = None
     version_from: int = 1
     version_to: int = 2
     mutation_type: str = "param_tweak"
     change_description: str = ""
-    mutation_detail: Optional[str] = None
-    rationale: Optional[str] = None
-    performance_before: Optional[str] = None
-    performance_after: Optional[str] = None
-    parent_fitness: Optional[float] = None
+    mutation_detail: str | None = None
+    rationale: str | None = None
+    performance_before: str | None = None
+    performance_after: str | None = None
+    parent_fitness: float | None = None
     outcome: str = "pending"
     created_at: str = field(default_factory=_utcnow_iso)
 
@@ -167,20 +169,20 @@ class StrategyGenomes:
             genome.genome_hash = StrategyGenome.compute_hash(genome.genome_yaml)
         d = genome.to_dict()
         cols = ", ".join(d.keys())
-        placeholders = ", ".join(f":{k}" for k in d.keys())
+        placeholders = ", ".join(f":{k}" for k in d)
         sql = f"INSERT INTO strategy_genomes ({cols}) VALUES ({placeholders})"
         with self._conn() as conn:
             conn.execute(sql, d)
         logger.info("genome_inserted", strategy_id=genome.strategy_id, name=genome.name)
         return genome.strategy_id
 
-    def get_genome(self, strategy_id: str) -> Optional[StrategyGenome]:
+    def get_genome(self, strategy_id: str) -> StrategyGenome | None:
         sql = "SELECT * FROM strategy_genomes WHERE strategy_id = ?"
         with self._conn() as conn:
             row = conn.execute(sql, (strategy_id,)).fetchone()
         return StrategyGenome(**dict(row)) if row else None
 
-    def get_genome_by_name(self, name: str) -> Optional[StrategyGenome]:
+    def get_genome_by_name(self, name: str) -> StrategyGenome | None:
         sql = "SELECT * FROM strategy_genomes WHERE name = ? ORDER BY version DESC LIMIT 1"
         with self._conn() as conn:
             row = conn.execute(sql, (name,)).fetchone()
@@ -199,7 +201,7 @@ class StrategyGenomes:
             return True
         return False
 
-    def update_status(self, strategy_id: str, status: str, reason: Optional[str] = None) -> bool:
+    def update_status(self, strategy_id: str, status: str, reason: str | None = None) -> bool:
         fields: dict[str, Any] = {"status": status}
         now = _utcnow_iso()
         if status == "live":
@@ -217,7 +219,7 @@ class StrategyGenomes:
         return [StrategyGenome(**dict(r)) for r in rows]
 
     def list_genomes(
-        self, status: Optional[str] = None, strategy_type: Optional[str] = None, limit: int = 100
+        self, status: str | None = None, strategy_type: str | None = None, limit: int = 100
     ) -> list[StrategyGenome]:
         clauses: list[str] = []
         params: list[Any] = []
@@ -255,7 +257,7 @@ class StrategyGenomes:
     def insert_performance(self, perf: StrategyPerformance) -> str:
         d = perf.to_dict()
         cols = ", ".join(d.keys())
-        placeholders = ", ".join(f":{k}" for k in d.keys())
+        placeholders = ", ".join(f":{k}" for k in d)
         sql = f"INSERT INTO strategy_performance ({cols}) VALUES ({placeholders})"
         with self._conn() as conn:
             conn.execute(sql, d)
@@ -271,7 +273,7 @@ class StrategyGenomes:
         self, strategy_id: str, total_trades: int, winning_trades: int,
         total_pnl: float, sharpe_ratio: float, max_drawdown: float,
         win_rate: float, profit_factor: float,
-        rolling_sharpe_30d: Optional[float] = None, consecutive_losses: Optional[int] = None,
+        rolling_sharpe_30d: float | None = None, consecutive_losses: int | None = None,
     ) -> bool:
         fields: dict[str, Any] = {
             "total_trades": total_trades, "winning_trades": winning_trades,
@@ -292,7 +294,7 @@ class StrategyGenomes:
     def record_mutation(self, mutation: StrategyMutation) -> str:
         d = mutation.to_dict()
         cols = ", ".join(d.keys())
-        placeholders = ", ".join(f":{k}" for k in d.keys())
+        placeholders = ", ".join(f":{k}" for k in d)
         sql = f"INSERT INTO strategy_mutations ({cols}) VALUES ({placeholders})"
         with self._conn() as conn:
             conn.execute(sql, d)
@@ -300,8 +302,8 @@ class StrategyGenomes:
         return mutation.mutation_id
 
     def get_mutations(
-        self, strategy_name: Optional[str] = None, parent_id: Optional[str] = None,
-        mutation_type: Optional[str] = None, limit: int = 50
+        self, strategy_name: str | None = None, parent_id: str | None = None,
+        mutation_type: str | None = None, limit: int = 50
     ) -> list[StrategyMutation]:
         clauses: list[str] = []
         params: list[Any] = []

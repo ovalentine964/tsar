@@ -14,14 +14,15 @@ Level 5: GpuMonteCarloEngine (CUDA Monte Carlo for VaR)
 from __future__ import annotations
 
 import abc
-from typing import Any
+from typing import TYPE_CHECKING
 
-from src.interfaces.types import (
-    DrawdownState,
-    Portfolio,
-    RiskDecision,
-    Signal,
-)
+if TYPE_CHECKING:
+    from src.interfaces.types import (
+        DrawdownState,
+        Portfolio,
+        RiskDecision,
+        Signal,
+    )
 
 
 class RiskEngine(abc.ABC):

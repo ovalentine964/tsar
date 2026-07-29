@@ -19,6 +19,7 @@ Exit rules:
 from __future__ import annotations
 
 import logging
+from datetime import UTC
 from typing import Any
 
 from src.strategy.base import BaseStrategy
@@ -405,8 +406,8 @@ class MeanReversionStrategy(BaseStrategy):
         # ── Time stop: 4 hours ──
         entry_time = position.get("entry_time")
         if entry_time is not None:
-            from datetime import datetime, timezone
-            now = datetime.now(timezone.utc)
+            from datetime import datetime
+            now = datetime.now(UTC)
             if isinstance(entry_time, str):
                 entry_time = datetime.fromisoformat(entry_time.replace("Z", "+00:00"))
             hours_held = (now - entry_time).total_seconds() / 3600

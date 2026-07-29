@@ -12,24 +12,25 @@ All fields have full type hints and docstrings.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from datetime import datetime
-from enum import Enum
-from typing import Any
+from enum import StrEnum
+from typing import TYPE_CHECKING, Any
 
+if TYPE_CHECKING:
+    from datetime import datetime
 
 # ═══════════════════════════════════════════════════════════════════════
 # ENUMS
 # ═══════════════════════════════════════════════════════════════════════
 
 
-class OrderSide(str, Enum):
+class OrderSide(StrEnum):
     """Direction of an order."""
 
     BUY = "buy"
     SELL = "sell"
 
 
-class OrderType(str, Enum):
+class OrderType(StrEnum):
     """Type of order to place on the exchange."""
 
     MARKET = "market"
@@ -38,7 +39,7 @@ class OrderType(str, Enum):
     STOP_LIMIT = "stop_limit"
 
 
-class OrderStatus(str, Enum):
+class OrderStatus(StrEnum):
     """Lifecycle status of an order."""
 
     PENDING = "pending"
@@ -50,7 +51,7 @@ class OrderStatus(str, Enum):
     EXPIRED = "expired"
 
 
-class Timeframe(str, Enum):
+class Timeframe(StrEnum):
     """OHLCV candle timeframes."""
 
     M1 = "1m"
@@ -63,7 +64,7 @@ class Timeframe(str, Enum):
     W1 = "1w"
 
 
-class ConnectionStatus(str, Enum):
+class ConnectionStatus(StrEnum):
     """Connection state for exchange gateways."""
 
     DISCONNECTED = "disconnected"
@@ -73,7 +74,7 @@ class ConnectionStatus(str, Enum):
     ERROR = "error"
 
 
-class TimeInForce(str, Enum):
+class TimeInForce(StrEnum):
     """Time-in-force policy for orders."""
 
     GTC = "gtc"  # Good Till Cancelled
@@ -82,7 +83,7 @@ class TimeInForce(str, Enum):
     GTX = "gtx"  # Good Till Crossing (post-only)
 
 
-class VetoLevel(str, Enum):
+class VetoLevel(StrEnum):
     """Veto severity levels for risk decisions."""
 
     NONE = "NONE"      # No veto — trade approved
@@ -92,7 +93,7 @@ class VetoLevel(str, Enum):
     NUCLEAR = "NUCLEAR"  # Kill switch — halt all trading
 
 
-class DrawdownLevel(str, Enum):
+class DrawdownLevel(StrEnum):
     """Drawdown circuit breaker levels."""
 
     GREEN = "GREEN"      # Drawdown < 2% — normal operation

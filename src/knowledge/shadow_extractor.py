@@ -11,14 +11,16 @@ from __future__ import annotations
 
 import json
 import uuid
-from dataclasses import dataclass, field, asdict
-from datetime import datetime, timezone
-from typing import Any, Optional
+from dataclasses import asdict, dataclass, field
+from datetime import UTC, datetime
+from typing import TYPE_CHECKING, Any
 
-from src.interfaces.llm_provider import LLMProvider
-from src.knowledge.trade_memory import TradeMemory, TradeRecord
 from src.llm.prompts import get_prompt, get_system_prompt
 from src.utils.logging import get_logger
+
+if TYPE_CHECKING:
+    from src.interfaces.llm_provider import LLMProvider
+    from src.knowledge.trade_memory import TradeMemory, TradeRecord
 
 logger = get_logger(__name__)
 
@@ -28,7 +30,7 @@ def _ulid() -> str:
 
 
 def _utcnow_iso() -> str:
-    return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.%fZ")
+    return datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%S.%fZ")
 
 
 # ═══════════════════════════════════════════════════════════════════════
@@ -49,9 +51,9 @@ class TradingRule:
     action: str = "buy"  # "buy" or "sell"
     confidence: float = 0.5
     source_trade_ids: list[str] = field(default_factory=list)
-    symbol: Optional[str] = None
-    strategy_id: Optional[str] = None
-    regime: Optional[str] = None
+    symbol: str | None = None
+    strategy_id: str | None = None
+    regime: str | None = None
     description: str = ""
     rationale: str = ""
     created_at: str = field(default_factory=_utcnow_iso)
@@ -107,8 +109,8 @@ class ShadowExtractor:
 
     async def extract(
         self,
-        symbol: Optional[str] = None,
-        strategy_id: Optional[str] = None,
+        symbol: str | None = None,
+        strategy_id: str | None = None,
         min_trades: int = 5,
         min_win_rate: float = 0.55,
         lookback_days: int = 90,
@@ -129,7 +131,7 @@ class ShadowExtractor:
         since = None
         if lookback_days > 0:
             from datetime import timedelta
-            since = (datetime.now(timezone.utc) - timedelta(days=lookback_days)).strftime(
+            since = (datetime.now(UTC) - timedelta(days=lookback_days)).strftime(
                 "%Y-%m-%dT%H:%M:%S.%fZ"
             )
 

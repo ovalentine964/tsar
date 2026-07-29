@@ -63,10 +63,7 @@ class DrawdownMonitor:
         hwm = portfolio.high_water_mark
 
         # --- Drawdown from HWM ---
-        if hwm > 0:
-            drawdown_pct = (equity - hwm) / hwm
-        else:
-            drawdown_pct = 0.0
+        drawdown_pct = (equity - hwm) / hwm if hwm > 0 else 0.0
 
         # --- Daily P&L percentage ---
         daily_pnl_pct = portfolio.daily_pnl_pct

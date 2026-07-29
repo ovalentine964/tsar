@@ -17,6 +17,7 @@ from __future__ import annotations
 import logging
 import os
 import sys
+from datetime import UTC
 from typing import Any
 
 try:
@@ -114,12 +115,12 @@ def _add_service_field(service_name: str) -> structlog.types.Processor:
 
 def _setup_fallback(*, log_level: int, json_output: bool) -> None:
     import json as _json
-    from datetime import datetime, timezone
+    from datetime import datetime
 
     class _JsonFormatter(logging.Formatter):
         def format(self, record: logging.LogRecord) -> str:
             entry = {
-                "timestamp": datetime.now(timezone.utc).isoformat(),
+                "timestamp": datetime.now(UTC).isoformat(),
                 "level": record.levelname,
                 "logger": record.name,
                 "message": record.getMessage(),
@@ -170,10 +171,10 @@ class _FallbackLogger:
     def exception(self, event: str, **kwargs: Any) -> None:
         self._logger.exception(event)
 
-    def bind(self, **kwargs: Any) -> "_FallbackLogger":
+    def bind(self, **kwargs: Any) -> _FallbackLogger:
         return self
 
-    def unbind(self, *args: Any) -> "_FallbackLogger":
+    def unbind(self, *args: Any) -> _FallbackLogger:
         return self
 
 

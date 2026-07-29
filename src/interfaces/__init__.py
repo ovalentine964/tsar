@@ -8,6 +8,7 @@ Agent code imports from here. Agents NEVER import concrete backends.
 from typing import Any
 
 from src.interfaces.types import (
+    OHLCV,
     Balance,
     BollingerResult,
     ConnectionStatus,
@@ -19,7 +20,6 @@ from src.interfaces.types import (
     LLMResponse,
     MACDResult,
     ModelCapabilities,
-    OHLCV,
     Order,
     OrderBook,
     OrderRequest,
@@ -32,8 +32,8 @@ from src.interfaces.types import (
     Price,
     RiskCheckResult,
     RiskDecision,
-    SRLevels,
     Signal,
+    SRLevels,
     Timeframe,
     TimeInForce,
     Trade,

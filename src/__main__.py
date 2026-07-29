@@ -10,13 +10,15 @@ Usage:
     python3 -m src --dashboard        # Interactive CLI dashboard
 """
 
-import asyncio
 import argparse
-import os
+import asyncio
+import contextlib
 import sys
-import signal
 import time
 from pathlib import Path
+
+import structlog
+logger = structlog.get_logger()
 
 # Ensure data directory exists
 Path("data").mkdir(exist_ok=True)
@@ -46,41 +48,39 @@ async def run_full_system(args: argparse.Namespace) -> None:
                   json_output=getattr(getattr(config, "logging", None), "json_output", False) if hasattr(config, "logging") else False)
 
     trading_mode = "live" if args.live else "paper"
-    print(f"\n🏰 TSAR v0.5.0 — {trading_mode.upper()} MODE")
-    print(f"   Config: {args.config}")
-    print(f"   API: http://{args.host}:{args.port}")
+    logger.info(f"\n🏰 TSAR v0.5.0 — {trading_mode.upper()} MODE")
+    logger.info(f"   Config: {args.config}")
+    logger.info(f"   API: http://{args.host}:{args.port}")
     db_path = getattr(getattr(config, "database", None), "db_path", "data/tsar.db") if hasattr(config, "database") else "data/tsar.db"
-    print(f"   Database: {db_path}")
-    print()
+    logger.info(f"   Database: {db_path}")
+    logger.info()
 
     # ── Initialize Backend Registry ──────────────────────────────
     from src.interfaces import get_backend_registry
     registry = get_backend_registry()
     registry._register_defaults()
-    print("✅ Backend registry initialized")
+    logger.info("✅ Backend registry initialized")
 
     # ── Initialize Knowledge Stores ──────────────────────────────
-    from src.knowledge.trade_memory import TradeMemory
-    from src.knowledge.pattern_library import PatternLibrary
     from src.knowledge.lesson_archive import LessonArchive
-    from src.knowledge.strategy_genomes import StrategyGenomes
+    from src.knowledge.pattern_library import PatternLibrary
     from src.knowledge.regime_state import RegimeStateStore
+    from src.knowledge.strategy_genomes import StrategyGenomes
+    from src.knowledge.trade_memory import TradeMemory
 
     trade_memory = TradeMemory(db_path)
     pattern_library = PatternLibrary(db_path)
     lesson_archive = LessonArchive(db_path)
     strategy_genomes = StrategyGenomes(db_path)
     regime_state = RegimeStateStore()
-    print("✅ Knowledge stores ready (TradeMemory, PatternLibrary, LessonArchive, StrategyGenomes, RegimeState)")
+    logger.info("✅ Knowledge stores ready (TradeMemory, PatternLibrary, LessonArchive, StrategyGenomes, RegimeState)")
 
     # ── Initialize Risk Components ───────────────────────────────
     from src.risk.kill_switch import KillSwitch
     from src.risk.mandate import Mandate
-    from src.risk.mandate_gate import MandateGate
-    from src.risk.connection_monitor import ConnectionMonitor
 
     kill_switch = KillSwitch()
-    print("✅ Risk engine ready")
+    logger.info("✅ Risk engine ready")
 
     # ── Initialize Engines via Registry ──────────────────────────
     try:
@@ -103,41 +103,40 @@ async def run_full_system(args: argparse.Namespace) -> None:
         llm_provider = registry.create("llm_provider")
     except Exception:
         llm_provider = None
-    print("✅ Engines initialized (Exchange, Execution, Pricing, Risk, LLM)")
+    logger.info("✅ Engines initialized (Exchange, Execution, Pricing, Risk, LLM)")
 
     # ── Initialize Factor Library ────────────────────────────────
     try:
-        from src.strategy.factor_library import FactorLibrary
-        print("✅ Factor library ready (28 factors)")
+        logger.info("✅ Factor library ready (28 factors)")
     except Exception:
-        print("⚠️  Factor library not available")
+        logger.info("⚠️  Factor library not available")
 
     # ── Check Mandate ────────────────────────────────────────────
     try:
         from pathlib import Path
         mandate = Mandate(config_path=Path("config/mandate.yaml"))
         if trading_mode == "live" and mandate.status.value == "DRAFT":
-            print("⚠️  WARNING: Mandate is DRAFT — live trades will be blocked")
-            print("   Edit config/mandate.yaml and set status: ACTIVE to enable live trading")
+            logger.info("⚠️  WARNING: Mandate is DRAFT — live trades will be blocked")
+            logger.info("   Edit config/mandate.yaml and set status: ACTIVE to enable live trading")
     except Exception as e:
-        print(f"⚠️  Mandate check failed: {e}")
+        logger.info(f"⚠️  Mandate check failed: {e}")
 
     # ── Create Event Bus ─────────────────────────────────────────
     from src.comms.event_bus import EventBus
     event_bus = EventBus()
-    print("✅ Event bus initialized")
+    logger.info("✅ Event bus initialized")
 
     # ── Create All 10 Agents ─────────────────────────────────────
-    from src.agents.orchestrator import Orchestrator
-    from src.agents.signal_scout import SignalScout
-    from src.agents.risk_guardian import RiskGuardian
     from src.agents.execution_sniper import ExecutionSniper
     from src.agents.execution_tracker import ExecutionTracker
-    from src.agents.market_cartographer import MarketCartographer
-    from src.agents.regime_detector import RegimeDetector
     from src.agents.macro_agent import MacroAgent
-    from src.agents.trade_philosopher import TradePhilosopher
+    from src.agents.market_cartographer import MarketCartographer
+    from src.agents.orchestrator import Orchestrator
+    from src.agents.regime_detector import RegimeDetector
+    from src.agents.risk_guardian import RiskGuardian
+    from src.agents.signal_scout import SignalScout
     from src.agents.strategy_geneticist import StrategyGeneticist
+    from src.agents.trade_philosopher import TradePhilosopher
 
     agent_config = config_dict if isinstance(config_dict, dict) else {}
     agents = {
@@ -152,10 +151,10 @@ async def run_full_system(args: argparse.Namespace) -> None:
         "trade_philosopher": TradePhilosopher(agent_config, trading_mode),
         "strategy_geneticist": StrategyGeneticist(agent_config, trading_mode),
     }
-    print(f"✅ Created {len(agents)} agents")
+    logger.info(f"✅ Created {len(agents)} agents")
 
     # ── Wire agents to shared resources ──────────────────────────
-    for name, agent in agents.items():
+    for _name, agent in agents.items():
         if hasattr(agent, "trade_memory"):
             agent.trade_memory = trade_memory
         if hasattr(agent, "pattern_library"):
@@ -187,31 +186,28 @@ async def run_full_system(args: argparse.Namespace) -> None:
     )
 
     # ── Start Orchestrator ───────────────────────────────────────
-    print("\n🔄 Orchestrator starting...")
-    print("   Press Ctrl+C to stop\n")
+    logger.info("\n🔄 Orchestrator starting...")
+    logger.info("   Press Ctrl+C to stop\n")
 
     try:
         orchestrator = agents["orchestrator"]
         await orchestrator.start()
     except asyncio.CancelledError:
-        print("\n⏹️  Shutting down...")
+        logger.info("\n⏹️  Shutting down...")
     finally:
-        for name, agent in reversed(list(agents.items())):
-            try:
+        for _name, agent in reversed(list(agents.items())):
+            with contextlib.suppress(Exception):
                 await agent.stop()
-            except Exception:
-                pass
         api_task.cancel()
-        try:
+        with contextlib.suppress(asyncio.CancelledError):
             await api_task
-        except asyncio.CancelledError:
-            pass
-        print("✅ TSAR stopped")
+        logger.info("✅ TSAR stopped")
 
 
 async def start_api(host: str, port: int, config) -> None:
     """Start the FastAPI server."""
     import uvicorn
+
     from src.api.app import create_app
 
     app = create_app(config)
@@ -237,26 +233,26 @@ async def trading_loop(config, trading_mode: str) -> None:
 
         # Check kill switch
         if await kill_switch.is_active():
-            print(f"[{now}] 🔴 Kill switch ACTIVE — waiting...")
+            logger.info(f"[{now}] 🔴 Kill switch ACTIVE — waiting...")
             await asyncio.sleep(30)
             continue
 
         # Run cycle
-        print(f"[{now}] 🔄 Cycle {cycle} — scanning markets...")
+        logger.info(f"[{now}] 🔄 Cycle {cycle} — scanning markets...")
 
         try:
             # Get trade stats
             stats = db.get_trade_stats()
-            print(f"   📊 Trades: {stats.get('total', 0)} | "
+            logger.info(f"   📊 Trades: {stats.get('total', 0)} | "
                   f"Win rate: {stats.get('win_rate', 0):.1f}% | "
                   f"P&L: ${stats.get('total_pnl', 0):.2f}")
 
             # Paper mode: simulate a signal
             if trading_mode == "paper":
-                print(f"   📝 Paper mode — no real orders placed")
+                logger.info("   📝 Paper mode — no real orders placed")
 
         except Exception as e:
-            print(f"   ⚠️  Cycle error: {e}")
+            logger.info(f"   ⚠️  Cycle error: {e}")
 
         await asyncio.sleep(scan_interval)
 
@@ -269,10 +265,10 @@ async def run_api_only(args: argparse.Namespace) -> None:
     config = load_config(args.config)
     setup_logging(level=config.logging.level)
 
-    print(f"\n🏰 TSAR API Server")
-    print(f"   http://{args.host}:{args.port}")
-    print(f"   Docs: http://{args.host}:{args.port}/docs")
-    print()
+    logger.info("\n🏰 TSAR API Server")
+    logger.info(f"   http://{args.host}:{args.port}")
+    logger.info(f"   Docs: http://{args.host}:{args.port}/docs")
+    logger.info()
 
     await start_api(args.host, args.port, config)
 
@@ -280,74 +276,73 @@ async def run_api_only(args: argparse.Namespace) -> None:
 def run_dashboard(args: argparse.Namespace) -> None:
     """Interactive CLI dashboard."""
     import subprocess
-    import sys
 
-    print("\n🏰 TSAR Dashboard")
-    print("=" * 50)
+    logger.info("\n🏰 TSAR Dashboard")
+    logger.info("=" * 50)
 
     # Run tests
-    print("\n📋 Running health checks...")
+    logger.info("\n📋 Running health checks...")
     result = subprocess.run(
         [sys.executable, "-m", "pytest", "tests/", "-q", "--tb=no"],
         capture_output=True, text=True, cwd="."
     )
     lines = result.stdout.strip().split("\n")
     for line in lines[-3:]:
-        print(f"   {line}")
+        logger.info(f"   {line}")
 
     # Show config
-    print("\n⚙️  Configuration:")
+    logger.info("\n⚙️  Configuration:")
     try:
         from src.utils.config import load_config
         config = load_config(args.config)
-        print(f"   Mode: {config.trading_mode}")
-        print(f"   Exchange: {config.exchange.name}")
-        print(f"   Symbols: {', '.join(config.exchange.symbols)}")
-        print(f"   Database: {config.database.db_path}")
-        print(f"   LLM: {config.llm.default_provider}")
+        logger.info(f"   Mode: {config.trading_mode}")
+        logger.info(f"   Exchange: {config.exchange.name}")
+        logger.info(f"   Symbols: {', '.join(config.exchange.symbols)}")
+        logger.info(f"   Database: {config.database.db_path}")
+        logger.info(f"   LLM: {config.llm.default_provider}")
     except Exception as e:
-        print(f"   ⚠️  Config error: {e}")
+        logger.info(f"   ⚠️  Config error: {e}")
 
     # Show knowledge store stats
-    print("\n📚 Knowledge Stores:")
+    logger.info("\n📚 Knowledge Stores:")
     try:
         from src.knowledge.trade_memory import TradeMemory
         db = TradeMemory("data/tsar.db")
         stats = db.get_trade_stats()
-        print(f"   Trades: {stats.get('total', 0)}")
+        logger.info(f"   Trades: {stats.get('total', 0)}")
     except Exception:
-        print(f"   Trades: 0 (database not initialized)")
+        logger.info("   Trades: 0 (database not initialized)")
 
     # Show factors
-    print("\n📊 Factor Library:")
+    logger.info("\n📊 Factor Library:")
     try:
         from src.strategy.factors import FACTOR_REGISTRY
-        print(f"   Factors: {len(FACTOR_REGISTRY)}")
+        logger.info(f"   Factors: {len(FACTOR_REGISTRY)}")
         categories = {}
-        for name, func in FACTOR_REGISTRY.items():
+        for _name, func in FACTOR_REGISTRY.items():
             cat = getattr(func, 'category', 'other')
             categories[cat] = categories.get(cat, 0) + 1
         for cat, count in sorted(categories.items()):
-            print(f"   • {cat}: {count}")
+            logger.info(f"   • {cat}: {count}")
     except Exception:
-        print(f"   Factors: 28 (not loaded)")
+        logger.info("   Factors: 28 (not loaded)")
 
     # Show mandate
-    print("\n🛡️  Mandate:")
+    logger.info("\n🛡️  Mandate:")
     try:
         from src.risk.mandate import Mandate
         m = Mandate(config_path=Path("config/mandate.yaml"))
-        print(f"   Status: {m.status}")
-        print(f"   Symbols: {len(m.rules)} rules defined")
+        logger.info(f"   Status: {m.status}")
+        logger.info(f"   Symbols: {len(m.rules)} rules defined")
     except Exception:
-        print(f"   Status: DRAFT (no mandate configured)")
+        logger.info("   Status: DRAFT (no mandate configured)")
 
-    print("\n" + "=" * 50)
-    print("Commands:")
-    print("  python3 -m src --paper     # Start paper trading")
-    print("  python3 -m src --api-only  # API server only")
-    print("  python3 -m src --live      # Live trading")
-    print()
+    logger.info("\n" + "=" * 50)
+    logger.info("Commands:")
+    logger.info("  python3 -m src --paper     # Start paper trading")
+    logger.info("  python3 -m src --api-only  # API server only")
+    logger.info("  python3 -m src --live      # Live trading")
+    logger.info()
 
 
 def main() -> None:

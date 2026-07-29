@@ -16,9 +16,8 @@ Level 4: FixExecEngine (institutional FIX protocol)
 
 from __future__ import annotations
 
-import asyncio
 import logging
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 import ccxt.async_support as ccxt
@@ -38,14 +37,14 @@ logger = logging.getLogger(__name__)
 
 def _utcnow() -> datetime:
     """Return timezone-aware UTC now."""
-    return datetime.now(timezone.utc)
+    return datetime.now(UTC)
 
 
 def _ts_to_dt(ts_ms: int | float | None) -> datetime:
     """Convert millisecond timestamp to timezone-aware datetime."""
     if ts_ms is None:
         return _utcnow()
-    return datetime.fromtimestamp(float(ts_ms) / 1000, tz=timezone.utc)
+    return datetime.fromtimestamp(float(ts_ms) / 1000, tz=UTC)
 
 
 class CcxtExecEngine(ExecutionEngine):

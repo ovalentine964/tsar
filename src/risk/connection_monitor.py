@@ -20,7 +20,7 @@ class ConnectionMonitor:
                 await self.exchange.ping()
                 self.consecutive_failures = 0
                 self.last_success = time.time()
-            except Exception as e:
+            except Exception:
                 self.consecutive_failures += 1
                 if self.consecutive_failures >= self.max_failures:
                     await self.kill_switch.activate(

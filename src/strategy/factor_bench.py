@@ -14,14 +14,14 @@ Usage:
 from __future__ import annotations
 
 import logging
-from dataclasses import dataclass, field
-from datetime import datetime, timezone
-from typing import Any
+from dataclasses import dataclass
+from datetime import UTC, datetime
+from typing import TYPE_CHECKING
 
-import numpy as np
 import pandas as pd
 
-from src.strategy.factor_library import FactorLibrary
+if TYPE_CHECKING:
+    from src.strategy.factor_library import FactorLibrary
 
 logger = logging.getLogger(__name__)
 
@@ -179,7 +179,7 @@ class FactorBenchmarker:
                 decay_data[meta.name] = decay_rows
 
             # Persist IC to library DB
-            ts = datetime.now(timezone.utc).isoformat()
+            ts = datetime.now(UTC).isoformat()
             self._lib.record_ic(
                 factor_name=meta.name,
                 timestamp=ts,
@@ -196,7 +196,7 @@ class FactorBenchmarker:
             forward_period=fp,
             n_factors=len(scores),
             n_observations=len(ohlcv_data),
-            timestamp=datetime.now(timezone.utc).isoformat(),
+            timestamp=datetime.now(UTC).isoformat(),
         )
 
     def compute_single_ic(

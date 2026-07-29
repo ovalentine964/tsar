@@ -22,8 +22,9 @@ from __future__ import annotations
 
 import logging
 import math
+from collections.abc import Callable
 from dataclasses import dataclass, field
-from typing import Any, Callable
+from typing import Any
 
 import numpy as np
 
@@ -346,7 +347,7 @@ class WalkForwardValidator:
                 avg_trade_duration=0.0, expectancy=0.0,
             )
 
-        n = len(metrics_list)
+        len(metrics_list)
 
         def _avg(key: str) -> float:
             vals = [getattr(m, key) for m in metrics_list]

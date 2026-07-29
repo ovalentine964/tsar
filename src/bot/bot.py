@@ -1,8 +1,8 @@
 """TSAR Telegram Bot — real-time monitoring and control."""
-import aiohttp
 import asyncio
 import logging
-from typing import Any
+
+import aiohttp
 
 logger = logging.getLogger(__name__)
 

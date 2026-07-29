@@ -12,14 +12,16 @@ Additional: OpenAIProvider, AnthropicProvider, DeepSeekProvider
 from __future__ import annotations
 
 import abc
-from collections.abc import AsyncIterator
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
-from src.interfaces.types import (
-    LLMChunk,
-    LLMResponse,
-    ModelCapabilities,
-)
+if TYPE_CHECKING:
+    from collections.abc import AsyncIterator
+
+    from src.interfaces.types import (
+        LLMChunk,
+        LLMResponse,
+        ModelCapabilities,
+    )
 
 
 class LLMProvider(abc.ABC):

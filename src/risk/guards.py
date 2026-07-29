@@ -15,8 +15,10 @@ from __future__ import annotations
 import logging
 import time
 from dataclasses import dataclass, field
+from typing import TYPE_CHECKING
 
-from src.interfaces.types import Signal
+if TYPE_CHECKING:
+    from src.interfaces.types import Signal
 
 logger = logging.getLogger(__name__)
 

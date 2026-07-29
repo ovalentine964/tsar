@@ -21,7 +21,7 @@ from __future__ import annotations
 
 import os
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 
 try:
     import yaml
@@ -31,7 +31,6 @@ except ImportError:
 try:
     from pydantic import BaseModel, Field, field_validator
 except ImportError:
-    import inspect as _inspect
 
     class _FieldInfo:
         def __init__(self, default: Any = None, default_factory: Any = None, **kwargs: Any) -> None:
@@ -98,7 +97,7 @@ class RedisConfig(BaseModel):
     host: str = Field(default="localhost")
     port: int = Field(default=6379)
     db: int = Field(default=0)
-    password: Optional[str] = Field(default=None)
+    password: str | None = Field(default=None)
     ssl: bool = Field(default=False)
     decode_responses: bool = Field(default=True)
     socket_timeout_s: float = Field(default=5.0)
@@ -114,8 +113,8 @@ class RedisConfig(BaseModel):
 class ExchangeConfig(BaseModel):
     name: str = Field(default="binance")
     sandbox: bool = Field(default=True)
-    api_key: Optional[str] = Field(default=None)
-    api_secret: Optional[str] = Field(default=None)
+    api_key: str | None = Field(default=None)
+    api_secret: str | None = Field(default=None)
     symbols: list[str] = Field(default=["BTC/USDT"])
     rate_limit_per_minute: int = Field(default=1200)
 
@@ -136,7 +135,7 @@ class LLMConfig(BaseModel):
     default_provider: str = Field(default="ollama")
     ollama_base_url: str = Field(default="http://localhost:11434")
     ollama_model: str = Field(default="qwen2.5:7b")
-    deepseek_api_key: Optional[str] = Field(default=None)
+    deepseek_api_key: str | None = Field(default=None)
     deepseek_base_url: str = Field(default="https://api.deepseek.com")
     daily_budget_usd: float = Field(default=0.0)
     monthly_budget_usd: float = Field(default=0.0)
@@ -187,7 +186,7 @@ def _discover_config_path(explicit: str | Path | None = None) -> Path | None:
 def _load_yaml(path: Path) -> dict[str, Any]:
     if yaml is None:
         raise ImportError("PyYAML required. Install: pip install pyyaml")
-    with open(path, "r", encoding="utf-8") as f:
+    with open(path, encoding="utf-8") as f:
         data = yaml.safe_load(f)
     return data if isinstance(data, dict) else {}
 
@@ -265,7 +264,7 @@ def load_config(
     return config
 
 
-_config_instance: Optional[TSARConfig] = None
+_config_instance: TSARConfig | None = None
 
 
 def get_config() -> TSARConfig:

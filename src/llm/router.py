@@ -12,18 +12,21 @@ from __future__ import annotations
 
 import logging
 import time
-from collections.abc import AsyncIterator
 from dataclasses import dataclass, field
-from enum import Enum
-from typing import Any
+from enum import StrEnum
+from typing import TYPE_CHECKING, Any
 
 import yaml
 
 from src.backends.python.deepseek_provider import DeepSeekProvider
 from src.backends.python.ollama_provider import OllamaProvider
 from src.backends.python.openai_provider import OpenAIProvider
-from src.interfaces.llm_provider import LLMProvider
-from src.interfaces.types import LLMChunk, LLMResponse
+
+if TYPE_CHECKING:
+    from collections.abc import AsyncIterator
+
+    from src.interfaces.llm_provider import LLMProvider
+    from src.interfaces.types import LLMChunk, LLMResponse
 
 logger = logging.getLogger(__name__)
 
@@ -33,7 +36,7 @@ logger = logging.getLogger(__name__)
 # ═══════════════════════════════════════════════════════════════════════
 
 
-class CircuitState(str, Enum):
+class CircuitState(StrEnum):
     """Circuit breaker states."""
 
     CLOSED = "closed"  # Normal operation

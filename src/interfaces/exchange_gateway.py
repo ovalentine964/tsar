@@ -15,20 +15,20 @@ The interface is the contract. The backend is an implementation detail.
 from __future__ import annotations
 
 import abc
-from typing import Any, Callable
+from typing import TYPE_CHECKING, Any
 
-from src.interfaces.types import (
-    Balance,
-    ConnectionStatus,
-    OHLCV,
-    OrderBook,
-    OrderSide,
-    OrderType,
-    Position,
-    Price,
-    Timeframe,
-    Trade,
-)
+if TYPE_CHECKING:
+    from collections.abc import Callable
+
+    from src.interfaces.types import (
+        OHLCV,
+        Balance,
+        OrderBook,
+        Position,
+        Price,
+        Timeframe,
+        Trade,
+    )
 
 
 class ExchangeGateway(abc.ABC):

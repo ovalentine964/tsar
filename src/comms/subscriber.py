@@ -8,8 +8,10 @@ subscription for Day1 development and testing.
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import logging
-from typing import Any, Awaitable, Callable
+from collections.abc import Awaitable, Callable
+from typing import Any
 
 from src.comms.events import CloudEvent, from_redis_fields
 
@@ -126,10 +128,8 @@ class EventSubscriber:
         self.stop()
         for task in self._tasks:
             task.cancel()
-            try:
+            with contextlib.suppress(asyncio.CancelledError):
                 await task
-            except asyncio.CancelledError:
-                pass
         self._tasks.clear()
 
     # ------------------------------------------------------------------

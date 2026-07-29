@@ -12,12 +12,15 @@ import re
 import sqlite3
 import uuid
 from contextlib import contextmanager
-from dataclasses import dataclass, field, asdict
-from datetime import datetime, timezone
+from dataclasses import asdict, dataclass, field
+from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any, Generator, Optional
+from typing import TYPE_CHECKING, Any
 
 from src.utils.logging import get_logger
+
+if TYPE_CHECKING:
+    from collections.abc import Generator
 
 logger = get_logger(__name__)
 
@@ -27,40 +30,40 @@ def _ulid() -> str:
 
 
 def _utcnow_iso() -> str:
-    return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.%fZ")
+    return datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%S.%fZ")
 
 
 @dataclass
 class Lesson:
     lesson_id: str = field(default_factory=_ulid)
-    trade_id: Optional[str] = None
+    trade_id: str | None = None
     title: str = ""
     lesson_type: str = "INSIGHT"
-    category: Optional[str] = None
+    category: str | None = None
     severity: str = "moderate"
     description: str = ""
-    action_item: Optional[str] = None
-    content: Optional[str] = None
-    source_strategy_id: Optional[str] = None
-    source_pattern_id: Optional[str] = None
-    source_event: Optional[str] = None
-    applicable_regimes: Optional[str] = None
-    applicable_symbols: Optional[str] = None
-    applicable_strategies: Optional[str] = None
+    action_item: str | None = None
+    content: str | None = None
+    source_strategy_id: str | None = None
+    source_pattern_id: str | None = None
+    source_event: str | None = None
+    applicable_regimes: str | None = None
+    applicable_symbols: str | None = None
+    applicable_strategies: str | None = None
     action_required: int = 0
-    action_taken: Optional[str] = None
+    action_taken: str | None = None
     action_status: str = "pending"
     applied: int = 0
     times_applied: int = 0
     times_violated: int = 0
-    last_applied: Optional[str] = None
-    last_violated: Optional[str] = None
+    last_applied: str | None = None
+    last_violated: str | None = None
     violation_impact: float = 0.0
     confidence: float = 0.8
     validated_count: int = 1
-    discovered_by: Optional[str] = None
+    discovered_by: str | None = None
     discovered_at: str = field(default_factory=_utcnow_iso)
-    tags: Optional[str] = None
+    tags: str | None = None
     created_at: str = field(default_factory=_utcnow_iso)
     updated_at: str = field(default_factory=_utcnow_iso)
     is_archived: int = 0
@@ -73,17 +76,17 @@ class Lesson:
 class LessonApplication:
     application_id: str = field(default_factory=_ulid)
     lesson_id: str = ""
-    trade_id: Optional[str] = None
-    strategy_name: Optional[str] = None
+    trade_id: str | None = None
+    strategy_name: str | None = None
     context: str = ""
-    parameter_changed: Optional[str] = None
-    old_value: Optional[str] = None
-    new_value: Optional[str] = None
-    outcome: Optional[str] = None
-    impact_measured: Optional[float] = None
-    agent: Optional[str] = None
+    parameter_changed: str | None = None
+    old_value: str | None = None
+    new_value: str | None = None
+    outcome: str | None = None
+    impact_measured: float | None = None
+    agent: str | None = None
     created_at: str = field(default_factory=_utcnow_iso)
-    applied_at: Optional[str] = None
+    applied_at: str | None = None
 
     def to_dict(self) -> dict[str, Any]:
         return {k: v for k, v in asdict(self).items() if v is not None}
@@ -95,8 +98,8 @@ class LessonViolation:
     lesson_id: str = ""
     trade_id: str = ""
     violation_description: str = ""
-    pnl_impact: Optional[float] = None
-    reason_given: Optional[str] = None
+    pnl_impact: float | None = None
+    reason_given: str | None = None
     occurred_at: str = field(default_factory=_utcnow_iso)
     created_at: str = field(default_factory=_utcnow_iso)
 
@@ -140,14 +143,14 @@ class LessonArchive:
     def insert_lesson(self, lesson: Lesson) -> str:
         d = lesson.to_dict()
         cols = ", ".join(d.keys())
-        placeholders = ", ".join(f":{k}" for k in d.keys())
+        placeholders = ", ".join(f":{k}" for k in d)
         sql = f"INSERT INTO lessons ({cols}) VALUES ({placeholders})"
         with self._conn() as conn:
             conn.execute(sql, d)
         logger.info("lesson_inserted", lesson_id=lesson.lesson_id, title=lesson.title)
         return lesson.lesson_id
 
-    def get_lesson(self, lesson_id: str) -> Optional[Lesson]:
+    def get_lesson(self, lesson_id: str) -> Lesson | None:
         sql = "SELECT * FROM lessons WHERE lesson_id = ?"
         with self._conn() as conn:
             row = conn.execute(sql, (lesson_id,)).fetchone()
@@ -167,8 +170,8 @@ class LessonArchive:
         return False
 
     def list_lessons(
-        self, lesson_type: Optional[str] = None, severity: Optional[str] = None,
-        category: Optional[str] = None, source_strategy_id: Optional[str] = None,
+        self, lesson_type: str | None = None, severity: str | None = None,
+        category: str | None = None, source_strategy_id: str | None = None,
         include_archived: bool = False, limit: int = 100, offset: int = 0
     ) -> list[Lesson]:
         clauses: list[str] = []
@@ -229,7 +232,7 @@ class LessonArchive:
     # ── FTS5 search ──────────────────────────────────────────
 
     def search(
-        self, query: str, severity: Optional[str] = None, lesson_type: Optional[str] = None,
+        self, query: str, severity: str | None = None, lesson_type: str | None = None,
         include_archived: bool = False, limit: int = 20
     ) -> list[dict[str, Any]]:
         fts_query = self._format_fts_query(query)
@@ -270,7 +273,7 @@ class LessonArchive:
     def record_application(self, app: LessonApplication) -> str:
         d = app.to_dict()
         cols = ", ".join(d.keys())
-        placeholders = ", ".join(f":{k}" for k in d.keys())
+        placeholders = ", ".join(f":{k}" for k in d)
         sql = f"INSERT INTO lesson_applications ({cols}) VALUES ({placeholders})"
         with self._conn() as conn:
             conn.execute(sql, d)
@@ -295,7 +298,7 @@ class LessonArchive:
     def record_violation(self, violation: LessonViolation) -> str:
         d = violation.to_dict()
         cols = ", ".join(d.keys())
-        placeholders = ", ".join(f":{k}" for k in d.keys())
+        placeholders = ", ".join(f":{k}" for k in d)
         sql = f"INSERT INTO lesson_violations ({cols}) VALUES ({placeholders})"
         with self._conn() as conn:
             conn.execute(sql, d)
@@ -317,7 +320,7 @@ class LessonArchive:
             rows = conn.execute(sql, (lesson_id, limit)).fetchall()
         return [LessonViolation(**dict(r)) for r in rows]
 
-    def get_violation_summary(self, since: Optional[str] = None) -> list[dict[str, Any]]:
+    def get_violation_summary(self, since: str | None = None) -> list[dict[str, Any]]:
         clause = "AND lv.created_at >= ?" if since else ""
         sql = f"""
             SELECT l.lesson_id, l.title, l.severity,

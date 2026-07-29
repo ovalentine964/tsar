@@ -20,9 +20,8 @@ from __future__ import annotations
 
 import json
 import logging
-import time
-from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from dataclasses import dataclass
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -205,7 +204,7 @@ class ImprovementTracker:
     def current_snapshot(self) -> MetricSnapshot:
         """Compute current metric snapshot."""
         return MetricSnapshot(
-            timestamp=datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.%fZ"),
+            timestamp=datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%S.%fZ"),
             trade_count=self._trade_count,
             total_pnl=round(self._total_pnl, 2),
             win_rate=self._compute_win_rate(),

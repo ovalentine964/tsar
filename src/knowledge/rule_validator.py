@@ -14,14 +14,15 @@ import json
 import math
 import sqlite3
 import uuid
-from contextlib import contextmanager
-from dataclasses import dataclass, field, asdict
-from datetime import datetime, timezone
+from dataclasses import asdict, dataclass, field
+from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any, Generator, Optional, Protocol
+from typing import TYPE_CHECKING, Any, Protocol
 
-from src.knowledge.shadow_extractor import TradingRule
 from src.utils.logging import get_logger
+
+if TYPE_CHECKING:
+    from src.knowledge.shadow_extractor import TradingRule
 
 logger = get_logger(__name__)
 
@@ -31,7 +32,7 @@ def _ulid() -> str:
 
 
 def _utcnow_iso() -> str:
-    return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.%fZ")
+    return datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%S.%fZ")
 
 
 # ═══════════════════════════════════════════════════════════════════════
@@ -56,9 +57,9 @@ class ValidatedRule:
     action: str = "buy"
     confidence: float = 0.5
     source_trade_ids: list[str] = field(default_factory=list)
-    symbol: Optional[str] = None
-    strategy_id: Optional[str] = None
-    regime: Optional[str] = None
+    symbol: str | None = None
+    strategy_id: str | None = None
+    regime: str | None = None
     description: str = ""
     rationale: str = ""
 
@@ -119,7 +120,7 @@ class OHLCVProvider(Protocol):
         symbol: str,
         timeframe: str = "1h",
         limit: int = 500,
-        since: Optional[str] = None,
+        since: str | None = None,
     ) -> list[OHLCVCandle]:
         """Fetch historical OHLCV candles."""
         ...
@@ -155,7 +156,7 @@ class RuleValidator:
     def __init__(
         self,
         ohlcv_provider: OHLCVProvider,
-        db_path: Optional[str | Path] = None,
+        db_path: str | Path | None = None,
     ) -> None:
         self._provider = ohlcv_provider
         self._db_path = str(db_path) if db_path else None
@@ -163,7 +164,7 @@ class RuleValidator:
     async def validate(
         self,
         rule: TradingRule,
-        symbol: Optional[str] = None,
+        symbol: str | None = None,
         timeframe: str = "1h",
         lookback_candles: int = 500,
     ) -> ValidatedRule:
@@ -264,7 +265,7 @@ class RuleValidator:
     async def validate_batch(
         self,
         rules: list[TradingRule],
-        symbol: Optional[str] = None,
+        symbol: str | None = None,
         timeframe: str = "1h",
         lookback_candles: int = 500,
     ) -> list[ValidatedRule]:
@@ -352,10 +353,7 @@ class RuleValidator:
         if not conditions:
             return False
 
-        for cond in conditions:
-            if not self._evaluate_condition(cond, candles, idx):
-                return False  # All conditions must be true (AND logic)
-        return True
+        return all(self._evaluate_condition(cond, candles, idx) for cond in conditions)
 
     def _evaluate_condition(
         self,
@@ -425,7 +423,7 @@ class RuleValidator:
     @staticmethod
     def _compute_rsi(
         candles: list[OHLCVCandle], idx: int, period: int = 14
-    ) -> Optional[float]:
+    ) -> float | None:
         """Compute RSI at a given candle index."""
         if idx < period:
             return None
@@ -449,7 +447,7 @@ class RuleValidator:
     @staticmethod
     def _compute_sma(
         candles: list[OHLCVCandle], idx: int, period: int
-    ) -> Optional[float]:
+    ) -> float | None:
         """Compute Simple Moving Average at a given candle index."""
         if idx < period - 1:
             return None
@@ -459,7 +457,7 @@ class RuleValidator:
     @staticmethod
     def _compute_avg_volume(
         candles: list[OHLCVCandle], idx: int, period: int = 20
-    ) -> Optional[float]:
+    ) -> float | None:
         """Compute average volume over a lookback period."""
         if idx < period:
             return None
@@ -641,7 +639,7 @@ class RuleValidator:
             d["conditions"] = json.dumps(d["conditions"])
             d["source_trade_ids"] = json.dumps(d["source_trade_ids"])
             cols = ", ".join(d.keys())
-            placeholders = ", ".join(f":{k}" for k in d.keys())
+            placeholders = ", ".join(f":{k}" for k in d)
             conn.execute(
                 f"INSERT OR REPLACE INTO validated_rules ({cols}) VALUES ({placeholders})",
                 d,

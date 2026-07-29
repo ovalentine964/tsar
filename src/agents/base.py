@@ -15,15 +15,18 @@ All events use CloudEvents v1.0 via the comms.publisher/subscriber layer.
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import logging
 import time
 import uuid
 from abc import ABC, abstractmethod
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
-from src.comms.events import CloudEvent, create_event
 from src.comms.publisher import EventPublisher
-from src.comms.subscriber import EventSubscriber, EventHandler
+from src.comms.subscriber import EventHandler, EventSubscriber
+
+if TYPE_CHECKING:
+    from src.comms.events import CloudEvent
 
 logger = logging.getLogger(__name__)
 
@@ -173,19 +176,15 @@ class BaseAgent(ABC):
         self._subscriber.stop()
         for task in self._subscription_tasks:
             task.cancel()
-            try:
+            with contextlib.suppress(asyncio.CancelledError):
                 await task
-            except asyncio.CancelledError:
-                pass
         self._subscription_tasks.clear()
 
         # Stop main loop
         if self._task:
             self._task.cancel()
-            try:
+            with contextlib.suppress(asyncio.CancelledError):
                 await self._task
-            except asyncio.CancelledError:
-                pass
 
         # Cleanup
         await self.on_shutdown()

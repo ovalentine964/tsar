@@ -12,12 +12,15 @@ import re
 import sqlite3
 import uuid
 from contextlib import contextmanager
-from dataclasses import dataclass, field, asdict
-from datetime import datetime, timezone
+from dataclasses import asdict, dataclass, field
+from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any, Generator, Optional
+from typing import TYPE_CHECKING, Any
 
 from src.utils.logging import get_logger
+
+if TYPE_CHECKING:
+    from collections.abc import Generator
 
 logger = get_logger(__name__)
 
@@ -27,7 +30,7 @@ def _ulid() -> str:
 
 
 def _utcnow_iso() -> str:
-    return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.%fZ")
+    return datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%S.%fZ")
 
 
 @dataclass
@@ -38,24 +41,24 @@ class Pattern:
     description: str = ""
     conditions: str = "{}"
     sample_size: int = 0
-    success_rate: Optional[float] = None
-    avg_return: Optional[float] = None
-    avg_pnl_impact: Optional[float] = None
-    avg_duration_hours: Optional[float] = None
-    risk_reward: Optional[float] = None
-    expectancy: Optional[float] = None
-    sharpe_contribution: Optional[float] = None
+    success_rate: float | None = None
+    avg_return: float | None = None
+    avg_pnl_impact: float | None = None
+    avg_duration_hours: float | None = None
+    risk_reward: float | None = None
+    expectancy: float | None = None
+    sharpe_contribution: float | None = None
     confidence: float = 0.5
-    last_validated: Optional[str] = None
-    last_seen: Optional[str] = None
+    last_validated: str | None = None
+    last_seen: str | None = None
     decay_rate: float = 0.01
     min_sample_size: int = 10
-    example_trade_ids: Optional[str] = None
-    chart_embedding_id: Optional[str] = None
+    example_trade_ids: str | None = None
+    chart_embedding_id: str | None = None
     status: str = "candidate"
-    discovered_by: Optional[str] = None
+    discovered_by: str | None = None
     discovered_at: str = field(default_factory=_utcnow_iso)
-    tags: Optional[str] = None
+    tags: str | None = None
     created_at: str = field(default_factory=_utcnow_iso)
     updated_at: str = field(default_factory=_utcnow_iso)
 
@@ -67,21 +70,21 @@ class Pattern:
 class PatternObservation:
     observation_id: str = field(default_factory=_ulid)
     pattern_id: str = ""
-    trade_id: Optional[str] = None
+    trade_id: str | None = None
     symbol: str = ""
     observed_at: str = field(default_factory=_utcnow_iso)
-    timeframe: Optional[str] = None
-    price_at_trigger: Optional[float] = None
-    regime_at_trigger: Optional[str] = None
-    volatility_at_trigger: Optional[float] = None
-    volume_at_trigger: Optional[float] = None
-    outcome: Optional[str] = None
-    pnl_impact: Optional[float] = None
-    return_pct: Optional[float] = None
-    duration_hours: Optional[float] = None
-    max_adverse: Optional[float] = None
-    max_favorable: Optional[float] = None
-    embedding_id: Optional[str] = None
+    timeframe: str | None = None
+    price_at_trigger: float | None = None
+    regime_at_trigger: str | None = None
+    volatility_at_trigger: float | None = None
+    volume_at_trigger: float | None = None
+    outcome: str | None = None
+    pnl_impact: float | None = None
+    return_pct: float | None = None
+    duration_hours: float | None = None
+    max_adverse: float | None = None
+    max_favorable: float | None = None
+    embedding_id: str | None = None
     created_at: str = field(default_factory=_utcnow_iso)
 
     def to_dict(self) -> dict[str, Any]:
@@ -94,8 +97,8 @@ class PatternRelationship:
     pattern_a_id: str = ""
     pattern_b_id: str = ""
     relationship: str = "co_occurs"
-    strength: Optional[float] = None
-    sample_size: Optional[int] = None
+    strength: float | None = None
+    sample_size: int | None = None
     created_at: str = field(default_factory=_utcnow_iso)
 
     def to_dict(self) -> dict[str, Any]:
@@ -138,14 +141,14 @@ class PatternLibrary:
     def insert_pattern(self, pattern: Pattern) -> str:
         d = pattern.to_dict()
         cols = ", ".join(d.keys())
-        placeholders = ", ".join(f":{k}" for k in d.keys())
+        placeholders = ", ".join(f":{k}" for k in d)
         sql = f"INSERT INTO patterns ({cols}) VALUES ({placeholders})"
         with self._conn() as conn:
             conn.execute(sql, d)
         logger.info("pattern_inserted", pattern_id=pattern.pattern_id, name=pattern.pattern_name)
         return pattern.pattern_id
 
-    def get_pattern(self, pattern_id: str) -> Optional[Pattern]:
+    def get_pattern(self, pattern_id: str) -> Pattern | None:
         sql = "SELECT * FROM patterns WHERE pattern_id = ?"
         with self._conn() as conn:
             row = conn.execute(sql, (pattern_id,)).fetchone()
@@ -165,7 +168,7 @@ class PatternLibrary:
         return False
 
     def list_patterns(
-        self, pattern_type: Optional[str] = None, status: Optional[str] = None,
+        self, pattern_type: str | None = None, status: str | None = None,
         min_confidence: float = 0.0, limit: int = 100
     ) -> list[Pattern]:
         clauses: list[str] = ["confidence >= ?"]
@@ -211,7 +214,7 @@ class PatternLibrary:
     def record_observation(self, obs: PatternObservation) -> str:
         d = obs.to_dict()
         cols = ", ".join(d.keys())
-        placeholders = ", ".join(f":{k}" for k in d.keys())
+        placeholders = ", ".join(f":{k}" for k in d)
         sql = f"INSERT INTO pattern_observations ({cols}) VALUES ({placeholders})"
         with self._conn() as conn:
             conn.execute(sql, d)
@@ -219,7 +222,7 @@ class PatternLibrary:
         return obs.observation_id
 
     def get_observations(
-        self, pattern_id: str, outcome: Optional[str] = None, limit: int = 200
+        self, pattern_id: str, outcome: str | None = None, limit: int = 200
     ) -> list[PatternObservation]:
         clauses = ["pattern_id = ?"]
         params: list[Any] = [pattern_id]
@@ -257,7 +260,7 @@ class PatternLibrary:
     # ── Statistical validation ───────────────────────────────
 
     def validate_pattern(
-        self, pattern_id: str, min_sample_size: Optional[int] = None, min_confidence: float = 0.7
+        self, pattern_id: str, min_sample_size: int | None = None, min_confidence: float = 0.7
     ) -> dict[str, Any]:
         pattern = self.get_pattern(pattern_id)
         if pattern is None:
@@ -304,7 +307,7 @@ class PatternLibrary:
     def insert_relationship(self, rel: PatternRelationship) -> str:
         d = rel.to_dict()
         cols = ", ".join(d.keys())
-        placeholders = ", ".join(f":{k}" for k in d.keys())
+        placeholders = ", ".join(f":{k}" for k in d)
         sql = f"INSERT INTO pattern_relationships ({cols}) VALUES ({placeholders})"
         with self._conn() as conn:
             conn.execute(sql, d)

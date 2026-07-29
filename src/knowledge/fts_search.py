@@ -12,10 +12,9 @@ Persistence: SQLite (WAL mode, tsar.db) — async via aiosqlite.
 from __future__ import annotations
 
 import re
-import unicodedata
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 
 import aiosqlite
 
@@ -202,7 +201,7 @@ class MemoryRecall:
 
     def __init__(self, db_path: str | Path) -> None:
         self._db_path = str(db_path)
-        self._db: Optional[aiosqlite.Connection] = None
+        self._db: aiosqlite.Connection | None = None
 
     # ── Lifecycle ────────────────────────────────────────────
 
@@ -234,7 +233,7 @@ class MemoryRecall:
         """
         assert self._db is not None
 
-        for store_name, cfg in _STORE_REGISTRY.items():
+        for _store_name, cfg in _STORE_REGISTRY.items():
             fts = cfg["fts_table"]
             src = cfg["source_table"]
             cols = cfg["columns"]
@@ -297,7 +296,7 @@ class MemoryRecall:
             await self._db.close()
             self._db = None
 
-    async def __aenter__(self) -> "MemoryRecall":
+    async def __aenter__(self) -> MemoryRecall:
         await self.initialize()
         return self
 
@@ -309,7 +308,7 @@ class MemoryRecall:
     async def search(
         self,
         query: str,
-        stores: Optional[list[str]] = None,
+        stores: list[str] | None = None,
         limit: int = 20,
     ) -> list[SearchResult]:
         """Search across knowledge stores using FTS5.
@@ -461,7 +460,7 @@ class MemoryRecall:
         return results
 
     @staticmethod
-    def _resolve_stores(stores: Optional[list[str]]) -> list[str]:
+    def _resolve_stores(stores: list[str] | None) -> list[str]:
         """Validate and resolve store names."""
         if stores is None:
             return list(VALID_STORES)
@@ -493,7 +492,7 @@ class MemoryRecall:
 
     # ── Index management ─────────────────────────────────────
 
-    async def rebuild_index(self, store_name: Optional[str] = None) -> int:
+    async def rebuild_index(self, store_name: str | None = None) -> int:
         """Rebuild FTS5 index(es) via INSERT INTO fts(fts) VALUES('rebuild').
 
         Useful after bulk inserts that bypassed triggers, or to recover from

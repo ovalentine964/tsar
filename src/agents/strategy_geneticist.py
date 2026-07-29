@@ -25,12 +25,11 @@ from __future__ import annotations
 import logging
 import time
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
 from typing import Any
 
 from src.agents.base import BaseAgent
 from src.strategy.backtest_engine import BacktestConfig, BacktestEngine, BacktestResult
-from src.strategy.factor_bench import FactorBenchmarker, FactorBenchmarkResult
+from src.strategy.factor_bench import FactorBenchmarker
 from src.strategy.factor_library import FactorLibrary
 from src.strategy.monte_carlo import MonteCarloConfig, MonteCarloResult, MonteCarloSimulator
 from src.strategy.walk_forward import WalkForwardConfig, WalkForwardResult, WalkForwardValidator

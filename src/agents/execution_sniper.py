@@ -21,25 +21,22 @@ Publishes to:  tsar:stream:trades
 
 from __future__ import annotations
 
-import asyncio
 import logging
 import time
-import uuid
-from datetime import datetime, timezone
-from typing import Any
+from datetime import UTC, datetime
+from typing import TYPE_CHECKING, Any
 
 from src.agents.base import BaseAgent
-from src.comms.events import CloudEvent
 from src.interfaces.types import (
     ExecutionResult,
-    Fill,
     Order,
-    OrderRequest,
     OrderSide,
     OrderStatus,
     OrderType,
-    TimeInForce,
 )
+
+if TYPE_CHECKING:
+    from src.comms.events import CloudEvent
 
 logger = logging.getLogger(__name__)
 
@@ -88,7 +85,7 @@ class ExecutionSniper(BaseAgent):
 
     async def on_initialize(self) -> None:
         """Initialize execution engine and exchange gateway."""
-        from src.interfaces import get_execution_engine, get_exchange_gateway
+        from src.interfaces import get_exchange_gateway, get_execution_engine
 
         self._exec_engine = get_execution_engine()
         self._gateway = get_exchange_gateway()
@@ -299,7 +296,7 @@ class ExecutionSniper(BaseAgent):
             quantity=quantity,
             price=None,
             status=OrderStatus.PENDING,
-            timestamp=datetime.now(timezone.utc),
+            timestamp=datetime.now(UTC),
         )
 
         try:
@@ -337,7 +334,7 @@ class ExecutionSniper(BaseAgent):
             quantity=quantity,
             stop_price=stop_price,
             status=OrderStatus.PENDING,
-            timestamp=datetime.now(timezone.utc),
+            timestamp=datetime.now(UTC),
         )
 
         try:
@@ -378,7 +375,7 @@ class ExecutionSniper(BaseAgent):
             quantity=quantity,
             price=take_profit_price,
             status=OrderStatus.PENDING,
-            timestamp=datetime.now(timezone.utc),
+            timestamp=datetime.now(UTC),
         )
 
         try:
@@ -478,7 +475,7 @@ class ExecutionSniper(BaseAgent):
                     for f in entry_result.fills
                 ],
                 "status": entry_result.status.value,
-                "timestamp": datetime.now(timezone.utc).isoformat(),
+                "timestamp": datetime.now(UTC).isoformat(),
             },
             priority=1,
             risk_level="LOW",
@@ -512,7 +509,7 @@ class ExecutionSniper(BaseAgent):
                 "symbol": symbol,
                 "side": side.value,
                 "reason": reason,
-                "timestamp": datetime.now(timezone.utc).isoformat(),
+                "timestamp": datetime.now(UTC).isoformat(),
             },
             priority=0,  # Critical — execution failure
             risk_level="HIGH",

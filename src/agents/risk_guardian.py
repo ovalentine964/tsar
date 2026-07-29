@@ -31,23 +31,23 @@ from __future__ import annotations
 
 import logging
 import time
-import uuid
-from datetime import datetime, timezone
-from typing import Any
+from datetime import UTC, datetime
+from typing import TYPE_CHECKING, Any
 
 from src.agents.base import BaseAgent
-from src.comms.events import CloudEvent
-from src.risk.mandate_gate import MandateGate
 from src.interfaces.types import (
     DrawdownLevel,
     DrawdownState,
     OrderSide,
     Portfolio,
-    RiskCheckResult,
     RiskDecision,
     Signal,
     VetoLevel,
 )
+from src.risk.mandate_gate import MandateGate
+
+if TYPE_CHECKING:
+    from src.comms.events import CloudEvent
 
 logger = logging.getLogger(__name__)
 
@@ -270,7 +270,7 @@ class RiskGuardian(BaseAgent):
                 rejection_reasons=tuple(checks_failed),
                 warnings=tuple(warnings),
                 veto_level=VetoLevel.NUCLEAR.value,
-                timestamp=datetime.now(timezone.utc),
+                timestamp=datetime.now(UTC),
             )
         checks_passed.append("kill_switch")
 
@@ -287,7 +287,7 @@ class RiskGuardian(BaseAgent):
                 rejection_reasons=tuple(checks_failed),
                 warnings=tuple(warnings),
                 veto_level=VetoLevel.HARD.value,
-                timestamp=datetime.now(timezone.utc),
+                timestamp=datetime.now(UTC),
             )
 
         if drawdown.circuit_breaker_level == DrawdownLevel.ORANGE.value:
@@ -301,7 +301,7 @@ class RiskGuardian(BaseAgent):
                 rejection_reasons=tuple(checks_failed),
                 warnings=tuple(warnings),
                 veto_level=VetoLevel.FIRM.value,
-                timestamp=datetime.now(timezone.utc),
+                timestamp=datetime.now(UTC),
             )
 
         if drawdown.circuit_breaker_level == DrawdownLevel.YELLOW.value:
@@ -325,7 +325,7 @@ class RiskGuardian(BaseAgent):
                     rejection_reasons=tuple(checks_failed),
                     warnings=tuple(warnings),
                     veto_level=VetoLevel.HARD.value,
-                    timestamp=datetime.now(timezone.utc),
+                    timestamp=datetime.now(UTC),
                 )
         checks_passed.append("daily_loss_limit")
 
@@ -342,7 +342,7 @@ class RiskGuardian(BaseAgent):
                 rejection_reasons=tuple(checks_failed),
                 warnings=tuple(warnings),
                 veto_level=VetoLevel.FIRM.value,
-                timestamp=datetime.now(timezone.utc),
+                timestamp=datetime.now(UTC),
             )
         checks_passed.append("max_open_positions")
 
@@ -356,7 +356,7 @@ class RiskGuardian(BaseAgent):
                 rejection_reasons=tuple(checks_failed),
                 warnings=tuple(warnings),
                 veto_level=VetoLevel.HARD.value,
-                timestamp=datetime.now(timezone.utc),
+                timestamp=datetime.now(UTC),
             )
 
         stop_loss_distance_pct = abs(signal.entry_price - signal.stop_loss) / signal.entry_price * 100
@@ -372,7 +372,7 @@ class RiskGuardian(BaseAgent):
                 rejection_reasons=tuple(checks_failed),
                 warnings=tuple(warnings),
                 veto_level=VetoLevel.FIRM.value,
-                timestamp=datetime.now(timezone.utc),
+                timestamp=datetime.now(UTC),
             )
 
         if signal.stop_loss == 0:
@@ -384,7 +384,7 @@ class RiskGuardian(BaseAgent):
                 rejection_reasons=tuple(checks_failed),
                 warnings=tuple(warnings),
                 veto_level=VetoLevel.HARD.value,
-                timestamp=datetime.now(timezone.utc),
+                timestamp=datetime.now(UTC),
             )
         checks_passed.append("stop_loss_validation")
 
@@ -404,7 +404,7 @@ class RiskGuardian(BaseAgent):
                     rejection_reasons=tuple(checks_failed),
                     warnings=tuple(warnings),
                     veto_level=VetoLevel.FIRM.value,
-                    timestamp=datetime.now(timezone.utc),
+                    timestamp=datetime.now(UTC),
                 )
         checks_passed.append("risk_reward_ratio")
 
@@ -424,7 +424,7 @@ class RiskGuardian(BaseAgent):
                 rejection_reasons=tuple(checks_failed),
                 warnings=tuple(warnings),
                 veto_level=VetoLevel.FIRM.value,
-                timestamp=datetime.now(timezone.utc),
+                timestamp=datetime.now(UTC),
             )
         checks_passed.append("symbol_cooldown")
 
@@ -443,7 +443,7 @@ class RiskGuardian(BaseAgent):
                 rejection_reasons=tuple(checks_failed),
                 warnings=tuple(warnings),
                 veto_level=VetoLevel.FIRM.value,
-                timestamp=datetime.now(timezone.utc),
+                timestamp=datetime.now(UTC),
             )
         checks_passed.append("no_conflicting_positions")
 
@@ -459,7 +459,7 @@ class RiskGuardian(BaseAgent):
                 rejection_reasons=tuple(checks_failed),
                 warnings=tuple(warnings),
                 veto_level=VetoLevel.SOFT.value,
-                timestamp=datetime.now(timezone.utc),
+                timestamp=datetime.now(UTC),
             )
         checks_passed.append("signal_score")
 
@@ -477,7 +477,7 @@ class RiskGuardian(BaseAgent):
             rejection_reasons=(),
             warnings=tuple(warnings),
             veto_level=veto_level,
-            timestamp=datetime.now(timezone.utc),
+            timestamp=datetime.now(UTC),
         )
 
     def _calculate_position_size(self, signal: Signal) -> float:

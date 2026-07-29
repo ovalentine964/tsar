@@ -18,12 +18,13 @@ from __future__ import annotations
 
 import logging
 import math
-from dataclasses import dataclass, field
-from typing import Any
+from dataclasses import dataclass
+from typing import TYPE_CHECKING
 
 import numpy as np
 
-from src.strategy.backtest_engine import BacktestResult, TradeRecord
+if TYPE_CHECKING:
+    from src.strategy.backtest_engine import BacktestResult
 
 logger = logging.getLogger(__name__)
 

@@ -9,16 +9,18 @@ Persistence: SQLite (WAL mode, tsar.db)
 
 from __future__ import annotations
 
-import json
 import sqlite3
 import uuid
 from contextlib import contextmanager
-from dataclasses import dataclass, field, asdict
-from datetime import datetime, timezone
+from dataclasses import asdict, dataclass, field
+from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any, Generator, Optional
+from typing import TYPE_CHECKING, Any
 
 from src.utils.logging import get_logger
+
+if TYPE_CHECKING:
+    from collections.abc import Generator
 
 logger = get_logger(__name__)
 
@@ -28,7 +30,7 @@ def _ulid() -> str:
 
 
 def _utcnow_iso() -> str:
-    return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.%fZ")
+    return datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%S.%fZ")
 
 
 @dataclass
@@ -37,53 +39,53 @@ class TradeRecord:
     trade_id: str = field(default_factory=_ulid)
     symbol: str = ""
     asset_class: str = "crypto"
-    exchange: Optional[str] = None
+    exchange: str | None = None
     strategy_id: str = ""
     signal_type: str = "entry"
-    signal_score: Optional[float] = None
-    signal_source: Optional[str] = None
+    signal_score: float | None = None
+    signal_source: str | None = None
     side: str = "buy"
     order_type: str = "market"
     quantity: float = 0.0
-    limit_price: Optional[float] = None
-    stop_price: Optional[float] = None
-    entry_price: Optional[float] = None
-    exit_price: Optional[float] = None
-    fill_quantity: Optional[float] = None
-    slippage_bps: Optional[float] = None
+    limit_price: float | None = None
+    stop_price: float | None = None
+    entry_price: float | None = None
+    exit_price: float | None = None
+    fill_quantity: float | None = None
+    slippage_bps: float | None = None
     commission: float = 0.0
-    fill_timestamp: Optional[str] = None
-    latency_ms: Optional[int] = None
+    fill_timestamp: str | None = None
+    latency_ms: int | None = None
     position_size_before: float = 0.0
     position_size_after: float = 0.0
-    portfolio_heat_before: Optional[float] = None
-    portfolio_heat_after: Optional[float] = None
-    regime_at_entry: Optional[str] = None
-    vix_level: Optional[float] = None
-    market_breadth: Optional[float] = None
-    sector_momentum: Optional[str] = None
-    volatility_regime: Optional[str] = None
-    liquidity_score: Optional[float] = None
-    expected_return: Optional[float] = None
-    expected_risk: Optional[float] = None
-    risk_reward_ratio: Optional[float] = None
-    confidence: Optional[float] = None
-    thesis: Optional[str] = None
-    key_levels: Optional[str] = None
+    portfolio_heat_before: float | None = None
+    portfolio_heat_after: float | None = None
+    regime_at_entry: str | None = None
+    vix_level: float | None = None
+    market_breadth: float | None = None
+    sector_momentum: str | None = None
+    volatility_regime: str | None = None
+    liquidity_score: float | None = None
+    expected_return: float | None = None
+    expected_risk: float | None = None
+    risk_reward_ratio: float | None = None
+    confidence: float | None = None
+    thesis: str | None = None
+    key_levels: str | None = None
     status: str = "OPEN"
     realized_pnl: float = 0.0
     realized_pnl_pct: float = 0.0
-    holding_period_hours: Optional[float] = None
-    max_drawdown_during: Optional[float] = None
-    max_favorable_excursion: Optional[float] = None
-    max_adverse_excursion: Optional[float] = None
-    outcome_grade: Optional[str] = None
-    execution_grade: Optional[str] = None
-    reflection: Optional[str] = None
-    lessons: Optional[str] = None
-    pattern_matches: Optional[str] = None
+    holding_period_hours: float | None = None
+    max_drawdown_during: float | None = None
+    max_favorable_excursion: float | None = None
+    max_adverse_excursion: float | None = None
+    outcome_grade: str | None = None
+    execution_grade: str | None = None
+    reflection: str | None = None
+    lessons: str | None = None
+    pattern_matches: str | None = None
     trading_mode: str = "paper"
-    notes: Optional[str] = None
+    notes: str | None = None
     created_at: str = field(default_factory=_utcnow_iso)
     updated_at: str = field(default_factory=_utcnow_iso)
     is_deleted: int = 0
@@ -98,22 +100,22 @@ class TradeSnapshot:
     snapshot_id: str = field(default_factory=_ulid)
     trade_id: str = ""
     snapshot_type: str = "decision"
-    bid: Optional[float] = None
-    ask: Optional[float] = None
-    mid: Optional[float] = None
-    last_price: Optional[float] = None
-    volume_24h: Optional[float] = None
-    rsi_14: Optional[float] = None
-    macd_signal: Optional[float] = None
-    bb_position: Optional[float] = None
-    atr_14: Optional[float] = None
-    obv_trend: Optional[str] = None
-    book_depth_bid: Optional[str] = None
-    book_depth_ask: Optional[str] = None
-    spread_bps: Optional[float] = None
-    news_sentiment: Optional[float] = None
-    social_sentiment: Optional[float] = None
-    fear_greed_index: Optional[float] = None
+    bid: float | None = None
+    ask: float | None = None
+    mid: float | None = None
+    last_price: float | None = None
+    volume_24h: float | None = None
+    rsi_14: float | None = None
+    macd_signal: float | None = None
+    bb_position: float | None = None
+    atr_14: float | None = None
+    obv_trend: str | None = None
+    book_depth_bid: str | None = None
+    book_depth_ask: str | None = None
+    spread_bps: float | None = None
+    news_sentiment: float | None = None
+    social_sentiment: float | None = None
+    fear_greed_index: float | None = None
     created_at: str = field(default_factory=_utcnow_iso)
 
     def to_dict(self) -> dict[str, Any]:
@@ -127,8 +129,8 @@ class TradeJournalEntry:
     trade_id: str = ""
     entry_type: str = "post_mortem"
     content: str = ""
-    mood: Optional[str] = None
-    cognitive_biases: Optional[str] = None
+    mood: str | None = None
+    cognitive_biases: str | None = None
     created_at: str = field(default_factory=_utcnow_iso)
 
     def to_dict(self) -> dict[str, Any]:
@@ -171,14 +173,14 @@ class TradeMemory:
     def insert_trade(self, trade: TradeRecord) -> str:
         d = trade.to_dict()
         cols = ", ".join(d.keys())
-        placeholders = ", ".join(f":{k}" for k in d.keys())
+        placeholders = ", ".join(f":{k}" for k in d)
         sql = f"INSERT INTO trade_records ({cols}) VALUES ({placeholders})"
         with self._conn() as conn:
             conn.execute(sql, d)
         logger.info("trade_inserted", trade_id=trade.trade_id, symbol=trade.symbol)
         return trade.trade_id
 
-    def get_trade(self, trade_id: str) -> Optional[TradeRecord]:
+    def get_trade(self, trade_id: str) -> TradeRecord | None:
         sql = "SELECT * FROM trade_records WHERE trade_id = ? AND is_deleted = 0"
         with self._conn() as conn:
             row = conn.execute(sql, (trade_id,)).fetchone()
@@ -203,10 +205,10 @@ class TradeMemory:
         exit_price: float,
         realized_pnl: float,
         realized_pnl_pct: float,
-        holding_period_hours: Optional[float] = None,
-        outcome_grade: Optional[str] = None,
-        execution_grade: Optional[str] = None,
-        reflection: Optional[str] = None,
+        holding_period_hours: float | None = None,
+        outcome_grade: str | None = None,
+        execution_grade: str | None = None,
+        reflection: str | None = None,
         status: str = "CLOSED",
     ) -> bool:
         fields: dict[str, Any] = {
@@ -239,12 +241,12 @@ class TradeMemory:
 
     def list_trades(
         self,
-        symbol: Optional[str] = None,
-        strategy_id: Optional[str] = None,
-        status: Optional[str] = None,
-        trading_mode: Optional[str] = None,
-        since: Optional[str] = None,
-        until: Optional[str] = None,
+        symbol: str | None = None,
+        strategy_id: str | None = None,
+        status: str | None = None,
+        trading_mode: str | None = None,
+        since: str | None = None,
+        until: str | None = None,
         limit: int = 100,
         offset: int = 0,
     ) -> list[TradeRecord]:
@@ -285,7 +287,7 @@ class TradeMemory:
             rows = conn.execute(sql).fetchall()
         return [TradeRecord(**dict(r)) for r in rows]
 
-    def get_trade_count(self, since: Optional[str] = None) -> int:
+    def get_trade_count(self, since: str | None = None) -> int:
         if since:
             sql = "SELECT COUNT(*) FROM trade_records WHERE is_deleted = 0 AND created_at >= ?"
             params: tuple[Any, ...] = (since,)
@@ -296,7 +298,7 @@ class TradeMemory:
             row = conn.execute(sql, params).fetchone()
         return row[0] if row else 0
 
-    def get_strategy_summary(self, since: Optional[str] = None) -> list[dict[str, Any]]:
+    def get_strategy_summary(self, since: str | None = None) -> list[dict[str, Any]]:
         clause = "AND created_at >= ?" if since else ""
         sql = f"""
             SELECT
@@ -348,14 +350,14 @@ class TradeMemory:
     def insert_snapshot(self, snapshot: TradeSnapshot) -> str:
         d = snapshot.to_dict()
         cols = ", ".join(d.keys())
-        placeholders = ", ".join(f":{k}" for k in d.keys())
+        placeholders = ", ".join(f":{k}" for k in d)
         sql = f"INSERT INTO trade_snapshots ({cols}) VALUES ({placeholders})"
         with self._conn() as conn:
             conn.execute(sql, d)
         return snapshot.snapshot_id
 
     def get_snapshots(
-        self, trade_id: str, snapshot_type: Optional[str] = None
+        self, trade_id: str, snapshot_type: str | None = None
     ) -> list[TradeSnapshot]:
         if snapshot_type:
             sql = "SELECT * FROM trade_snapshots WHERE trade_id = ? AND snapshot_type = ? ORDER BY created_at"
@@ -372,7 +374,7 @@ class TradeMemory:
     def insert_journal_entry(self, entry: TradeJournalEntry) -> str:
         d = entry.to_dict()
         cols = ", ".join(d.keys())
-        placeholders = ", ".join(f":{k}" for k in d.keys())
+        placeholders = ", ".join(f":{k}" for k in d)
         sql = f"INSERT INTO trade_journal ({cols}) VALUES ({placeholders})"
         with self._conn() as conn:
             conn.execute(sql, d)
@@ -380,8 +382,8 @@ class TradeMemory:
 
     def get_journal_entries(
         self,
-        trade_id: Optional[str] = None,
-        entry_type: Optional[str] = None,
+        trade_id: str | None = None,
+        entry_type: str | None = None,
         limit: int = 50,
     ) -> list[TradeJournalEntry]:
         clauses: list[str] = []
@@ -401,7 +403,7 @@ class TradeMemory:
 
     # ── Regime-specific queries ──────────────────────────────
 
-    def get_performance_by_regime(self, since: Optional[str] = None) -> list[dict[str, Any]]:
+    def get_performance_by_regime(self, since: str | None = None) -> list[dict[str, Any]]:
         clause = "AND created_at >= ?" if since else ""
         sql = f"""
             SELECT
@@ -420,7 +422,7 @@ class TradeMemory:
             rows = conn.execute(sql, params).fetchall()
         return [dict(r) for r in rows]
 
-    def get_symbol_performance(self, symbol: str, since: Optional[str] = None) -> dict[str, Any]:
+    def get_symbol_performance(self, symbol: str, since: str | None = None) -> dict[str, Any]:
         clause = "AND created_at >= ?" if since else ""
         sql = f"""
             SELECT

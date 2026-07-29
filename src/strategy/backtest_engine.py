@@ -24,14 +24,16 @@ from __future__ import annotations
 
 import logging
 import math
-from dataclasses import dataclass, field
-from datetime import datetime
-from typing import Any
+from dataclasses import dataclass
+from typing import TYPE_CHECKING, Any
 
 import numpy as np
 
-from src.interfaces.types import OHLCV
-from src.strategy.base import BaseStrategy
+if TYPE_CHECKING:
+    from datetime import datetime
+
+    from src.interfaces.types import OHLCV
+    from src.strategy.base import BaseStrategy
 
 logger = logging.getLogger(__name__)
 
@@ -448,7 +450,7 @@ class BacktestEngine:
 
         config = self._config
         pnl_values = [t.pnl for t in trades]
-        pnl_pcts = [t.pnl_pct for t in trades]
+        [t.pnl_pct for t in trades]
 
         # Win/loss stats
         winners = [p for p in pnl_values if p > 0]
@@ -560,7 +562,6 @@ class BacktestEngine:
 
         peak = equity_curve[0]
         max_dd = 0.0
-        current_dd_start = 0
         max_dd_duration = 0
         in_drawdown = False
         dd_start_idx = 0

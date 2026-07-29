@@ -21,24 +21,26 @@ import logging
 import time
 import uuid
 from dataclasses import dataclass
-from datetime import datetime, timezone
-from typing import Any
+from datetime import UTC, datetime
+from typing import TYPE_CHECKING, Any
 
 import pandas as pd
 
 from src.agents.base import BaseAgent
-from src.comms.events import CloudEvent
 from src.interfaces.types import (
+    OHLCV,
     BollingerResult,
     MACDResult,
-    OHLCV,
     OrderSide,
+    Signal,
     SRLevel,
     SRLevels,
-    Signal,
     Timeframe,
 )
 from src.strategy.factor_library import FactorLibrary
+
+if TYPE_CHECKING:
+    from src.comms.events import CloudEvent
 
 logger = logging.getLogger(__name__)
 
@@ -368,7 +370,7 @@ class SignalScout(BaseAgent):
                 "ema_trend": ema_trend[-1] if ema_trend else 0,
                 "timeframe": "1h",
             },
-            timestamp=datetime.now(timezone.utc),
+            timestamp=datetime.now(UTC),
         )
 
         logger.info(
@@ -429,10 +431,7 @@ class SignalScout(BaseAgent):
 
         # ── S/R Proximity Score (30%) ─────────────────────────────
         # Closer to key level → higher score
-        if side == OrderSide.BUY:
-            levels = sr_levels.supports
-        else:
-            levels = sr_levels.resistances
+        levels = sr_levels.supports if side == OrderSide.BUY else sr_levels.resistances
 
         best_sr_score = 0.0
         for level in levels:
@@ -526,7 +525,7 @@ class SignalScout(BaseAgent):
 
     def _compute_factor_adjustment(
         self,
-        ohlcv_df: "pd.DataFrame",
+        ohlcv_df: pd.DataFrame,
         side: OrderSide,
     ) -> float:
         """Compute factor-based signal adjustment in [-1, 1].

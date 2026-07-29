@@ -8,6 +8,7 @@ Supports both Redis Streams and an in-memory fallback for development/testing.
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import logging
 from typing import Any
 
@@ -172,10 +173,8 @@ class InMemoryBus:
         if block_ms > 0:
             event = self._events.get(stream)
             if event:
-                try:
+                with contextlib.suppress(asyncio.TimeoutError):
                     await asyncio.wait_for(event.wait(), timeout=block_ms / 1000)
-                except asyncio.TimeoutError:
-                    pass
 
         # Read events
         async with self._lock:

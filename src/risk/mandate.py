@@ -21,8 +21,8 @@ Persists to config/mandate.yaml. All validation is deterministic.
 from __future__ import annotations
 
 import logging
-from datetime import datetime, timezone
-from enum import Enum
+from datetime import UTC, datetime
+from enum import StrEnum
 from pathlib import Path
 from typing import Any
 
@@ -41,7 +41,7 @@ _DEFAULT_CONFIG = "config/mandate.yaml"
 # ═══════════════════════════════════════════════════════════════════════
 
 
-class MandateStatus(str, Enum):
+class MandateStatus(StrEnum):
     """Lifecycle status of a mandate."""
 
     DRAFT = "draft"        # Created but not committed
@@ -258,7 +258,7 @@ class Mandate:
             ValueError: If rules are invalid (no symbols, zero limits).
         """
         self._validate_rules()
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         self._state = self._state.model_copy(update={
             "status": MandateStatus.ACTIVE,
             "committed_at": now,
@@ -278,7 +278,7 @@ class Mandate:
         Args:
             user_id: ID of the human revoking the mandate.
         """
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         self._state = self._state.model_copy(update={
             "status": MandateStatus.REVOKED,
             "revoked_at": now,
@@ -432,15 +432,9 @@ class Mandate:
         rules = self._state.rules
 
         # Normalize inputs
-        if isinstance(side, OrderSide):
-            side_str = side.value
-        else:
-            side_str = side
+        side_str = side.value if isinstance(side, OrderSide) else side
 
-        if isinstance(order_type, OrderType):
-            ot_str = order_type.value
-        else:
-            ot_str = order_type
+        ot_str = order_type.value if isinstance(order_type, OrderType) else order_type
 
         # Symbol check
         symbol_upper = symbol.strip().upper()

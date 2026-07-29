@@ -64,7 +64,7 @@ class StrategyGenome:
         if not path.exists():
             raise FileNotFoundError(f"Genome YAML not found: {path}")
 
-        with open(path, "r") as f:
+        with open(path) as f:
             config = yaml.safe_load(f)
 
         name = config.get("name", path.stem)
