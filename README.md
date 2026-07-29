@@ -6,7 +6,7 @@
 [![Phases](https://img.shields.io/badge/Phases_1A--4-COMPLETE-green?style=for-badge)]()
 [![Mobile](https://img.shields.io/badge/Mobile-Flutter-blue?style=for-badge)]()
 [![License](https://img.shields.io/badge/License-MIT-blue?style=for-badge)]()
-[![Status](https://img.shields.io/badge/Status-Integration_Wiring_Complete-yellow?style=for-badge)]()
+[![Status](https://img.shields.io/badge/Status-Production_Ready_v0.5.0-yellow?style=for-badge)]()
 
 ## What Is TSAR?
 
@@ -36,7 +36,7 @@ TRADE → OBSERVE → REFLECT → EXTRACT → ADAPT → BETTER TRADE
  ✅ Phase 4   — Factor Library (IC/IR scoring, category taxonomy, strategy factors)
  ✅ Integration Wiring — All components connected via CloudEvents + FastAPI
  ✅ Mobile App — Flutter app with full API integration (28+ endpoints)
- ⬜ Engineering — Production hardening, deployment
+ ✅ Engineering — Production hardening, deployment (v0.5.0)
  ⬜ Live Trading — Paper validation → live with mandate
 ```
 
@@ -153,6 +153,33 @@ See [mobile/README.md](mobile/README.md) for full setup and API integration deta
 ### Download
 
 Pre-built APK available on [GitHub Releases](../../releases).
+
+
+## Quick Start (5 Minutes)
+
+```bash
+# 1. Clone
+git clone https://github.com/ovalentine964/tsar.git && cd tsar
+
+# 2. Configure (fill in your API keys)
+cp .env.example .env && nano .env
+
+# 3. Start
+./quickstart.sh
+
+# 4. Open on your phone
+# http://YOUR_SERVER:8000/app
+```
+
+**See [INSTALL.md](INSTALL.md) for detailed setup guide.**
+
+## Access on Your Phone
+
+| Method | How |
+|--------|-----|
+| 📱 **Web Dashboard** | Open `http://YOUR_SERVER:8000/app` in phone browser |
+| 📲 **Flutter APK** | Download from [GitHub Releases](../../releases) |
+| 💬 **Telegram** | Send `/status` to your bot |
 
 ## Tech Stack
 

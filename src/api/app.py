@@ -419,3 +419,11 @@ def create_app(config: Any = None) -> FastAPI:
 
 
     return app
+
+# ── Mobile Web Dashboard ───────────────────────────────────
+import os
+from fastapi.staticfiles import StaticFiles
+
+static_dir = os.path.join(os.path.dirname(__file__), "static")
+if os.path.exists(static_dir):
+    app.mount("/app", StaticFiles(directory=static_dir, html=True), name="dashboard")

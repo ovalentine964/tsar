@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<title>TSAR — Trading Super Agent</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{--bg:#0a0e17;--card:#111827;--green:#00C853;--red:#FF1744;--blue:#2979FF;--text:#e0e0e0;--dim:#888;--border:#1e293b}
+body{font-family:-apple-system,system-ui,sans-serif;background:var(--bg);color:var(--text);padding:16px;max-width:480px;margin:0 auto;-webkit-font-smoothing:antialiased}
+h1{font-size:20px;margin-bottom:4px}
+h2{font-size:14px;color:var(--dim);font-weight:400;margin-bottom:16px}
+.card{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:16px;margin-bottom:12px}
+.stat{display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid var(--border)}
+.stat:last-child{border:none}
+.label{color:var(--dim);font-size:13px}
+.value{font-size:16px;font-weight:600;font-family:'JetBrains Mono',monospace}
+.positive{color:var(--green)}
+.negative{color:var(--red)}
+.neutral{color:var(--blue)}
+.btn{display:block;width:100%;padding:14px;border:none;border-radius:10px;font-size:15px;font-weight:600;cursor:pointer;margin-bottom:8px}
+.btn-green{background:var(--green);color:#000}
+.btn-red{background:var(--red);color:#fff}
+.btn-blue{background:var(--blue);color:#fff}
+.btn-outline{background:transparent;border:1px solid var(--border);color:var(--text)}
+.status-dot{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:6px}
+.status-dot.online{background:var(--green)}
+.status-dot.offline{background:var(--red)}
+.pulse{animation:pulse 2s infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.5}}
+#loading{text-align:center;padding:40px;color:var(--dim)}
+</style>
+</head>
+<body>
+
+<div id="loading">Loading TSAR...</div>
+
+<div id="app" style="display:none">
+<h1>🏰 TSAR</h1>
+<h2><span class="status-dot online pulse"></span>Trading Super Agent</h2>
+
+<div class="card">
+<div class="stat"><span class="label">Mode</span><span class="value neutral" id="mode">—</span></div>
+<div class="stat"><span class="label">Regime</span><span class="value" id="regime">—</span></div>
+<div class="stat"><span class="label">Kill Switch</span><span class="value" id="killswitch">—</span></div>
+<div class="stat"><span class="label">Uptime</span><span class="value" id="uptime">—</span></div>
+</div>
+
+<div class="card">
+<h2 style="margin-bottom:12px">💰 Portfolio</h2>
+<div class="stat"><span class="label">Total P&L</span><span class="value" id="pnl">—</span></div>
+<div class="stat"><span class="label">Daily P&L</span><span class="value" id="dailyPnl">—</span></div>
+<div class="stat"><span class="label">Win Rate</span><span class="value" id="winrate">—</span></div>
+<div class="stat"><span class="label">Trades Today</span><span class="value" id="tradesToday">—</span></div>
+<div class="stat"><span class="label">Open Positions</span><span class="value" id="positions">—</span></div>
+</div>
+
+<div class="card">
+<h2 style="margin-bottom:12px">📊 Positions</h2>
+<div id="positionsList" style="color:var(--dim);font-size:13px">No open positions</div>
+</div>
+
+<button class="btn btn-outline" onclick="refresh()">🔄 Refresh</button>
+<button class="btn btn-red" onclick="killSwitch()">🚨 Kill Switch</button>
+</div>
+
+<script>
+const API = window.location.origin;
+const KEY = localStorage.getItem('tsar_key') || prompt('Enter your TSAR API key:');
+if(KEY) localStorage.setItem('tsar_key', KEY);
+
+async function fetch(path){
+const r = await window.fetch(API+path,{headers:{'X-API-Key':KEY}});
+if(!r.ok) throw new Error(r.statusText);
+return r.json();
+}
+
+async function refresh(){
+try{
+const [health, pnl, risk] = await Promise.all([
+fetch('/health'),
+fetch('/api/v1/pnl').catch(()=>({total_pnl:0,daily_pnl:0,win_rate:0,trades_today:0})),
+fetch('/api/v1/risk').catch(()=>({kill_switch_active:false}))
+]);
+
+document.getElementById('loading').style.display='none';
+document.getElementById('app').style.display='block';
+document.getElementById('mode').textContent = health.trading_mode || 'paper';
+document.getElementById('regime').textContent = health.regime || 'UNKNOWN';
+document.getElementById('killswitch').textContent = risk.kill_switch_active ? '🔴 ACTIVE' : '🟢 OFF';
+document.getElementById('killswitch').className = 'value ' + (risk.kill_switch_active ? 'negative' : 'positive');
+document.getElementById('uptime').textContent = health.uptime || '—';
+
+const pnlVal = pnl.total_pnl || 0;
+document.getElementById('pnl').textContent = (pnlVal>=0?'+':'') + '$' + pnlVal.toFixed(2);
+document.getElementById('pnl').className = 'value ' + (pnlVal>=0?'positive':'negative');
+document.getElementById('dailyPnl').textContent = '$' + (pnl.daily_pnl||0).toFixed(2);
+document.getElementById('winrate').textContent = ((pnl.win_rate||0)*100).toFixed(1) + '%';
+document.getElementById('tradesToday').textContent = pnl.trades_today || 0;
+
+const positions = await fetch('/api/v1/positions').catch(()=>[]);
+document.getElementById('positions').textContent = positions.length || 0;
+const list = document.getElementById('positionsList');
+if(positions.length){
+list.innerHTML = positions.map(p=>
+`<div class="stat"><span class="label">${p.symbol}</span><span class="value ${p.side==='buy'?'positive':'negative'}">${p.side.toUpperCase()} ${p.quantity} @ $${p.entry_price}</span></div>`
+).join('');
+}else{
+list.innerHTML = '<div style="text-align:center;padding:8px">No open positions</div>';
+}
+}catch(e){
+document.getElementById('loading').innerHTML='❌ Cannot connect to TSAR API<br><small>'+e.message+'</small>';
+}
+}
+
+async function killSwitch(){
+if(!confirm('🚨 Activate kill switch? This will close all positions and stop trading.'))return;
+try{
+await fetch('/api/v1/kill',{method:'POST',headers:{'Content-Type':'application/json','X-API-Key':KEY},body:JSON.stringify({reason:'Manual kill from mobile'})});
+alert('✅ Kill switch activated');
+refresh();
+}catch(e){alert('Error: '+e.message)}
+}
+
+refresh();
+setInterval(refresh,30000);
+</script>
+</body>
+</html>
