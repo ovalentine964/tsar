@@ -24,7 +24,7 @@ FROM python:3.12-slim AS production
 
 LABEL maintainer="TSAR Team"
 LABEL description="TSAR — Trading Super Agent Regime"
-LABEL version="0.1.0"
+LABEL version="0.5.0"
 
 # Runtime system dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends \

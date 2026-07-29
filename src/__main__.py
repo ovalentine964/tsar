@@ -44,7 +44,7 @@ async def run_full_system(args: argparse.Namespace) -> None:
     setup_logging(level=config.logging.level, json_output=config.logging.json_output)
 
     trading_mode = "live" if args.live else "paper"
-    print(f"\n🏰 TSAR v0.1.0 — {trading_mode.upper()} MODE")
+    print(f"\n🏰 TSAR v0.5.0 — {trading_mode.upper()} MODE")
     print(f"   Config: {args.config}")
     print(f"   API: http://{args.host}:{args.port}")
     print(f"   Database: {config.database.db_path}")
@@ -228,7 +228,7 @@ def run_dashboard(args: argparse.Namespace) -> None:
     print("\n🛡️  Mandate:")
     try:
         from src.risk.mandate import Mandate
-        m = Mandate.from_yaml("config/mandate.yaml")
+        m = Mandate(config_path=Path("config/mandate.yaml"))
         print(f"   Status: {m.status}")
         print(f"   Symbols: {len(m.rules)} rules defined")
     except Exception:

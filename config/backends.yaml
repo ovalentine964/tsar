@@ -16,7 +16,7 @@ exchange_gateway:
     timeout_s: 15
 
 pricing_engine:
-  primary: "src.interfaces.pricing.pandas_ta_engine.PandasTA"
+  primary: "src.backends.python.pandas_ta_engine.PandasTAEngine"
   fallback:
     - path: "src.interfaces.pricing.rust_tick_engine.RustTick"
       priority: 200
@@ -34,7 +34,7 @@ execution_engine:
     slippage_std_bps: 2
 
 risk_engine:
-  primary: "src.interfaces.risk.py_risk_engine.PyRiskEngine"
+  primary: "src.backends.python.python_risk_engine.PythonRiskEngine"
   fallback:
     - path: "src.interfaces.risk.rust_risk_engine.RustRiskEngine"
       priority: 200
@@ -42,11 +42,11 @@ risk_engine:
     config_path: "config/risk.yaml"
 
 llm_provider:
-  primary: "src.interfaces.llm.ollama_provider.OllamaProvider"
+  primary: "src.backends.python.ollama_provider.OllamaProvider"
   fallback:
-    - path: "src.interfaces.llm.openai_provider.OpenAIProvider"
+    - path: "src.backends.python.openai_provider.OpenAIProvider"
       priority: 200
-    - path: "src.interfaces.llm.deepseek_provider.DeepSeekProvider"
+    - path: "src.backends.python.deepseek_provider.DeepSeekProvider"
       priority: 300
   config:
     config_path: "config/models.yaml"

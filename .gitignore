@@ -105,3 +105,11 @@ coverage.xml
 *.py,cover
 .hypothesis/
 reports/
+*.db-shm
+*.db-wal
+__pycache__/
+*.pyc
+.env
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
