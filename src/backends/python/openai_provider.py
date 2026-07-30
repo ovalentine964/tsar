@@ -193,12 +193,9 @@ class OpenAIProvider(LLMProvider):
         )
 
     def count_tokens(self, text: str) -> int:
-        """Estimate token count using the ~4 chars/token heuristic.
-
-        For exact counts, use ``tiktoken`` — but this is a reasonable
-        fallback that works for all models.
-        """
-        return max(1, len(text) // 4)
+        """Count tokens using tiktoken (falls back to heuristic)."""
+        from src.llm.token_counter import count_tokens
+        return count_tokens(text, model=self._default_model)
 
     def get_capabilities(self) -> ModelCapabilities:
         """Return capabilities for the default OpenAI model."""

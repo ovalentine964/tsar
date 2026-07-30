@@ -135,6 +135,146 @@ class BackendRegistry:
         logger.info("Creating backend: %s → %s", interface_name, backend_name)
         return cls(**merged_config)
 
+    def create_with_fallback(
+        self,
+        interface_name: str,
+        config: dict[str, Any] | None = None,
+    ) -> tuple[Any, str]:
+        """Create a backend instance with automatic fallback.
+
+        Attempts to instantiate backends in fallback-chain order (primary
+        first). If the primary raises during construction, the next backend
+        in the chain is tried. All construction errors are logged.
+
+        Args:
+            interface_name: Interface identifier.
+            config: Override configuration passed to the backend constructor.
+
+        Returns:
+            Tuple of (backend_instance, backend_name).
+
+        Raises:
+            ValueError: No backend registered for the given interface.
+            RuntimeError: All backends in the chain failed to instantiate.
+        """
+        chain = self._fallback_chains.get(interface_name, [])
+        if not chain:
+            raise ValueError(
+                f"No backend registered for interface '{interface_name}'. "
+                f"Registered: {list(self._backends.keys())}"
+            )
+
+        merged_config = {**self._configs.get(interface_name, {}), **(config or {})}
+        errors: list[str] = []
+
+        for backend_name in chain:
+            cls = self._backends[interface_name][backend_name]
+            try:
+                logger.info(
+                    "Attempting backend: %s → %s", interface_name, backend_name
+                )
+                instance = cls(**merged_config)
+                if errors:
+                    logger.warning(
+                        "Fallback activated for %s: primary failed, using %s",
+                        interface_name,
+                        backend_name,
+                    )
+                return instance, backend_name
+            except Exception as exc:
+                error_msg = f"{backend_name}: {type(exc).__name__}: {exc}"
+                errors.append(error_msg)
+                logger.warning(
+                    "Backend %s failed for %s: %s",
+                    backend_name,
+                    interface_name,
+                    error_msg,
+                )
+
+        raise RuntimeError(
+            f"All backends failed for interface '{interface_name}'. "
+            f"Errors: {errors}"
+        )
+
+    async def execute_with_fallback(
+        self,
+        interface_name: str,
+        method_name: str,
+        config: dict[str, Any] | None = None,
+        *args: Any,
+        **kwargs: Any,
+    ) -> Any:
+        """Execute a method on a backend with automatic fallback on failure.
+
+        Tries to call ``method_name`` on each backend in the fallback chain.
+        If the primary backend raises during *execution* (not construction),
+        the next backend is tried. Each backend is freshly constructed to
+        avoid stale state.
+
+        Args:
+            interface_name: Interface identifier.
+            method_name: Name of the method to call on the backend.
+            config: Override configuration for backend construction.
+            *args: Positional args passed to the method.
+            **kwargs: Keyword args passed to the method.
+
+        Returns:
+            The return value of the method call.
+
+        Raises:
+            ValueError: No backend registered.
+            RuntimeError: All backends failed during execution.
+        """
+        chain = self._fallback_chains.get(interface_name, [])
+        if not chain:
+            raise ValueError(
+                f"No backend registered for interface '{interface_name}'. "
+                f"Registered: {list(self._backends.keys())}"
+            )
+
+        merged_config = {**self._configs.get(interface_name, {}), **(config or {})}
+        errors: list[str] = []
+
+        for backend_name in chain:
+            cls = self._backends[interface_name][backend_name]
+            try:
+                logger.info(
+                    "Executing %s.%s via %s",
+                    interface_name,
+                    method_name,
+                    backend_name,
+                )
+                instance = cls(**merged_config)
+                method = getattr(instance, method_name, None)
+                if method is None:
+                    raise AttributeError(
+                        f"Backend '{backend_name}' has no method '{method_name}'"
+                    )
+                result = method(*args, **kwargs)
+                if errors:
+                    logger.warning(
+                        "Fallback execution for %s.%s: succeeded on %s after %d failure(s)",
+                        interface_name,
+                        method_name,
+                        backend_name,
+                        len(errors),
+                    )
+                return result
+            except Exception as exc:
+                error_msg = f"{backend_name}: {type(exc).__name__}: {exc}"
+                errors.append(error_msg)
+                logger.warning(
+                    "Backend %s.%s failed: %s",
+                    backend_name,
+                    method_name,
+                    error_msg,
+                )
+
+        raise RuntimeError(
+            f"All backends failed for {interface_name}.{method_name}. "
+            f"Errors: {errors}"
+        )
+
     # ═══════════════════════════════════════════════════════════════
     # FALLBACK CHAINS
     # ═══════════════════════════════════════════════════════════════

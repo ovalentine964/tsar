@@ -13,6 +13,8 @@ on:
 
 env:
   PYTHON_VERSION: "3.12"
+  RUST_TOOLCHAIN: "1.79"
+  CMAKE_VERSION: "3.28"
 
 jobs:
   # ----------------------------------------------------------
@@ -102,6 +104,69 @@ jobs:
           path: coverage.xml
 
   # ----------------------------------------------------------
+  # Rust Build & Test
+  # ----------------------------------------------------------
+  rust:
+    name: Rust (build + test)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: rust
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: ${{ env.RUST_TOOLCHAIN }}
+          components: clippy, rustfmt
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: rust -> target
+
+      - name: Check formatting
+        run: cargo fmt --all -- --check
+
+      - name: Clippy lint
+        run: cargo clippy --workspace --all-targets -- -D warnings
+
+      - name: Build workspace
+        run: cargo build --workspace --verbose
+
+      - name: Run tests
+        run: cargo test --workspace --verbose
+
+  # ----------------------------------------------------------
+  # C++ Build & Test
+  # ----------------------------------------------------------
+  cpp:
+    name: C++ (CMake + test)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: cpp
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y cmake g++ libboost-all-dev
+
+      - name: Configure (CMake)
+        run: |
+          cmake -B build -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_CXX_STANDARD=20 \
+            -DTSAR_BUILD_TESTS=ON
+
+      - name: Build
+        run: cmake --build build --config Release -j$(nproc)
+
+      - name: Run tests
+        run: cd build && ctest --output-on-failure -j$(nproc)
+
+  # ----------------------------------------------------------
   # Security
   # ----------------------------------------------------------
   security:
@@ -130,7 +195,7 @@ jobs:
   build:
     name: Build (docker)
     runs-on: ubuntu-latest
-    needs: [lint, typecheck, test]
+    needs: [lint, typecheck, test, rust, cpp]
     steps:
       - uses: actions/checkout@v4
 

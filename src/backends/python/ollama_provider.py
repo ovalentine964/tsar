@@ -191,12 +191,13 @@ class OllamaProvider(LLMProvider):
                 chunk_index += 1
 
     def count_tokens(self, text: str) -> int:
-        """Estimate token count.
+        """Count tokens using tiktoken (falls back to heuristic).
 
-        Ollama does not expose a tokenizer endpoint.  Uses the common
-        heuristic of ~4 characters per token for English/mixed text.
+        Ollama does not expose a tokenizer endpoint. Uses tiktoken
+        for accurate counting with cl100k_base as approximation.
         """
-        return max(1, len(text) // 4)
+        from src.llm.token_counter import count_tokens
+        return count_tokens(text, model=self._default_model)
 
     def get_capabilities(self) -> ModelCapabilities:
         """Return capabilities for the default model."""

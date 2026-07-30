@@ -215,6 +215,9 @@ class ModelRouter:
         # Cost tracking
         self.cost_tracker = CostTracker()
 
+        # Ollama fallback tracking (H-004)
+        self._ollama_fallback_count: int = 0
+
     # ------------------------------------------------------------------
     # Public API
     # ------------------------------------------------------------------
@@ -416,6 +419,27 @@ class ModelRouter:
         if provider_name not in self._breakers:
             self._breakers[provider_name] = CircuitBreaker(**self._cb_kwargs)
         return self._breakers[provider_name]
+
+    def get_router_status(self) -> dict[str, Any]:
+        """Get router status including fallback chain health.
+
+        Returns:
+            Dict with provider health, circuit breaker states,
+            and fallback chain status.
+        """
+        breaker_states = {}
+        for name, breaker in self._breakers.items():
+            breaker_states[name] = {
+                "state": breaker.state.value,
+                "consecutive_failures": breaker._consecutive_failures,
+            }
+
+        return {
+            "initialized_providers": list(self._providers.keys()),
+            "circuit_breakers": breaker_states,
+            "cost_tracker": self.cost_tracker.summary(),
+            "ollama_fallback_count": self._ollama_fallback_count,
+        }
 
     @staticmethod
     def _load_default_config() -> dict[str, Any]:

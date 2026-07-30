@@ -26,10 +26,12 @@ from src.agents.base import BaseAgent
 from src.agents.execution_sniper import ExecutionSniper
 from src.agents.orchestrator import Orchestrator
 from src.agents.risk_guardian import RiskGuardian
+from src.agents.sentiment_agent import SentimentAgent
 from src.agents.signal_scout import SignalScout
 
 __all__: list[str] = [
     "BaseAgent",
+    "SentimentAgent",
     "SignalScout",
     "RiskGuardian",
     "ExecutionSniper",

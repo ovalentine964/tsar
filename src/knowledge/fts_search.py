@@ -1,12 +1,15 @@
-"""TSAR — Unified FTS5 Semantic Memory Recall.
+"""TSAR — Unified FTS5 + ChromaDB Semantic Memory Recall.
 
-Searches across all 5 knowledge stores using SQLite FTS5 full-text indexes.
-Provides ranked, cross-store results with relevance scoring.
+Searches across all 5 knowledge stores using:
+- SQLite FTS5 full-text indexes for keyword search
+- ChromaDB vector similarity for semantic pattern matching (optional)
+- Hybrid search combining both for best results
 
 Handles CJK, Thai, Arabic, Cyrillic via unicode61 tokenizer + tokenchars.
 Treats underscores as token boundaries for snake_case terms.
 
 Persistence: SQLite (WAL mode, tsar.db) — async via aiosqlite.
+ChromaDB: optional, graceful degradation if not installed.
 """
 
 from __future__ import annotations
@@ -19,6 +22,24 @@ from typing import Any
 import aiosqlite
 
 from src.utils.logging import get_logger
+
+# ChromaDB optional import
+try:
+    from src.knowledge.chromadb_store import ChromaVectorStore, VectorSearchResult, is_chromadb_available
+    _CHROMA_IMPORT_OK = True
+except ImportError:
+    _CHROMA_IMPORT_OK = False
+    ChromaVectorStore = None  # type: ignore[assignment,misc]
+    VectorSearchResult = None  # type: ignore[assignment,misc]
+    is_chromadb_available = None  # type: ignore[assignment]
+
+# RAG Blueprint optional import
+try:
+    from src.knowledge.rag_blueprint_search import RAGBlueprintSearch
+    _RAG_BLUEPRINT_IMPORT_OK = True
+except ImportError:
+    _RAG_BLUEPRINT_IMPORT_OK = False
+    RAGBlueprintSearch = None  # type: ignore[assignment,misc]
 
 logger = get_logger(__name__)
 
@@ -185,23 +206,39 @@ def format_fts_query(query: str) -> str:
 
 
 class MemoryRecall:
-    """Unified FTS5 search across all TSAR knowledge stores.
+    """Unified FTS5 + ChromaDB search across all TSAR knowledge stores.
 
     Usage::
 
         recall = MemoryRecall("/path/to/tsar.db")
         await recall.initialize()
 
+        # Keyword search (FTS5)
         results = await recall.search("mean reversion BTC oversold")
-        results = await recall.search("stop_loss", stores=["trade_records", "lessons"])
-        results = await recall.search("趋势反转", stores=["patterns"])  # CJK
+
+        # Semantic search (ChromaDB, if available)
+        results = await recall.semantic_search("bearish reversal pattern")
+
+        # Hybrid search (FTS5 + ChromaDB, merged and re-ranked)
+        results = await recall.hybrid_search("oversold RSI bounce")
 
         await recall.close()
     """
 
-    def __init__(self, db_path: str | Path) -> None:
+    def __init__(
+        self,
+        db_path: str | Path,
+        chromadb_dir: str | Path | None = None,
+        embedding_fn: Any | None = None,
+        nvidia_skills_config: dict[str, Any] | None = None,
+    ) -> None:
         self._db_path = str(db_path)
         self._db: aiosqlite.Connection | None = None
+        self._chroma_store: Any | None = None
+        self._chromadb_dir = str(chromadb_dir) if chromadb_dir else None
+        self._embedding_fn = embedding_fn
+        self._nvidia_config = nvidia_skills_config or {}
+        self._rag_blueprint: Any | None = None
 
     # ── Lifecycle ────────────────────────────────────────────
 
@@ -216,7 +253,29 @@ class MemoryRecall:
         # Verify FTS5 virtual tables exist; create if missing
         await self._ensure_fts_tables()
 
-        logger.info("memory_recall_initialized", db_path=self._db_path)
+        # Initialize ChromaDB if available
+        if _CHROMA_IMPORT_OK and is_chromadb_available():
+            try:
+                self._chroma_store = ChromaVectorStore(
+                    persist_dir=self._chromadb_dir,
+                    embedding_fn=self._embedding_fn,
+                )
+                logger.info("chromadb_initialized_with_recall", available=self._chroma_store.available)
+            except Exception as exc:
+                logger.warning("chromadb_init_failed", error=str(exc))
+                self._chroma_store = None
+
+        logger.info("memory_recall_initialized", db_path=self._db_path, chromadb=self._chroma_store is not None)
+
+        # Initialize RAG Blueprint if available and enabled
+        if _RAG_BLUEPRINT_IMPORT_OK and self._nvidia_config.get("rag_blueprint", {}).get("enabled", False):
+            try:
+                rag_cfg = self._nvidia_config.get("rag_blueprint", {})
+                self._rag_blueprint = RAGBlueprintSearch(self, rag_cfg)
+                logger.info("rag_blueprint_initialized", available=self._rag_blueprint.available)
+            except Exception as exc:
+                logger.warning("rag_blueprint_init_failed", error=str(exc))
+                self._rag_blueprint = None
 
     async def _ensure_fts_tables(self) -> None:
         """Create FTS5 virtual tables and triggers if they don't already exist.
@@ -291,7 +350,10 @@ class MemoryRecall:
             logger.info("fts_table_created", fts_table=fts, source=src)
 
     async def close(self) -> None:
-        """Close the database connection."""
+        """Close the database connection and ChromaDB."""
+        if self._chroma_store:
+            self._chroma_store.close()
+            self._chroma_store = None
         if self._db:
             await self._db.close()
             self._db = None
@@ -471,6 +533,183 @@ class MemoryRecall:
             else:
                 logger.warning("unknown_store_ignored", store=s)
         return resolved
+
+    # ── ChromaDB vector search ────────────────────────────────
+
+    async def semantic_search(
+        self,
+        query: str,
+        stores: list[str] | None = None,
+        limit: int = 20,
+        where: dict[str, Any] | None = None,
+    ) -> list[SearchResult]:
+        """Search using ChromaDB vector similarity.
+
+        Falls back to FTS5 if ChromaDB is unavailable.
+        """
+        if not self._chroma_store or not self._chroma_store.available:
+            logger.info("semantic_search_fallback_to_fts", reason="chromadb_unavailable")
+            return await self.search(query, stores=stores, limit=limit)
+
+        target_stores = self._resolve_stores(stores)
+        collection_map = {
+            "trade_records": "tsar_trades",
+            "strategy_genomes": None,  # no vector store for genomes yet
+            "patterns": "tsar_patterns",
+            "lessons": "tsar_lessons",
+        }
+
+        all_results: list[SearchResult] = []
+        for store_name in target_stores:
+            collection = collection_map.get(store_name)
+            if collection is None:
+                continue
+            try:
+                vec_results = self._chroma_store._search_collection(
+                    collection, query, limit=limit, where=where
+                )
+                for vr in vec_results:
+                    all_results.append(
+                        SearchResult(
+                            store=store_name,
+                            record_id=vr.id,
+                            score=vr.score,
+                            snippet=vr.document[:200] if vr.document else "",
+                            data=vr.metadata,
+                        )
+                    )
+            except Exception as exc:
+                logger.warning("semantic_search_error", store=store_name, error=str(exc))
+
+        all_results.sort(key=lambda r: r.score)
+        return all_results[:limit]
+
+    async def hybrid_search(
+        self,
+        query: str,
+        stores: list[str] | None = None,
+        limit: int = 20,
+        fts_weight: float = 0.5,
+        vector_weight: float = 0.5,
+    ) -> list[SearchResult]:
+        """Hybrid search combining FTS5 keyword + ChromaDB vector similarity.
+
+        Results from both engines are merged, de-duplicated by record_id,
+        and re-ranked using a weighted combination of FTS5 BM25 and vector
+        distance scores.
+
+        Falls back to FTS5-only if ChromaDB is unavailable.
+        """
+        if not self._chroma_store or not self._chroma_store.available:
+            return await self.search(query, stores=stores, limit=limit)
+
+        # Run both searches in parallel-ish (sequential for async compat)
+        fts_results = await self.search(query, stores=stores, limit=limit)
+        vec_results = await self.semantic_search(query, stores=stores, limit=limit)
+
+        # Normalize scores to [0, 1] range (lower = better for both)
+        fts_scored = self._normalize_scores(fts_results)
+        vec_scored = self._normalize_scores(vec_results)
+
+        # Merge by (store, record_id), weighted combination
+        merged: dict[tuple[str, str], dict[str, Any]] = {}
+        for r in fts_scored:
+            key = (r["store"], r["record_id"])
+            merged[key] = {
+                **r,
+                "fts_score_norm": r["score_norm"],
+                "vec_score_norm": 1.0,  # worst if not in vector results
+            }
+        for r in vec_scored:
+            key = (r["store"], r["record_id"])
+            if key in merged:
+                merged[key]["vec_score_norm"] = r["score_norm"]
+            else:
+                merged[key] = {
+                    **r,
+                    "fts_score_norm": 1.0,  # worst if not in FTS results
+                    "vec_score_norm": r["score_norm"],
+                }
+
+        # Compute combined score
+        results: list[SearchResult] = []
+        for key, data in merged.items():
+            combined = (
+                fts_weight * data.get("fts_score_norm", 1.0)
+                + vector_weight * data.get("vec_score_norm", 1.0)
+            )
+            results.append(
+                SearchResult(
+                    store=data["store"],
+                    record_id=data["record_id"],
+                    score=combined,
+                    snippet=data.get("snippet", ""),
+                    data=data.get("data", {}),
+                )
+            )
+
+        results.sort(key=lambda r: r.score)
+        return results[:limit]
+
+    @staticmethod
+    def _normalize_scores(results: list[SearchResult]) -> list[dict[str, Any]]:
+        """Normalize scores to [0, 1]. Lower = better match."""
+        if not results:
+            return []
+        scores = [abs(r.score) for r in results]
+        min_s = min(scores)
+        max_s = max(scores)
+        spread = max_s - min_s if max_s != min_s else 1.0
+        normalized = []
+        for r in results:
+            normalized.append({
+                "store": r.store,
+                "record_id": r.record_id,
+                "score": r.score,
+                "score_norm": (abs(r.score) - min_s) / spread,
+                "snippet": r.snippet,
+                "data": r.data,
+            })
+        return normalized
+
+    # ── RAG Blueprint enhanced search ───────────────────────
+
+    async def enhanced_search(
+        self,
+        query: str,
+        stores: list[str] | None = None,
+        limit: int = 20,
+    ) -> list[SearchResult]:
+        """Search using RAG Blueprint enhancements when available.
+
+        Uses NVIDIA RAG Blueprint for:
+        - Query expansion
+        - Cross-encoder reranking
+        - Context enrichment
+
+        Falls back to hybrid_search if RAG Blueprint is unavailable.
+        """
+        if self._rag_blueprint and self._rag_blueprint.available:
+            try:
+                enhanced = await self._rag_blueprint.enhanced_search(
+                    query=query, stores=stores, limit=limit
+                )
+                # Convert RerankedResult to SearchResult
+                return [
+                    SearchResult(
+                        store=r.store,
+                        record_id=r.record_id,
+                        score=r.reranked_score,
+                        snippet=r.snippet,
+                        data=r.data,
+                    )
+                    for r in enhanced.results
+                ]
+            except Exception as exc:
+                logger.warning("enhanced_search_fallback", error=str(exc))
+
+        # Fallback to hybrid search
+        return await self.hybrid_search(query, stores=stores, limit=limit)
 
     # ── Convenience methods ──────────────────────────────────
 

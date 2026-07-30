@@ -79,6 +79,14 @@ class MutatorConfig:
     max_proposals_per_run: int = 5
     allow_new_genomes: bool = False  # If True, create new genomes; else only mutate existing
 
+    # Diversity pressure settings
+    diversity_enabled: bool = True
+    similarity_threshold: float = 0.8  # Genomes >80% similar are penalized
+    diversity_bonus: float = 0.15      # Bonus for unique proposals
+    min_diverse_proposals: int = 2     # At least N proposals must be from different strategy types
+    max_similar_proposals: int = 2     # Max proposals targeting same genome
+    phenotype_penalty: float = 0.3     # Score penalty for phenotypically similar genomes
+
 
 # ═══════════════════════════════════════════════════════════════════════
 # GENOME MUTATOR
@@ -116,7 +124,8 @@ class GenomeMutator:
         """Propose genome mutations from validated rules.
 
         Filters rules by quality thresholds, finds matching genomes,
-        and creates mutation proposals.
+        and creates mutation proposals. Applies diversity pressure
+        to prevent convergence to local optima.
 
         Args:
             validated_rules: ValidatedRules from RuleValidator.
@@ -142,7 +151,7 @@ class GenomeMutator:
         candidates.sort(key=lambda r: r.expectancy, reverse=True)
 
         proposals: list[MutationProposal] = []
-        for rule in candidates[: self._config.max_proposals_per_run]:
+        for rule in candidates[: self._config.max_proposals_per_run * 2]:  # Generate extra for diversity filtering
             try:
                 proposal = await self._propose_for_rule(rule)
                 if proposal:
@@ -154,6 +163,12 @@ class GenomeMutator:
                     error=str(e),
                 )
 
+        # Apply diversity pressure
+        if self._config.diversity_enabled and len(proposals) > 1:
+            proposals = self._apply_diversity_pressure(proposals)
+
+        proposals = proposals[: self._config.max_proposals_per_run]
+
         logger.info(
             "genome_mutations_proposed",
             proposed=len(proposals),
@@ -164,12 +179,22 @@ class GenomeMutator:
     async def _propose_for_rule(
         self, rule: ValidatedRule
     ) -> MutationProposal | None:
-        """Create a mutation proposal for a single validated rule."""
+        """Create a mutation proposal for a single validated rule.
+
+        If the rule was derived from losing trades (action='avoid'),
+        the confidence is boosted by loss_weight because avoiding
+        losses is more valuable than marginal wins.
+        """
         # Find the best matching genome
         genome = self._find_matching_genome(rule)
 
         if genome:
-            return self._propose_genome_mutation(rule, genome)
+            proposal = self._propose_genome_mutation(rule, genome)
+            # Wire loss-weighted lessons: if rule came from losers,
+            # boost proposal confidence and record in genome
+            if proposal and rule.action == "avoid":
+                self._apply_loss_weighted_lesson(genome, rule, proposal)
+            return proposal
         elif self._config.allow_new_genomes:
             return self._propose_new_genome(rule)
         else:
@@ -179,6 +204,67 @@ class GenomeMutator:
                 strategy_id=rule.strategy_id,
             )
             return None
+
+    def _apply_loss_weighted_lesson(
+        self,
+        genome: StrategyGenome,
+        rule: ValidatedRule,
+        proposal: MutationProposal,
+    ) -> None:
+        """Apply a loss-weighted lesson directly to the genome.
+
+        Loss-derived rules get higher confidence because they
+        represent anti-patterns — setups to avoid. The loss severity
+        determines the weight multiplier.
+
+        Args:
+            genome: The target StrategyGenome.
+            rule: The validated rule (from losing trades).
+            proposal: The mutation proposal being created.
+        """
+        # Compute loss weight from rule metrics
+        # Rules from severe losses get higher weight
+        avg_loss = abs(rule.avg_loser_pct) if rule.avg_loser_pct else 0.0
+        if avg_loss > 5.0:
+            loss_weight = 1.5
+        elif avg_loss > 3.0:
+            loss_weight = 1.3
+        elif avg_loss > 1.0:
+            loss_weight = 1.15
+        else:
+            loss_weight = 1.0
+
+        # Boost proposal confidence for loss-derived rules
+        boosted_confidence = min(1.0, proposal.confidence_score * loss_weight)
+        proposal.confidence_score = boosted_confidence
+
+        # Record in genome via StrategyGenomes.apply_shadow_lesson
+        try:
+            lesson = {
+                "rule": rule.description,
+                "conditions": rule.conditions,
+                "confidence": rule.confidence,
+                "source": "shadow_losers",
+                "loss_severity": avg_loss,
+                "rationale": rule.rationale,
+            }
+            self._genomes.apply_shadow_lesson(
+                strategy_id=genome.strategy_id,
+                lesson=lesson,
+                loss_weight=loss_weight,
+            )
+            logger.info(
+                "loss_weighted_lesson_applied",
+                genome_id=genome.strategy_id,
+                rule_id=rule.rule_id,
+                loss_weight=loss_weight,
+                boosted_confidence=round(boosted_confidence, 3),
+                avg_loss_pct=round(avg_loss, 2),
+            )
+        except Exception as e:
+            logger.error(
+                "Failed to apply loss-weighted lesson: %s", e
+            )
 
     def _find_matching_genome(self, rule: ValidatedRule) -> StrategyGenome | None:
         """Find the best matching genome for a rule.
@@ -371,4 +457,136 @@ class GenomeMutator:
         if rule.action != "sell":
             return existing
         return GenomeMutator._merge_entry_rules(existing, rule)
+
+    # ── Diversity Pressure ──────────────────────────────────
+
+    def _apply_diversity_pressure(
+        self,
+        proposals: list[MutationProposal],
+    ) -> list[MutationProposal]:
+        """Apply diversity pressure to prevent convergence to local optima.
+
+        Diversity is maintained through three mechanisms:
+        1. Genome diversity: limit proposals targeting the same genome
+        2. Phenotype diversity: penalize proposals with similar rule structures
+        3. Strategy type diversity: ensure proposals span different mutation types
+
+        Args:
+            proposals: Candidate proposals sorted by quality.
+
+        Returns:
+            Filtered and re-scored proposals promoting diversity.
+        """
+        if not proposals:
+            return proposals
+
+        scored: list[tuple[float, MutationProposal]] = []
+        genome_counts: dict[str, int] = {}
+
+        for p in proposals:
+            genome_id = p.target_genome_id or "new"
+            count = genome_counts.get(genome_id, 0)
+            genome_counts[genome_id] = count + 1
+
+            # Base score from confidence and expected improvement
+            base_score = p.confidence_score * 0.6 + p.expected_improvement * 0.4
+
+            # ── Penalty 1: Too many proposals for same genome ──
+            if count >= self._config.max_similar_proposals:
+                penalty = self._config.phenotype_penalty * (count - self._config.max_similar_proposals + 1)
+                base_score -= penalty
+                logger.debug(
+                    "diversity_penalty_genome",
+                    genome_id=genome_id,
+                    count=count,
+                    penalty=penalty,
+                )
+
+            # ── Penalty 2: Phenotypic similarity ──
+            similarity = self._compute_phenotype_similarity(p, proposals)
+            if similarity > self._config.similarity_threshold:
+                penalty = self._config.phenotype_penalty * (similarity - self._config.similarity_threshold)
+                base_score -= penalty
+                logger.debug(
+                    "diversity_penalty_phenotype",
+                    proposal_id=p.proposal_id,
+                    similarity=similarity,
+                    penalty=penalty,
+                )
+
+            # ── Bonus: Unique mutation type ──
+            type_count = sum(1 for pp in proposals if pp.mutation_type == p.mutation_type)
+            if type_count <= 2:  # Rare mutation type gets bonus
+                base_score += self._config.diversity_bonus * 0.5
+
+            scored.append((max(0.0, base_score), p))
+
+        # Re-sort by adjusted score
+        scored.sort(key=lambda x: x[0], reverse=True)
+
+        # Ensure minimum diversity: at least N different mutation types
+        selected: list[MutationProposal] = []
+        seen_types: set[str] = set()
+        seen_genomes: set[str] = set()
+
+        # First pass: pick one from each mutation type
+        for score, prop in scored:
+            if prop.mutation_type not in seen_types:
+                selected.append(prop)
+                seen_types.add(prop.mutation_type)
+                seen_genomes.add(prop.target_genome_id or "new")
+            if len(selected) >= self._config.min_diverse_proposals:
+                break
+
+        # Second pass: fill remaining slots by score
+        for score, prop in scored:
+            if prop in selected:
+                continue
+            selected.append(prop)
+            if len(selected) >= self._config.max_proposals_per_run:
+                break
+
+        logger.info(
+            "diversity_pressure_applied",
+            input_count=len(proposals),
+            output_count=len(selected),
+            unique_genomes=len(seen_genomes),
+            unique_types=len(seen_types),
+        )
+
+        return selected
+
+    @staticmethod
+    def _compute_phenotype_similarity(
+        target: MutationProposal,
+        all_proposals: list[MutationProposal],
+    ) -> float:
+        """Compute phenotypic similarity between a proposal and others.
+
+        Compares proposed entry/exit rules using simple token overlap.
+        Returns 0.0 (unique) to 1.0 (identical).
+        """
+        target_tokens = set(
+            (target.proposed_entry_rules or "").split()
+            + (target.proposed_exit_rules or "").split()
+        )
+        if not target_tokens:
+            return 0.0
+
+        max_sim = 0.0
+        for other in all_proposals:
+            if other.proposal_id == target.proposal_id:
+                continue
+            other_tokens = set(
+                (other.proposed_entry_rules or "").split()
+                + (other.proposed_exit_rules or "").split()
+            )
+            if not other_tokens:
+                continue
+            overlap = len(target_tokens & other_tokens)
+            union = len(target_tokens | other_tokens)
+            sim = overlap / union if union > 0 else 0.0
+            max_sim = max(max_sim, sim)
+
+        return max_sim
 

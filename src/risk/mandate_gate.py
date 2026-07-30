@@ -208,6 +208,34 @@ class MandateGate:
 
         return self._mandate.check_order(order)
 
+    def check_paper_trading_gate(self) -> dict[str, Any]:
+        """Check if paper trading gate requirements are satisfied.
+
+        Returns:
+            Dict with gate status, paper trades completed, days in paper mode.
+        """
+        decision = self._mandate.check_paper_trading_gate()
+        rules = self._mandate.rules
+
+        days_in_paper = 0
+        if rules.paper_start_date:
+            try:
+                from datetime import UTC, datetime as dt
+                start = dt.fromisoformat(rules.paper_start_date)
+                days_in_paper = (dt.now(UTC) - start).days
+            except (ValueError, TypeError):
+                pass
+
+        return {
+            "gate_passed": decision.allowed,
+            "reason": decision.reason,
+            "violations": decision.violations,
+            "paper_trades_completed": rules.paper_trades_completed,
+            "min_paper_trades": rules.min_paper_trades,
+            "days_in_paper": days_in_paper,
+            "min_paper_days": rules.min_paper_days,
+        }
+
     def get_status(self) -> dict[str, Any]:
         """Get mandate gate status for monitoring/health checks.
 
@@ -215,6 +243,7 @@ class MandateGate:
             Dict with mandate status, version, committed_by, etc.
         """
         state = self._mandate.state
+        paper_gate = self.check_paper_trading_gate()
         return {
             "mandate_status": state.status.value,
             "is_active": self._mandate.is_active,
@@ -226,4 +255,5 @@ class MandateGate:
             "max_position_size_pct": state.rules.max_position_size_pct,
             "max_daily_trades": state.rules.max_daily_trades,
             "max_leverage": state.rules.max_leverage,
+            "paper_trading_gate": paper_gate,
         }

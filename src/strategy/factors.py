@@ -758,4 +758,19 @@ FACTOR_REGISTRY: dict[str, dict[str, object]] = {
         "default_params": {},
         "universe": ["crypto", "equity", "forex"],
     },
+    # Risk Factors (separated from technical indicators)
+    "realized_volatility": {
+        "func": historical_volatility,
+        "category": "risk_factor",
+        "description": "Realized volatility (annualized) — risk factor for position sizing",
+        "default_params": {"period": 20},
+        "universe": ["crypto", "equity"],
+    },
+    "vol_of_vol": {
+        "func": lambda df, period=20, **kw: historical_volatility(df, period=period).rolling(period).std(),
+        "category": "risk_factor",
+        "description": "Volatility of volatility — regime instability indicator",
+        "default_params": {"period": 20},
+        "universe": ["crypto", "equity"],
+    },
 }

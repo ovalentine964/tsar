@@ -89,6 +89,25 @@ class MandateRules(BaseModel):
         default_factory=lambda: ["buy", "sell"],
         description="Permitted order sides. Restrict to ['buy'] to disable shorting.",
     )
+    min_paper_trades: int = Field(
+        default=0,
+        ge=0,
+        description="Minimum number of paper trades required before live trading. 0 = no minimum.",
+    )
+    min_paper_days: int = Field(
+        default=0,
+        ge=0,
+        description="Minimum number of days in paper mode before live trading. 0 = no minimum.",
+    )
+    paper_trades_completed: int = Field(
+        default=0,
+        ge=0,
+        description="Number of paper trades completed (tracked automatically).",
+    )
+    paper_start_date: str = Field(
+        default="",
+        description="ISO date when paper trading started (tracked automatically).",
+    )
 
     @field_validator("allowed_symbols")
     @classmethod
@@ -562,6 +581,59 @@ class Mandate:
             logger.error(f"Failed to load mandate config from {path}: {e}")
             return MandateState()
 
+    def check_paper_trading_gate(self) -> MandateDecision:
+        """Check if minimum paper trading requirements are met.
+
+        Validates that the system has completed enough paper trades
+        and been in paper mode long enough before allowing live.
+
+        Returns:
+            MandateDecision indicating if paper trading gate passes.
+        """
+        rules = self._state.rules
+        violations: list[str] = []
+
+        # Check minimum paper trades
+        if rules.min_paper_trades > 0:
+            if rules.paper_trades_completed < rules.min_paper_trades:
+                violations.append(
+                    f"paper_trades_insufficient: {rules.paper_trades_completed} "
+                    f"completed < {rules.min_paper_trades} required"
+                )
+
+        # Check minimum paper days
+        if rules.min_paper_days > 0 and rules.paper_start_date:
+            try:
+                start = datetime.fromisoformat(rules.paper_start_date)
+                days_in_paper = (datetime.now(UTC) - start).days
+                if days_in_paper < rules.min_paper_days:
+                    violations.append(
+                        f"paper_days_insufficient: {days_in_paper} days "
+                        f"< {rules.min_paper_days} required"
+                    )
+            except (ValueError, TypeError):
+                violations.append("paper_start_date_invalid")
+
+        if violations:
+            return MandateDecision(
+                allowed=False,
+                reason=f"Paper trading gate: {len(violations)} requirement(s) not met.",
+                violations=violations,
+            )
+
+        return MandateDecision(
+            allowed=True,
+            reason="Paper trading requirements satisfied.",
+            violations=[],
+        )
+
+    def record_paper_trade(self) -> None:
+        """Increment the paper trade counter."""
+        self._state.rules.paper_trades_completed += 1
+        if not self._state.rules.paper_start_date:
+            self._state.rules.paper_start_date = datetime.now(UTC).isoformat()
+        self._save_to_yaml()
+
     def _validate_rules(self) -> None:
         """Validate that rules are sensible before committing.
 
@@ -592,6 +664,14 @@ class Mandate:
             raise ValueError(
                 "Cannot commit mandate with empty allowed_order_types — "
                 "no trades would be permitted."
+            )
+
+        # Check paper trading gate before allowing live commit
+        paper_gate = self.check_paper_trading_gate()
+        if not paper_gate.allowed:
+            raise ValueError(
+                f"Cannot commit mandate — paper trading requirements not met: "
+                f"{'; '.join(paper_gate.violations)}"
             )
 
     def reload(self) -> None:

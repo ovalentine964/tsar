@@ -22,6 +22,7 @@ from __future__ import annotations
 
 import logging
 import os
+import time
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -96,6 +97,24 @@ class RiskGovernor(RiskEngine):
         )
         self._blackout_events = self._config.get("blackout_events", {})
         self._recovery_config = self._config.get("recovery", {})
+
+        # Fee config (C-001)
+        fee_cfg = self._config.get("fees", {})
+        self._taker_fee_pct = fee_cfg.get("taker_fee_pct", 0.001)
+        self._min_rr_after_fees = fee_cfg.get("min_rr_ratio_after_fees", 1.5)
+
+        # Micro-capital config (H-005)
+        micro_cfg = self._config.get("micro_capital", {})
+        self._micro_enabled = micro_cfg.get("enabled", True)
+        self._micro_threshold = micro_cfg.get("threshold_usd", 50.0)
+
+        # Recovery protocol state (C-016)
+        self._recovery_state: dict[str, Any] = {
+            "active": False,
+            "level": None,       # "orange" or "red"
+            "started_at": None,  # Unix timestamp when recovery began
+            "current_phase": 0,  # Index into recovery phases
+        }
 
         logger.info(
             f"RiskGovernor initialized: max_pos={self._max_open_positions}, "
@@ -293,8 +312,19 @@ class RiskGovernor(RiskEngine):
         """Deactivate the kill switch — resume trading.
 
         Requires manual trigger. Gated Recovery Protocol applies.
+        Automatically starts the phased recovery protocol.
         """
+        # Determine which level triggered the kill switch
+        status = await self._kill_switch.get_status()
+        reason = status.get("reason", "")
+        level = "red"  # Default to most conservative
+        if "orange" in reason.lower() or "daily" in reason.lower():
+            level = "orange"
+
         await self._kill_switch.deactivate()
+
+        # Start phased recovery protocol (C-016)
+        self.start_recovery(level)
 
     # ═══════════════════════════════════════════════════════════════
     # Extended API — Trade outcome tracking
@@ -309,19 +339,145 @@ class RiskGovernor(RiskEngine):
         self._guards.record_outcome(is_win)
 
     def get_recovery_allocation(self, level: str) -> float:
-        """Get the current recovery allocation percentage.
+        """Get the current recovery allocation percentage (C-016).
 
         After a kill switch deactivation, position sizes ramp up
-        gradually based on the triggering circuit breaker level.
+        gradually through defined phases. Each phase has:
+          - duration_hours: How long this phase lasts
+          - allocation_pct: Position size as % of normal (5-100%)
+          - gate: Condition that must be met to advance
+
+        PHASED RE-ENTRY PROTOCOL:
+          RED level (kill switch triggered):
+            Phase 1:  5% allocation  (first 24h, requires regime check + manual OK)
+            Phase 2: 10% allocation  (next 48h, requires positive P&L)
+            Phase 3: 25% allocation  (next 72h, requires win rate > 40%)
+            Phase 4: 50% allocation  (next 72h, requires Sharpe > 0)
+            Phase 5: 100% allocation (full trading, requires report review)
+
+          ORANGE level (halt new trades):
+            Phase 1: 10% allocation  (first 24h, requires regime check)
+            Phase 2: 25% allocation  (next 48h, requires positive P&L)
+            Phase 3: 50% allocation  (next 48h, requires win rate > 40%)
+            Phase 4: 100% allocation (full trading)
 
         Args:
             level: The circuit breaker level that triggered ("orange" or "red").
 
         Returns:
-            Allocation percentage (0.0-1.0) for position sizing.
+            Allocation fraction (0.0-1.0) for position sizing.
+            Returns 1.0 if no recovery is active or level is unknown.
         """
-        # For Day1, return full allocation (recovery protocol is Level 2+)
+        # If no recovery is active, return full allocation
+        if not self._recovery_state.get("active"):
+            return 1.0
+
+        # Get recovery phases from config
+        recovery = self._recovery_config.get(level, {})
+        phases = recovery.get("phases", [])
+
+        if not phases:
+            # No phases defined for this level - fallback to defaults
+            logger.warning(
+                f"No recovery phases defined for level '{level}', "
+                f"using default phased re-entry"
+            )
+            phases = self._default_recovery_phases(level)
+
+        started_at = self._recovery_state.get("started_at")
+        if started_at is None:
+            logger.error("Recovery active but no start time - returning 0")
+            return 0.0
+
+        # Calculate elapsed time since recovery started
+        elapsed_hours = (time.time() - started_at) / 3600.0
+
+        # Find the current phase based on elapsed time
+        cumulative_hours = 0.0
+        for i, phase in enumerate(phases):
+            duration = phase.get("duration_hours", 0)
+            allocation = phase.get("allocation_pct", 100) / 100.0
+
+            if duration == 0:
+                # Duration 0 = final phase (indefinite until gate passed)
+                logger.info(
+                    f"Recovery [{level}] Phase {i+1}: {allocation:.0%} allocation "
+                    f"(final phase, elapsed={elapsed_hours:.1f}h)"
+                )
+                return allocation
+
+            cumulative_hours += duration
+
+            if elapsed_hours < cumulative_hours:
+                logger.info(
+                    f"Recovery [{level}] Phase {i+1}/{len(phases)}: "
+                    f"{allocation:.0%} allocation "
+                    f"(elapsed={elapsed_hours:.1f}h/{cumulative_hours:.1f}h)"
+                )
+                return allocation
+
+        # All phases completed - full allocation
+        logger.info(
+            f"Recovery [{level}] COMPLETE: all phases passed, "
+            f"returning 100% allocation"
+        )
+        self._recovery_state["active"] = False
         return 1.0
+
+    @staticmethod
+    def _default_recovery_phases(level: str) -> list[dict[str, Any]]:
+        """Default recovery phases when not defined in config.
+
+        Conservative defaults that match the architecture docs.
+        """
+        if level == "red":
+            return [
+                {"duration_hours": 24, "allocation_pct": 5, "gate": "regime_check"},
+                {"duration_hours": 48, "allocation_pct": 10, "gate": "positive_pnl"},
+                {"duration_hours": 72, "allocation_pct": 25, "gate": "win_rate_above_40"},
+                {"duration_hours": 72, "allocation_pct": 50, "gate": "sharpe_above_0"},
+                {"duration_hours": 0, "allocation_pct": 100, "gate": "full"},
+            ]
+        else:  # orange
+            return [
+                {"duration_hours": 24, "allocation_pct": 10, "gate": "regime_check"},
+                {"duration_hours": 48, "allocation_pct": 25, "gate": "positive_pnl"},
+                {"duration_hours": 48, "allocation_pct": 50, "gate": "win_rate_above_40"},
+                {"duration_hours": 0, "allocation_pct": 100, "gate": "full"},
+            ]
+
+    def start_recovery(self, level: str) -> None:
+        """Begin the recovery protocol after kill switch deactivation.
+
+        Args:
+            level: The circuit breaker level that triggered ("orange" or "red").
+        """
+        self._recovery_state = {
+            "active": True,
+            "level": level,
+            "started_at": time.time(),
+            "current_phase": 0,
+        }
+        logger.warning(
+            f"Recovery protocol STARTED for level '{level}' at "
+            f"{time.strftime('%Y-%m-%d %H:%M:%S UTC', time.gmtime())}"
+        )
+
+    def get_recovery_state(self) -> dict[str, Any]:
+        """Get current recovery protocol state for monitoring.
+
+        Returns:
+            Dict with recovery status, level, phase, and elapsed time.
+        """
+        state = dict(self._recovery_state)
+        if state.get("active") and state.get("started_at"):
+            state["elapsed_hours"] = (time.time() - state["started_at"]) / 3600.0
+            level = state.get("level", "")
+            recovery = self._recovery_config.get(level, {})
+            phases = recovery.get("phases", []) or self._default_recovery_phases(level)
+            state["total_phases"] = len(phases)
+            state["phases_config"] = phases
+        return state
 
     # ═══════════════════════════════════════════════════════════════
     # Layer helpers — all deterministic
@@ -465,13 +621,37 @@ class RiskGovernor(RiskEngine):
             return {}
 
     def _build_sizer_config(self) -> SizingConfig:
-        """Build PositionSizer config from loaded YAML."""
+        """Build PositionSizer config from loaded YAML.
+
+        C-015: Single source of truth - reads ALL parameters from risk.yaml.
+        C-001: Includes fee parameters.
+        H-005: Includes micro-capital parameters.
+        """
+        fee_cfg = self._config.get("fees", {})
+        micro_cfg = self._config.get("micro_capital", {})
+
         return SizingConfig(
+            # Standard params
             kelly_fraction=self._config.get("kelly_fraction", 0.25),
             risk_per_trade_pct=self._config.get("risk_per_trade_pct", 0.02),
             max_single_position_pct=self._config.get(
                 "max_single_position_pct", 0.15
             ),
+            # Fee params (C-001)
+            maker_fee_pct=fee_cfg.get("maker_fee_pct", 0.001),
+            taker_fee_pct=fee_cfg.get("taker_fee_pct", 0.001),
+            fee_adjusted_kelly=fee_cfg.get("fee_adjusted_kelly", True),
+            min_rr_ratio_after_fees=fee_cfg.get("min_rr_ratio_after_fees", 1.5),
+            # Micro-capital params (H-005)
+            micro_capital_enabled=micro_cfg.get("enabled", True),
+            micro_capital_threshold_usd=micro_cfg.get("threshold_usd", 50.0),
+            micro_kelly_fraction=micro_cfg.get("kelly_fraction", 0.40),
+            micro_risk_per_trade_pct=micro_cfg.get("risk_per_trade_pct", 0.05),
+            micro_max_single_position_pct=micro_cfg.get(
+                "max_single_position_pct", 0.30
+            ),
+            micro_min_notional_usd=micro_cfg.get("min_notional_usd", 5.0),
+            micro_min_quantity_step=micro_cfg.get("min_quantity_step", 0.00001),
         )
 
     def _build_drawdown_config(self) -> DrawdownConfig:

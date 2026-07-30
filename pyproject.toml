@@ -25,6 +25,7 @@ dependencies = [
     # --- LLM Providers ---
     "ollama>=0.4",            # Ollama local LLM
     "openai>=1.12",           # OpenAI / DeepSeek compatible API
+    "tiktoken>=0.7",          # Accurate token counting
     # --- API ---
     "fastapi>=0.110",         # REST API framework
     "uvicorn>=0.27",          # ASGI server

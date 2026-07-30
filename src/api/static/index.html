@@ -72,7 +72,7 @@ const KEY = localStorage.getItem('tsar_key') || prompt('Enter your TSAR API key:
 if(KEY) localStorage.setItem('tsar_key', KEY);
 
 async function fetch(path){
-const r = await window.fetch(API+path,{headers:{'X-API-Key':KEY}});
+const r = await window.fetch(API+path,{headers:{'Authorization':'Bearer '+KEY}});
 if(!r.ok) throw new Error(r.statusText);
 return r.json();
 }
@@ -118,7 +118,7 @@ document.getElementById('loading').innerHTML='❌ Cannot connect to TSAR API<br>
 async function killSwitch(){
 if(!confirm('🚨 Activate kill switch? This will close all positions and stop trading.'))return;
 try{
-await fetch('/api/v1/kill',{method:'POST',headers:{'Content-Type':'application/json','X-API-Key':KEY},body:JSON.stringify({reason:'Manual kill from mobile'})});
+await fetch('/api/v1/kill-switch',{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+KEY},body:JSON.stringify({reason:'Manual kill from mobile'})});
 alert('✅ Kill switch activated');
 refresh();
 }catch(e){alert('Error: '+e.message)}

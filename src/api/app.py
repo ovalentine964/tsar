@@ -5,13 +5,76 @@ Full working API with real data from all components.
 """
 
 import logging
+import os
 from datetime import UTC, datetime
 from typing import Any
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Depends, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
 logger = logging.getLogger(__name__)
+
+# ── JWT / API Key Authentication ──────────────────────────────
+# SECURITY (C-009): All endpoints require a valid API key via Bearer token.
+# The /health and /health/ready endpoints are excluded to allow load balancer probes.
+
+security = HTTPBearer(auto_error=False)
+
+# Allowed health paths that do NOT require authentication
+_HEALTH_PATHS = {"/health", "/health/ready", "/api/health"}
+
+
+def _get_api_key() -> str:
+    """Read the expected API key from environment."""
+    key = os.environ.get("TSAR_API_KEY", "")
+    if not key:
+        raise RuntimeError(
+            "TSAR_API_KEY is not set. Refusing to start without authentication. "
+            "Set TSAR_API_KEY in your .env file."
+        )
+    return key
+
+
+def _is_health_path(path: str) -> bool:
+    """Check if the request path is a health endpoint (exempt from auth)."""
+    # Normalize: strip trailing slash
+    clean = path.rstrip("/")
+    return clean in _HEALTH_PATHS
+
+
+async def require_api_key(
+    request: Request,
+    credentials: HTTPAuthorizationCredentials | None = Depends(security),
+) -> str:
+    """FastAPI dependency: enforce API key on non-health routes.
+
+    Returns the validated API key string on success.
+    Raises 401/403 on failure.
+    """
+    # Health endpoints are exempt
+    if _is_health_path(request.url.path):
+        return "health-exempt"
+
+    expected = os.environ.get("TSAR_API_KEY", "")
+    if not expected:
+        # If no key configured, deny all non-health access
+        raise HTTPException(
+            status_code=503,
+            detail="API key not configured on server. Set TSAR_API_KEY.",
+        )
+
+    if credentials is None:
+        raise HTTPException(
+            status_code=401,
+            detail="Missing Authorization header. Use: Bearer <TSAR_API_KEY>",
+        )
+
+    if credentials.credentials != expected:
+        logger.warning("Invalid API key attempt from %s", request.client.host if request.client else "unknown")
+        raise HTTPException(status_code=401, detail="Invalid API key.")
+
+    return credentials.credentials
 
 
 def create_app(config: Any = None) -> FastAPI:
@@ -24,16 +87,30 @@ def create_app(config: Any = None) -> FastAPI:
         redoc_url="/redoc",
     )
 
-    # CORS
+    # CORS — SECURITY (C-019): Use specific origins from env var instead of wildcard.
+    # Wildcard "*" with allow_credentials=True is a CORS vulnerability.
+    # Set TSAR_CORS_ORIGINS as a comma-separated list (e.g. "https://app.tsar.io,http://localhost:3000").
+    cors_origins_str = os.environ.get("TSAR_CORS_ORIGINS", "")
+    if cors_origins_str:
+        allowed_origins = [o.strip() for o in cors_origins_str.split(",") if o.strip()]
+    else:
+        # Default: deny cross-origin requests when not configured
+        allowed_origins = []
+        logger.warning(
+            "TSAR_CORS_ORIGINS not set — CORS will deny all cross-origin requests. "
+            "Set TSAR_CORS_ORIGINS as a comma-separated list of allowed origins."
+        )
+
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=["*"],
-        allow_credentials=True,
-        allow_methods=["*"],
-        allow_headers=["*"],
+        allow_origins=allowed_origins,
+        # SECURITY: Only enable credentials when origins are explicitly set (not wildcard).
+        allow_credentials=bool(allowed_origins),
+        allow_methods=["GET", "POST", "PUT", "DELETE"],
+        allow_headers=["Authorization", "Content-Type"],
     )
 
-    # ─── Health ───────────────────────────────────────────────
+    # ─── Health (no auth required) ─────────────────────────────
     @app.get("/health")
     async def health():
         return {"status": "ok", "version": "0.5.0", "timestamp": datetime.now(UTC).isoformat()}
@@ -42,9 +119,13 @@ def create_app(config: Any = None) -> FastAPI:
     async def ready():
         return {"ready": True}
 
-    # ─── Dashboard ────────────────────────────────────────────
+    @app.get("/api/health")
+    async def api_health_alias():
+        return await health()
+
+    # ─── Dashboard (auth required) ─────────────────────────────
     @app.get("/")
-    async def dashboard():
+    async def dashboard(api_key: str = Depends(require_api_key)):
         """System overview dashboard."""
         data = {"system": "TSAR", "version": "0.5.0", "status": "running"}
 
@@ -71,9 +152,9 @@ def create_app(config: Any = None) -> FastAPI:
 
         return data
 
-    # ─── Trades ───────────────────────────────────────────────
+    # ─── Trades (auth required) ────────────────────────────────
     @app.get("/api/v1/trades")
-    async def get_trades(limit: int = 100, symbol: str = None, status: str = None):
+    async def get_trades(limit: int = 100, symbol: str = None, status: str = None, api_key: str = Depends(require_api_key)):
         """Get trade history."""
         try:
             from src.knowledge.trade_memory import TradeMemory
@@ -84,7 +165,7 @@ def create_app(config: Any = None) -> FastAPI:
             return {"trades": [], "count": 0, "error": str(e)}
 
     @app.get("/api/v1/trades/stats")
-    async def get_trade_stats():
+    async def get_trade_stats(api_key: str = Depends(require_api_key)):
         """Get trade statistics."""
         try:
             from src.knowledge.trade_memory import TradeMemory
@@ -93,14 +174,14 @@ def create_app(config: Any = None) -> FastAPI:
         except Exception as e:
             return {"total": 0, "error": str(e)}
 
-    # ─── Portfolio ────────────────────────────────────────────
+    # ─── Portfolio (auth required) ─────────────────────────────
     @app.get("/api/v1/positions")
-    async def get_positions():
+    async def get_positions(api_key: str = Depends(require_api_key)):
         """Get current positions."""
         return {"positions": [], "count": 0}
 
     @app.get("/api/v1/pnl")
-    async def get_pnl():
+    async def get_pnl(api_key: str = Depends(require_api_key)):
         """Get P&L summary."""
         try:
             from src.knowledge.trade_memory import TradeMemory
@@ -116,9 +197,9 @@ def create_app(config: Any = None) -> FastAPI:
         except Exception:
             return {"total_pnl": 0, "daily_pnl": 0, "win_rate": 0, "total_trades": 0}
 
-    # ─── Risk ─────────────────────────────────────────────────
+    # ─── Risk (auth required) ─────────────────────────────────
     @app.get("/api/v1/risk")
-    async def get_risk():
+    async def get_risk(api_key: str = Depends(require_api_key)):
         """Get risk state."""
         try:
             from src.risk.kill_switch import KillSwitch
@@ -134,7 +215,7 @@ def create_app(config: Any = None) -> FastAPI:
             return {"kill_switch_active": False, "circuit_breaker": "GREEN"}
 
     @app.post("/api/v1/kill-switch")
-    async def activate_kill_switch(reason: str = "manual"):
+    async def activate_kill_switch(reason: str = "manual", api_key: str = Depends(require_api_key)):
         """Emergency halt."""
         try:
             from src.risk.kill_switch import KillSwitch
@@ -145,7 +226,7 @@ def create_app(config: Any = None) -> FastAPI:
             raise HTTPException(status_code=500, detail=str(e))
 
     @app.post("/api/v1/resume")
-    async def resume_trading():
+    async def resume_trading(api_key: str = Depends(require_api_key)):
         """Resume trading."""
         try:
             from src.risk.kill_switch import KillSwitch
@@ -155,9 +236,9 @@ def create_app(config: Any = None) -> FastAPI:
         except Exception as e:
             raise HTTPException(status_code=500, detail=str(e))
 
-    # ─── Mandate ──────────────────────────────────────────────
+    # ─── Mandate (auth required) ───────────────────────────────
     @app.get("/api/v1/mandate")
-    async def get_mandate():
+    async def get_mandate(api_key: str = Depends(require_api_key)):
         """Get mandate status."""
         try:
             from pathlib import Path
@@ -172,7 +253,7 @@ def create_app(config: Any = None) -> FastAPI:
             return {"status": "DRAFT", "error": str(e)}
 
     @app.post("/api/v1/mandate/commit")
-    async def commit_mandate():
+    async def commit_mandate(api_key: str = Depends(require_api_key)):
         """Commit the mandate (enables live trading)."""
         try:
             from pathlib import Path
@@ -185,7 +266,7 @@ def create_app(config: Any = None) -> FastAPI:
             raise HTTPException(status_code=500, detail=str(e))
 
     @app.post("/api/v1/mandate/revoke")
-    async def revoke_mandate():
+    async def revoke_mandate(api_key: str = Depends(require_api_key)):
         """Revoke the mandate (blocks live trading)."""
         try:
             from pathlib import Path
@@ -197,9 +278,9 @@ def create_app(config: Any = None) -> FastAPI:
         except Exception as e:
             raise HTTPException(status_code=500, detail=str(e))
 
-    # ─── Factors ──────────────────────────────────────────────
+    # ─── Factors (auth required) ───────────────────────────────
     @app.get("/api/v1/factors")
-    async def get_factors():
+    async def get_factors(api_key: str = Depends(require_api_key)):
         """Get factor library."""
         try:
             from src.strategy.factors import FACTOR_REGISTRY
@@ -216,7 +297,7 @@ def create_app(config: Any = None) -> FastAPI:
             return {"factors": [], "count": 0}
 
     @app.get("/api/v1/factors/compute")
-    async def compute_factors(symbol: str = "BTC/USDT"):
+    async def compute_factors(symbol: str = "BTC/USDT", api_key: str = Depends(require_api_key)):
         """Compute all factors for a symbol."""
         try:
             from src.strategy.factor_library import FactorLibrary
@@ -227,7 +308,7 @@ def create_app(config: Any = None) -> FastAPI:
             return {"symbol": symbol, "error": str(e)}
 
     @app.get("/api/v1/factors/benchmark")
-    async def benchmark_factors():
+    async def benchmark_factors(api_key: str = Depends(require_api_key)):
         """Run IC/IR benchmark on all factors."""
         try:
             from src.strategy.factor_bench import FactorBenchmarker
@@ -236,9 +317,9 @@ def create_app(config: Any = None) -> FastAPI:
         except Exception as e:
             return {"status": "error", "error": str(e)}
 
-    # ─── Strategies ───────────────────────────────────────────
+    # ─── Strategies (auth required) ────────────────────────────
     @app.get("/api/v1/strategies")
-    async def get_strategies():
+    async def get_strategies(api_key: str = Depends(require_api_key)):
         """Get strategy performance."""
         try:
             from src.knowledge.strategy_genomes import StrategyGenomes
@@ -248,9 +329,9 @@ def create_app(config: Any = None) -> FastAPI:
         except Exception:
             return {"strategies": [], "count": 0}
 
-    # ─── Backtest ─────────────────────────────────────────────
+    # ─── Backtest (auth required) ──────────────────────────────
     @app.post("/api/v1/backtest")
-    async def run_backtest(strategy: str = "mean_reversion", symbol: str = "BTC/USDT", days: int = 90):
+    async def run_backtest(strategy: str = "mean_reversion", symbol: str = "BTC/USDT", days: int = 90, api_key: str = Depends(require_api_key)):
         """Run a backtest."""
         try:
             from src.strategy.backtest_engine import BacktestConfig, BacktestEngine
@@ -265,9 +346,9 @@ def create_app(config: Any = None) -> FastAPI:
         except Exception as e:
             return {"status": "error", "error": str(e)}
 
-    # ─── Shadow ───────────────────────────────────────────────
+    # ─── Shadow (auth required) ────────────────────────────────
     @app.get("/api/v1/shadow/rules")
-    async def get_shadow_rules():
+    async def get_shadow_rules(api_key: str = Depends(require_api_key)):
         """Get extracted shadow rules."""
         try:
             from src.knowledge.rule_validator import RuleValidator
@@ -277,13 +358,13 @@ def create_app(config: Any = None) -> FastAPI:
             return {"rules": [], "count": 0}
 
     @app.post("/api/v1/shadow/extract")
-    async def trigger_shadow_extraction():
+    async def trigger_shadow_extraction(api_key: str = Depends(require_api_key)):
         """Manually trigger shadow extraction."""
         return {"status": "triggered", "message": "Shadow extraction started in background"}
 
-    # ─── Knowledge ────────────────────────────────────────────
+    # ─── Knowledge (auth required) ─────────────────────────────
     @app.get("/api/v1/knowledge/search")
-    async def search_knowledge(query: str, stores: str = None):
+    async def search_knowledge(query: str, stores: str = None, api_key: str = Depends(require_api_key)):
         """Search across all knowledge stores."""
         try:
             from src.knowledge.fts_search import MemoryRecall
@@ -306,9 +387,9 @@ def create_app(config: Any = None) -> FastAPI:
         except Exception as e:
             return {"query": query, "results": [], "error": str(e)}
 
-    # ─── Patterns & Lessons ───────────────────────────────────
+    # ─── Patterns & Lessons (auth required) ────────────────────
     @app.get("/api/v1/patterns")
-    async def get_patterns():
+    async def get_patterns(api_key: str = Depends(require_api_key)):
         """Get discovered patterns."""
         try:
             from src.knowledge.pattern_library import PatternLibrary
@@ -318,7 +399,7 @@ def create_app(config: Any = None) -> FastAPI:
             return {"patterns": [], "count": 0}
 
     @app.get("/api/v1/lessons")
-    async def get_lessons():
+    async def get_lessons(api_key: str = Depends(require_api_key)):
         """Get trade lessons."""
         try:
             from src.knowledge.lesson_archive import LessonArchive
@@ -327,15 +408,15 @@ def create_app(config: Any = None) -> FastAPI:
         except Exception:
             return {"lessons": [], "count": 0}
 
-    # ─── Regime ───────────────────────────────────────────────
+    # ─── Regime (auth required) ────────────────────────────────
     @app.get("/api/v1/regime")
-    async def get_regime():
+    async def get_regime(api_key: str = Depends(require_api_key)):
         """Get current market regime."""
         return {"regime": "unknown", "confidence": 0.0}
 
-    # ─── Backends ─────────────────────────────────────────────
+    # ─── Backends (auth required) ──────────────────────────────
     @app.get("/api/v1/backends")
-    async def get_backends():
+    async def get_backends(api_key: str = Depends(require_api_key)):
         """Get backend registry status."""
         try:
             from src.interfaces import get_backend_registry
@@ -343,9 +424,9 @@ def create_app(config: Any = None) -> FastAPI:
         except Exception:
             return {"backends": {}}
 
-    # ─── Flywheel ─────────────────────────────────────────────
+    # ─── Flywheel (auth required) ──────────────────────────────
     @app.get("/api/v1/flywheel")
-    async def get_flywheel():
+    async def get_flywheel(api_key: str = Depends(require_api_key)):
         """Get flywheel health."""
         return {
             "status": "active",
@@ -360,70 +441,65 @@ def create_app(config: Any = None) -> FastAPI:
             "last_cycle": datetime.now(UTC).isoformat(),
         }
 
-    # ─── Mobile App Route Aliases ────────────────────────────────
+    # ─── Mobile App Route Aliases (auth required) ───────────────
     @app.get("/api/dashboard")
-    async def api_dashboard_alias():
-        return await dashboard()
+    async def api_dashboard_alias(api_key: str = Depends(require_api_key)):
+        return await dashboard(api_key=api_key)
 
     @app.get("/api/trades")
-    async def api_trades_alias():
-        return await get_trades()
+    async def api_trades_alias(api_key: str = Depends(require_api_key)):
+        return await get_trades(api_key=api_key)
 
     @app.get("/api/risk")
-    async def api_risk_alias():
-        return await get_risk()
+    async def api_risk_alias(api_key: str = Depends(require_api_key)):
+        return await get_risk(api_key=api_key)
 
     @app.get("/api/positions")
-    async def api_positions_alias():
-        return await get_positions()
+    async def api_positions_alias(api_key: str = Depends(require_api_key)):
+        return await get_positions(api_key=api_key)
 
     @app.get("/api/pnl")
-    async def api_pnl_alias():
-        return await get_pnl()
+    async def api_pnl_alias(api_key: str = Depends(require_api_key)):
+        return await get_pnl(api_key=api_key)
 
     @app.get("/api/mandate")
-    async def api_mandate_alias():
-        return await get_mandate()
+    async def api_mandate_alias(api_key: str = Depends(require_api_key)):
+        return await get_mandate(api_key=api_key)
 
     @app.get("/api/factors")
-    async def api_factors_alias():
-        return await get_factors()
+    async def api_factors_alias(api_key: str = Depends(require_api_key)):
+        return await get_factors(api_key=api_key)
 
     @app.get("/api/strategies")
-    async def api_strategies_alias():
-        return await get_strategies()
+    async def api_strategies_alias(api_key: str = Depends(require_api_key)):
+        return await get_strategies(api_key=api_key)
 
     @app.get("/api/regime")
-    async def api_regime_alias():
-        return await get_regime()
+    async def api_regime_alias(api_key: str = Depends(require_api_key)):
+        return await get_regime(api_key=api_key)
 
     @app.get("/api/backends")
-    async def api_backends_alias():
-        return await get_backends()
+    async def api_backends_alias(api_key: str = Depends(require_api_key)):
+        return await get_backends(api_key=api_key)
 
     @app.get("/api/flywheel")
-    async def api_flywheel_alias():
-        return await get_flywheel()
+    async def api_flywheel_alias(api_key: str = Depends(require_api_key)):
+        return await get_flywheel(api_key=api_key)
 
     @app.get("/api/patterns")
-    async def api_patterns_alias():
-        return await get_patterns()
+    async def api_patterns_alias(api_key: str = Depends(require_api_key)):
+        return await get_patterns(api_key=api_key)
 
     @app.get("/api/lessons")
-    async def api_lessons_alias():
-        return await get_lessons()
+    async def api_lessons_alias(api_key: str = Depends(require_api_key)):
+        return await get_lessons(api_key=api_key)
 
-    @app.get("/api/health")
-    async def api_health_alias():
-        return await health()
 
+    # ── Mobile Web Dashboard (M-050) ──────────────────────────────
+    static_dir = os.path.join(os.path.dirname(__file__), "static")
+    if os.path.exists(static_dir):
+        from fastapi.staticfiles import StaticFiles
+        app.mount("/app", StaticFiles(directory=static_dir, html=True), name="dashboard")
+        logger.info("Web dashboard mounted at /app")
 
     return app
-
-# ── Mobile Web Dashboard ───────────────────────────────────
-import os
-from fastapi.staticfiles import StaticFiles
-
-static_dir = os.path.join(os.path.dirname(__file__), "static")
-if os.path.exists(static_dir):
-    app.mount("/app", StaticFiles(directory=static_dir, html=True), name="dashboard")

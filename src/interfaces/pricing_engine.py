@@ -4,9 +4,12 @@ TSAR Interface — PricingEngine Abstract Base Class.
 Abstracts all quantitative computation — technical indicators, pattern
 detection, and OHLCV analysis. All methods are stateless (pure functions).
 
-Day1: PandasTAEngine (pandas-ta + numpy)
-Level 2: RustTickEngine (Rust tick processor via PyO3)
-Level 3: QuantLibEngine (C++ QuantLib via pybind11)
+All methods are async to support both sync backends (via run_in_executor)
+and native async backends (Rust via PyO3, QuantLib via async FFI).
+
+Day1: PandasTAEngine (pandas-ta + numpy) — sync internally, wrapped as async
+Level 2: RustTickEngine (Rust tick processor via PyO3) — native async
+Level 3: QuantLibEngine (C++ QuantLib via pybind11) — native async
 """
 
 from __future__ import annotations
@@ -26,6 +29,10 @@ if TYPE_CHECKING:
 class PricingEngine(abc.ABC):
     """Abstract interface for pricing and quantitative computation.
 
+    All methods are async — backends that are natively sync (like pandas-ta)
+    should use ``asyncio.get_event_loop().run_in_executor()`` internally
+    to avoid blocking the event loop.
+
     All methods are stateless — no side effects, no exchange calls.
     Backends may use different internal libraries (pandas-ta, Rust, QuantLib)
     but expose identical interfaces.
@@ -40,7 +47,7 @@ class PricingEngine(abc.ABC):
     # ═══════════════════════════════════════════════════════════════
 
     @abc.abstractmethod
-    def calculate_rsi(self, closes: list[float], period: int = 14) -> float:
+    async def calculate_rsi(self, closes: list[float], period: int = 14) -> float:
         """Calculate Relative Strength Index (RSI).
 
         Measures the magnitude of recent price changes to evaluate
@@ -59,7 +66,7 @@ class PricingEngine(abc.ABC):
         ...
 
     @abc.abstractmethod
-    def calculate_macd(
+    async def calculate_macd(
         self,
         closes: list[float],
         fast: int = 12,
@@ -86,7 +93,7 @@ class PricingEngine(abc.ABC):
         ...
 
     @abc.abstractmethod
-    def calculate_bollinger(
+    async def calculate_bollinger(
         self,
         closes: list[float],
         period: int = 20,
@@ -111,7 +118,7 @@ class PricingEngine(abc.ABC):
         ...
 
     @abc.abstractmethod
-    def calculate_atr(
+    async def calculate_atr(
         self,
         highs: list[float],
         lows: list[float],
@@ -139,7 +146,7 @@ class PricingEngine(abc.ABC):
         ...
 
     @abc.abstractmethod
-    def calculate_ema(self, data: list[float], period: int = 20) -> list[float]:
+    async def calculate_ema(self, data: list[float], period: int = 20) -> list[float]:
         """Calculate Exponential Moving Average (EMA).
 
         A type of moving average that places a greater weight and
@@ -158,7 +165,7 @@ class PricingEngine(abc.ABC):
         ...
 
     @abc.abstractmethod
-    def detect_support_resistance(
+    async def detect_support_resistance(
         self,
         ohlcv: list[OHLCV],
     ) -> SRLevels:

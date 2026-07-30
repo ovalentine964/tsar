@@ -12,16 +12,131 @@ Three main categories:
 
 from __future__ import annotations
 
+import re
 from typing import Any
+
+# ═══════════════════════════════════════════════════════════════════════
+# SECURITY (H-009): Prompt Injection Sanitization
+# ═══════════════════════════════════════════════════════════════════════
+# Market data (symbol names, headlines, trade details) may contain
+# adversarial content injected via compromised data feeds. These
+# functions sanitize all external data before it enters LLM prompts.
+
+# Patterns that indicate prompt injection attempts
+_INJECTION_PATTERNS = [
+    r"(?i)ignore\s+(previous|all|above|prior)\s+(instructions|prompts|rules)",
+    r"(?i)you\s+are\s+now\s+(a|an|the)",
+    r"(?i)system\s*:\s*",
+    r"(?i)assistant\s*:\s*",
+    r"(?i)user\s*:\s*",
+    r"(?i)\bact\s+as\b",
+    r"(?i)\bpretend\s+(you|to)\s+(are|be)\b",
+    r"(?i)\bnew\s+instructions?\b",
+    r"(?i)\bforget\s+(everything|all|previous)\b",
+    r"(?i)\bdisregard\b",
+    r"<\|im_start\|>",
+    r"<\|im_end\|>",
+    r"\[INST\]",
+    r"\[/INST\]",
+]
+_INJECTION_RE = [re.compile(p) for p in _INJECTION_PATTERNS]
+
+# Max length for any single interpolated field (prevent token flooding)
+_MAX_FIELD_LENGTH = 2000
+
+
+def sanitize_field(value: Any) -> str:
+    """Sanitize a single value before interpolation into an LLM prompt.
+
+    - Converts to string
+    - Truncates to safe length
+    - Removes control characters
+    - Escapes prompt-delimiter sequences
+    - Detects and flags injection attempts
+
+    Args:
+        value: Any value to sanitize.
+
+    Returns:
+        Sanitized string safe for prompt interpolation.
+    """
+    if value is None:
+        return ""
+
+    s = str(value)
+
+    # Truncate to prevent token flooding
+    if len(s) > _MAX_FIELD_LENGTH:
+        s = s[:_MAX_FIELD_LENGTH] + "...[truncated]"
+
+    # Remove control characters (except newline/tab)
+    s = re.sub(r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]", "", s)
+
+    # Check for injection patterns and neutralize them
+    for pattern in _INJECTION_RE:
+        if pattern.search(s):
+            # Replace matched injection text with [SANITIZED] marker
+            s = pattern.sub("[SANITIZED]", s)
+
+    # Escape common prompt delimiter spoofing
+    s = s.replace("```", "'")
+    s = s.replace("---", "–")  # em-dash to en-dash
+
+    return s
+
+
+def sanitize_dict(data: dict[str, Any]) -> dict[str, str]:
+    """Sanitize all values in a dict for prompt interpolation.
+
+    Args:
+        data: Dict with string keys and arbitrary values.
+
+    Returns:
+        Dict with all values sanitized.
+    """
+    return {k: sanitize_field(v) for k, v in data.items()}
+
+
+def validate_llm_output(text: str) -> str:
+    """Validate LLM-generated output for signs of injection success.
+
+    Checks if the LLM output contains patterns suggesting the model
+    was manipulated (e.g., repeating injected instructions).
+
+    Args:
+        text: Raw LLM output.
+
+    Returns:
+        The original text if valid, or a safe fallback message.
+    """
+    if not text:
+        return "[No output generated]"
+
+    # Check for signs the model was hijacked
+    suspicious = [
+        r"(?i)^I\s+am\s+now\s+",
+        r"(?i)^my\s+new\s+instructions",
+        r"(?i)^system\s*:.*override",
+        r"(?i)I\s+will\s+ignore\s+",
+        r"(?i)as\s+an\s+unrestricted\s+AI",
+    ]
+    for pattern in suspicious:
+        if re.search(pattern, text):
+            return "[Output rejected: suspicious content detected]"
+
+    # Truncate excessively long outputs (possible token stuffing)
+    if len(text) > 5000:
+        text = text[:5000] + "...[truncated]"
+
+    return text
 
 # ═══════════════════════════════════════════════════════════════════════
 # TRADE ANALYSIS PROMPTS
 # ═══════════════════════════════════════════════════════════════════════
 
 TRADE_ANALYSIS_SYSTEM = (
-    "You are a quantitative trading analyst for a crypto trading system. "
-    "Be precise, factual, and concise. Focus on actionable insights. "
-    "Never give financial advice — you are analyzing past data, not predicting the future."
+    "Quant trading analyst. Be precise, factual, concise. "
+    "Focus on actionable data insights. No financial advice."
 )
 
 SIGNAL_NARRATIVE = """Explain this trading signal concisely.
@@ -115,9 +230,8 @@ Provide a 3-5 sentence summary highlighting key outcomes and observations."""
 # ═══════════════════════════════════════════════════════════════════════
 
 STRATEGY_SYNTHESIS_SYSTEM = (
-    "You are a quantitative strategy researcher. You propose specific, testable "
-    "modifications to trading strategies based on performance data. Every suggestion "
-    "must be concrete and measurable — no vague advice."
+    "Quant strategy researcher. Propose specific, testable strategy modifications "
+    "based on performance data. Every suggestion must be concrete and measurable."
 )
 
 STRATEGY_SYNTHESIS = """Propose a mutation to improve this trading strategy.
@@ -169,9 +283,8 @@ Report any detected biases with evidence."""
 # ═══════════════════════════════════════════════════════════════════════
 
 REGIME_EXPLANATION_SYSTEM = (
-    "You are a market regime analyst. You explain what the current market "
-    "environment means for trading decisions. Be specific about implications "
-    "for position sizing, strategy selection, and risk parameters."
+    "Market regime analyst. Explain what the current environment means "
+    "for position sizing, strategy selection, and risk parameters. Be specific."
 )
 
 REGIME_EXPLANATION = """Explain the current market regime in 2-3 sentences.
@@ -213,10 +326,9 @@ Assess:
 # ═══════════════════════════════════════════════════════════════════════
 
 SHADOW_RULE_EXTRACTION_SYSTEM = (
-    "You are a quantitative trading rule analyst. You analyze completed trades "
-    "to discover implicit if-then rules that distinguish winning trades from "
-    "losing ones. Every rule must be specific, testable, and backed by data. "
-    "Never invent rules without evidence in the trade data."
+    "Quant rule analyst. Extract implicit if-then rules from completed trades "
+    "that distinguish winners from losers. Rules must be specific, testable, "
+    "data-backed. Never invent rules without evidence."
 )
 
 SHADOW_RULE_EXTRACTION = """Analyze these winning trades and extract implicit trading rules.
@@ -297,8 +409,44 @@ SYSTEM_PROMPTS: dict[str, str] = {
 }
 
 
+# Max output tokens per task type — tuned for each use case
+MAX_TOKENS: dict[str, int] = {
+    # T2 tasks: short, fast responses
+    "t2_signal_narrative": 150,
+    "t2_trade_summary": 150,
+    "t2_risk_explanation": 150,
+    "t2_news_sentiment": 100,
+    "t2_daily_summary": 250,
+    "t2_anomaly_explanation": 200,
+    "t2_regime_explanation": 150,
+    # T3 tasks: deeper analysis
+    "t3_trade_narrative": 500,
+    "t3_strategy_synthesis": 400,
+    "t3_strategy_evaluation": 400,
+    "t3_bias_detection": 300,
+    "t3_risk_scenario": 400,
+    # T3 shadow: structured JSON output
+    "t3_shadow_rule_extraction": 800,
+}
+
+
+def get_max_tokens(task_type: str) -> int:
+    """Get recommended max_tokens for a task type.
+
+    Args:
+        task_type: Task type key.
+
+    Returns:
+        Max tokens for output (default 256 if unknown).
+    """
+    return MAX_TOKENS.get(task_type, 256)
+
+
 def get_prompt(task_type: str, **kwargs: Any) -> str:
     """Get a formatted prompt for a task type.
+
+    SECURITY (H-009): All template variables are sanitized before
+    interpolation to prevent prompt injection via market data.
 
     Args:
         task_type: Task type key (e.g. ``"t2_signal_narrative"``).
@@ -315,9 +463,11 @@ def get_prompt(task_type: str, **kwargs: Any) -> str:
         raise ValueError(f"Unknown task_type: {task_type}")
     if not template:
         # Dynamic prompts (empty template) expect a 'prompt' kwarg
-        return kwargs.get("prompt", "")
+        return sanitize_field(kwargs.get("prompt", ""))
     try:
-        return template.format(**kwargs)
+        # SECURITY: Sanitize all kwargs before interpolation
+        safe_kwargs = sanitize_dict(kwargs)
+        return template.format(**safe_kwargs)
     except KeyError as exc:
         raise ValueError(f"Missing template variable for {task_type}: {exc}") from exc
 

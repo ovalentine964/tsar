@@ -119,9 +119,58 @@ max_leverage:
 margin_utilization_cap: 0.60       # Never use >60% margin
 pre_liquidation_buffer: 0.70       # Act at 70% maintenance margin
 
+# --- Fee-Aware Position Sizing (C-001) ---
+# Accounts for exchange fees in Kelly calculation and position sizing.
+# Binance standard: 0.1% maker, 0.1% taker (without BNB discount)
+fees:
+  maker_fee_pct: 0.001             # 0.1% maker fee
+  taker_fee_pct: 0.001             # 0.1% taker fee
+  # Round-trip cost = entry fee + exit fee
+  # For a 2:1 R:R trade with 0.1% fees, net R:R drops to ~1.96:1
+  # Fee impact is factored into: Kelly edge, min R:R, and position sizing
+  min_rr_ratio_after_fees: 1.5     # Minimum R:R AFTER accounting for fees
+  # Commission-aware Kelly: reduces estimated edge by round-trip fee cost
+  fee_adjusted_kelly: true         # Enable fee-aware Kelly calculation
+
+# --- Micro-Capital Mode (H-005) ---
+# When equity is very low ($5-$50), standard risk controls become
+# inoperable — position sizes are too small for exchange minimums.
+# This section defines adjusted parameters for micro-capital accounts.
+micro_capital:
+  enabled: true
+  threshold_usd: 50.0              # Activate mode when equity < $50
+  # Adjusted Kelly fraction for micro accounts (more aggressive
+  # because absolute risk is already tiny)
+  kelly_fraction: 0.40             # 40% Kelly (vs 25% normal)
+  # Relaxed risk per trade — allows meaningful position sizes
+  risk_per_trade_pct: 0.05         # 5% risk per trade (vs 2% normal)
+  # Relaxed single position cap
+  max_single_position_pct: 0.30    # 30% of equity (vs 15% normal)
+  # Minimum notional to place on exchange (Binance: ~$5-10)
+  min_notional_usd: 5.0            # Exchange minimum order value
+  # Minimum quantity step (Binance: varies by pair, use conservative default)
+  min_quantity_step: 0.00001       # Minimum order quantity increment
+  # Bypass certain guards that are meaningless at micro scale
+  relax_guards:
+    anti_greed: true               # Greed guard irrelevant at $10
+    anti_overconfidence: true       # Overconfidence guard irrelevant at $10
+    # Keep revenge + FOMO guards active even at micro scale
+    anti_revenge: false
+    anti_fomo: false
+
 # --- Kill Switch ---
 kill_switch:
   file_path: "/tmp/tsar_kill_switch"
   redis_key: "tsar:risk:kill_switch"
   dual_write: true                 # Write to both file + Redis
   file_is_primary: true            # File survives Redis failure
+  # Watchdog (C-013): external process monitors main process health
+  watchdog:
+    enabled: true
+    check_interval_seconds: 5      # Check heartbeat every 5s
+    max_stale_seconds: 30          # 30s without heartbeat = trigger
+    stale_threshold: 3             # 3 consecutive stale reads before kill
+    heartbeat_path: "./data/heartbeat.json"
+    marker_path: "./data/watchdog_alive.json"
+    startup_grace_seconds: 60      # Don't trigger during startup
+    check_pid: true                # Verify main process PID is alive

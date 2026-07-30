@@ -19,6 +19,8 @@ from typing import TYPE_CHECKING, Any
 
 from src.utils.logging import get_logger
 
+from src.utils.logging import get_logger
+
 if TYPE_CHECKING:
     from collections.abc import Generator
 
@@ -141,32 +143,63 @@ class TradeMemory:
     """CRUD operations, FTS5 search, snapshots, and journal entries
     for the trade_records table in SQLite.
 
+    Supports optional connection pooling via SQLitePool for production
+    workloads. When ``pool`` is provided, connections are acquired from
+    the pool instead of creating new ones.
+
     Usage::
 
+        # Without pool (backward-compatible)
         mem = TradeMemory("/path/to/tsar.db")
+
+        # With connection pool
+        from src.knowledge.db_pool import SQLitePool
+        pool = SQLitePool("/path/to/tsar.db", pool_size=5)
+        mem = TradeMemory("/path/to/tsar.db", pool=pool)
+
         mem.insert_trade(trade)
         results = mem.search_thesis("mean reversion BTC oversold")
     """
 
-    def __init__(self, db_path: str | Path) -> None:
+    def __init__(
+        self,
+        db_path: str | Path,
+        pool: Any | None = None,
+        pool_size: int = 5,
+        max_overflow: int = 3,
+    ) -> None:
         self._db_path = str(db_path)
         Path(self._db_path).parent.mkdir(parents=True, exist_ok=True)
 
+        # Connection pool (optional)
+        if pool is not None:
+            self._pool = pool
+        else:
+            self._pool = None
+            # Pool can also be auto-created by importing get_pool
+            # but we keep it opt-in for backward compatibility
+
     @contextmanager
     def _conn(self) -> Generator[sqlite3.Connection, None, None]:
-        conn = sqlite3.connect(self._db_path, timeout=10)
-        conn.row_factory = sqlite3.Row
-        conn.execute("PRAGMA journal_mode=WAL")
-        conn.execute("PRAGMA foreign_keys=ON")
-        conn.execute("PRAGMA busy_timeout=5000")
-        try:
-            yield conn
-            conn.commit()
-        except Exception:
-            conn.rollback()
-            raise
-        finally:
-            conn.close()
+        if self._pool is not None:
+            # Use connection pool
+            with self._pool.connection() as conn:
+                yield conn
+        else:
+            # Direct connection (backward-compatible)
+            conn = sqlite3.connect(self._db_path, timeout=10)
+            conn.row_factory = sqlite3.Row
+            conn.execute("PRAGMA journal_mode=WAL")
+            conn.execute("PRAGMA foreign_keys=ON")
+            conn.execute("PRAGMA busy_timeout=5000")
+            try:
+                yield conn
+                conn.commit()
+            except Exception:
+                conn.rollback()
+                raise
+            finally:
+                conn.close()
 
     # ── Trade CRUD ───────────────────────────────────────────
 
@@ -401,6 +434,94 @@ class TradeMemory:
             rows = conn.execute(sql, params).fetchall()
         return [TradeJournalEntry(**dict(r)) for r in rows]
 
+    # ── Trade ↔ Lesson junction table ───────────────────────
+
+    def link_lesson(self, trade_id: str, lesson_id: str, relevance: float = 1.0) -> None:
+        """Link a lesson to a trade via junction table."""
+        sql = """
+            INSERT OR IGNORE INTO trade_lessons (trade_id, lesson_id, relevance)
+            VALUES (?, ?, ?)
+        """
+        with self._conn() as conn:
+            conn.execute(sql, (trade_id, lesson_id, relevance))
+
+    def unlink_lesson(self, trade_id: str, lesson_id: str) -> bool:
+        """Remove a lesson link from a trade."""
+        sql = "DELETE FROM trade_lessons WHERE trade_id = ? AND lesson_id = ?"
+        with self._conn() as conn:
+            cursor = conn.execute(sql, (trade_id, lesson_id))
+        return cursor.rowcount > 0
+
+    def get_trade_lessons(self, trade_id: str) -> list[dict[str, Any]]:
+        """Get all lessons linked to a trade via junction table."""
+        sql = """
+            SELECT l.*, tl.relevance
+            FROM trade_lessons tl
+            JOIN lessons l ON l.lesson_id = tl.lesson_id
+            WHERE tl.trade_id = ?
+            ORDER BY tl.relevance DESC
+        """
+        with self._conn() as conn:
+            rows = conn.execute(sql, (trade_id,)).fetchall()
+        return [dict(r) for r in rows]
+
+    def get_lesson_trades(self, lesson_id: str) -> list[TradeRecord]:
+        """Get all trades linked to a lesson via junction table."""
+        sql = """
+            SELECT t.*
+            FROM trade_lessons tl
+            JOIN trade_records t ON t.trade_id = tl.trade_id
+            WHERE tl.lesson_id = ? AND t.is_deleted = 0
+            ORDER BY t.created_at DESC
+        """
+        with self._conn() as conn:
+            rows = conn.execute(sql, (lesson_id,)).fetchall()
+        return [TradeRecord(**dict(r)) for r in rows]
+
+    # ── Trade ↔ Pattern junction table ───────────────────────
+
+    def link_pattern(self, trade_id: str, pattern_id: str, match_score: float = 0.0) -> None:
+        """Link a pattern to a trade via junction table."""
+        sql = """
+            INSERT OR IGNORE INTO trade_patterns (trade_id, pattern_id, match_score)
+            VALUES (?, ?, ?)
+        """
+        with self._conn() as conn:
+            conn.execute(sql, (trade_id, pattern_id, match_score))
+
+    def unlink_pattern(self, trade_id: str, pattern_id: str) -> bool:
+        """Remove a pattern link from a trade."""
+        sql = "DELETE FROM trade_patterns WHERE trade_id = ? AND pattern_id = ?"
+        with self._conn() as conn:
+            cursor = conn.execute(sql, (trade_id, pattern_id))
+        return cursor.rowcount > 0
+
+    def get_trade_patterns(self, trade_id: str) -> list[dict[str, Any]]:
+        """Get all patterns linked to a trade via junction table."""
+        sql = """
+            SELECT p.*, tp.match_score
+            FROM trade_patterns tp
+            JOIN patterns p ON p.pattern_id = tp.pattern_id
+            WHERE tp.trade_id = ?
+            ORDER BY tp.match_score DESC
+        """
+        with self._conn() as conn:
+            rows = conn.execute(sql, (trade_id,)).fetchall()
+        return [dict(r) for r in rows]
+
+    def get_pattern_trades(self, pattern_id: str) -> list[TradeRecord]:
+        """Get all trades linked to a pattern via junction table."""
+        sql = """
+            SELECT t.*
+            FROM trade_patterns tp
+            JOIN trade_records t ON t.trade_id = tp.trade_id
+            WHERE tp.pattern_id = ? AND t.is_deleted = 0
+            ORDER BY t.created_at DESC
+        """
+        with self._conn() as conn:
+            rows = conn.execute(sql, (pattern_id,)).fetchall()
+        return [TradeRecord(**dict(r)) for r in rows]
+
     # ── Regime-specific queries ──────────────────────────────
 
     def get_performance_by_regime(self, since: str | None = None) -> list[dict[str, Any]]:
@@ -442,3 +563,105 @@ class TradeMemory:
         with self._conn() as conn:
             row = conn.execute(sql, params).fetchone()
         return dict(row) if row else {}
+
+    # ── Trade statistics ──────────────────────────────────────
+
+    def get_trade_stats(self, strategy_id: str | None = None, since: str | None = None) -> dict[str, Any]:
+        """Compute aggregate trade statistics.
+
+        Returns:
+            Dict with keys: win_rate, total_pnl, avg_win, avg_loss,
+            profit_factor, max_drawdown, trade_count.
+        """
+        clauses: list[str] = ["is_deleted = 0", "status = 'CLOSED'"]
+        params: list[Any] = []
+        if strategy_id:
+            clauses.append("strategy_id = ?")
+            params.append(strategy_id)
+        if since:
+            clauses.append("created_at >= ?")
+            params.append(since)
+        where = " AND ".join(clauses)
+        sql = f"""
+            SELECT
+                COUNT(*) AS trade_count,
+                SUM(CASE WHEN realized_pnl > 0 THEN 1 ELSE 0 END) AS winning_trades,
+                SUM(CASE WHEN realized_pnl <= 0 THEN 1 ELSE 0 END) AS losing_trades,
+                AVG(CASE WHEN realized_pnl > 0 THEN 1.0 ELSE 0.0 END) AS win_rate,
+                SUM(realized_pnl) AS total_pnl,
+                AVG(CASE WHEN realized_pnl > 0 THEN realized_pnl ELSE NULL END) AS avg_win,
+                AVG(CASE WHEN realized_pnl <= 0 THEN realized_pnl ELSE NULL END) AS avg_loss,
+                SUM(CASE WHEN realized_pnl > 0 THEN realized_pnl ELSE 0 END) AS gross_profit,
+                SUM(CASE WHEN realized_pnl < 0 THEN ABS(realized_pnl) ELSE 0 END) AS gross_loss
+            FROM trade_records
+            WHERE {where}
+        """
+        with self._conn() as conn:
+            row = conn.execute(sql, params).fetchone()
+
+        if not row or row["trade_count"] == 0:
+            return {
+                "win_rate": 0.0,
+                "total_pnl": 0.0,
+                "avg_win": 0.0,
+                "avg_loss": 0.0,
+                "profit_factor": 0.0,
+                "max_drawdown": 0.0,
+                "trade_count": 0,
+            }
+
+        gross_profit = row["gross_profit"] or 0.0
+        gross_loss = row["gross_loss"] or 0.0
+        profit_factor = (gross_profit / gross_loss) if gross_loss > 0 else float("inf") if gross_profit > 0 else 0.0
+
+        # Compute max drawdown from cumulative P&L series
+        max_drawdown = self._compute_max_drawdown(strategy_id, since)
+
+        return {
+            "win_rate": row["win_rate"] or 0.0,
+            "total_pnl": row["total_pnl"] or 0.0,
+            "avg_win": row["avg_win"] or 0.0,
+            "avg_loss": row["avg_loss"] or 0.0,
+            "profit_factor": profit_factor,
+            "max_drawdown": max_drawdown,
+            "trade_count": row["trade_count"],
+        }
+
+    def _compute_max_drawdown(self, strategy_id: str | None = None, since: str | None = None) -> float:
+        """Compute max drawdown from the cumulative P&L curve.
+
+        Returns:
+            Max drawdown as a positive float (e.g. 0.05 = 5% drawdown).
+        """
+        clauses: list[str] = ["is_deleted = 0", "status = 'CLOSED'"]
+        params: list[Any] = []
+        if strategy_id:
+            clauses.append("strategy_id = ?")
+            params.append(strategy_id)
+        if since:
+            clauses.append("created_at >= ?")
+            params.append(since)
+        where = " AND ".join(clauses)
+        sql = f"""
+            SELECT realized_pnl FROM trade_records
+            WHERE {where}
+            ORDER BY created_at ASC
+        """
+        with self._conn() as conn:
+            rows = conn.execute(sql, params).fetchall()
+
+        if not rows:
+            return 0.0
+
+        cumulative = 0.0
+        peak = 0.0
+        max_dd = 0.0
+        for row in rows:
+            cumulative += row["realized_pnl"]
+            if cumulative > peak:
+                peak = cumulative
+            dd = peak - cumulative
+            if dd > max_dd:
+                max_dd = dd
+
+        return max_dd

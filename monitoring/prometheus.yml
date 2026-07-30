@@ -1,0 +1,23 @@
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+scrape_configs:
+  - job_name: "tsar-app"
+    metrics_path: "/metrics"
+    static_configs:
+      - targets: ["app:8000"]
+        labels:
+          service: "tsar"
+          environment: "production"
+
+  - job_name: "redis"
+    static_configs:
+      - targets: ["redis:6379"]
+
+  - job_name: "tsar-health"
+    metrics_path: "/health"
+    static_configs:
+      - targets: ["app:8000"]
+        labels:
+          service: "tsar-health"

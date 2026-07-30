@@ -9,6 +9,10 @@
 | **Binance API** | [testnet.binance.vision](https://testnet.binance.vision) → Generate API Key | Free |
 | **NVIDIA API** | [build.nvidia.com](https://build.nvidia.com) → Get API Key | Free |
 
+Optional keys (for enhanced features):
+- **DeepSeek API** — Cloud reasoning model ([platform.deepseek.com](https://platform.deepseek.com))
+- **Telegram Bot** — Mobile alerts ([@BotFather](https://t.me/BotFather))
+
 ### 2. Configure
 
 ```bash

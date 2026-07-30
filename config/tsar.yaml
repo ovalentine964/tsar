@@ -17,6 +17,8 @@ exchange:
   rate_limit_per_minute: 1200
 
 risk:
+  # Day 1 simplified defaults for paper trading.
+  # See config/risk.yaml for canonical, full-parameter risk configuration.
   daily_loss_limit_pct: 2.0
   max_drawdown_pct: 5.0
   max_open_positions: 3
@@ -31,7 +33,9 @@ llm:
   ollama_model: qwen2.5:7b
   deepseek_api_key: null
   deepseek_base_url: https://api.deepseek.com
+  nvidia_nim_base_url: https://integrate.api.nvidia.com/v1
   request_timeout_s: 30.0
+  # See config/models.yaml for full model routing and fallbacks
 
 strategy:
   default_strategy: mean_reversion

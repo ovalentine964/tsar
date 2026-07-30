@@ -302,6 +302,38 @@ class PatternLibrary:
             cursor = conn.execute(sql, (min_confidence,))
         return cursor.rowcount
 
+    # ── Pattern ↔ Example Trades junction table ─────────────
+
+    def add_example_trade(self, pattern_id: str, trade_id: str, is_primary: bool = False) -> None:
+        """Link an example trade to a pattern via junction table."""
+        sql = """
+            INSERT OR IGNORE INTO pattern_example_trades (pattern_id, trade_id, is_primary)
+            VALUES (?, ?, ?)
+        """
+        with self._conn() as conn:
+            conn.execute(sql, (pattern_id, trade_id, 1 if is_primary else 0))
+
+    def remove_example_trade(self, pattern_id: str, trade_id: str) -> bool:
+        """Remove an example trade link from a pattern."""
+        sql = "DELETE FROM pattern_example_trades WHERE pattern_id = ? AND trade_id = ?"
+        with self._conn() as conn:
+            cursor = conn.execute(sql, (pattern_id, trade_id))
+        return cursor.rowcount > 0
+
+    def get_example_trades(self, pattern_id: str, primary_only: bool = False) -> list[dict[str, Any]]:
+        """Get example trades for a pattern via junction table."""
+        extra = "AND pet.is_primary = 1" if primary_only else ""
+        sql = f"""
+            SELECT t.*, pet.is_primary
+            FROM pattern_example_trades pet
+            JOIN trade_records t ON t.trade_id = pet.trade_id
+            WHERE pet.pattern_id = ? {extra} AND t.is_deleted = 0
+            ORDER BY pet.is_primary DESC, t.created_at DESC
+        """
+        with self._conn() as conn:
+            rows = conn.execute(sql, (pattern_id,)).fetchall()
+        return [dict(r) for r in rows]
+
     # ── Pattern relationships ────────────────────────────────
 
     def insert_relationship(self, rel: PatternRelationship) -> str:

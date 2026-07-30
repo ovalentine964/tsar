@@ -338,6 +338,101 @@ class LessonArchive:
             rows = conn.execute(sql, params).fetchall()
         return [dict(r) for r in rows]
 
+    # ── Applicability junction tables ─────────────────────────
+
+    def add_applicable_regime(self, lesson_id: str, regime: str) -> None:
+        """Link a regime to a lesson via junction table."""
+        sql = "INSERT OR IGNORE INTO lesson_regimes (lesson_id, regime) VALUES (?, ?)"
+        with self._conn() as conn:
+            conn.execute(sql, (lesson_id, regime))
+
+    def remove_applicable_regime(self, lesson_id: str, regime: str) -> bool:
+        sql = "DELETE FROM lesson_regimes WHERE lesson_id = ? AND regime = ?"
+        with self._conn() as conn:
+            cursor = conn.execute(sql, (lesson_id, regime))
+        return cursor.rowcount > 0
+
+    def get_applicable_regimes(self, lesson_id: str) -> list[str]:
+        """Get regimes where this lesson applies."""
+        sql = "SELECT regime FROM lesson_regimes WHERE lesson_id = ? ORDER BY regime"
+        with self._conn() as conn:
+            rows = conn.execute(sql, (lesson_id,)).fetchall()
+        return [r["regime"] for r in rows]
+
+    def get_lessons_for_regime(self, regime: str) -> list[Lesson]:
+        """Get all lessons applicable to a given regime."""
+        sql = """
+            SELECT l.* FROM lesson_regimes lr
+            JOIN lessons l ON l.lesson_id = lr.lesson_id
+            WHERE lr.regime = ? AND l.is_archived = 0
+            ORDER BY l.severity, l.confidence DESC
+        """
+        with self._conn() as conn:
+            rows = conn.execute(sql, (regime,)).fetchall()
+        return [Lesson(**dict(r)) for r in rows]
+
+    def add_applicable_symbol(self, lesson_id: str, symbol: str) -> None:
+        """Link a symbol to a lesson via junction table."""
+        sql = "INSERT OR IGNORE INTO lesson_symbols (lesson_id, symbol) VALUES (?, ?)"
+        with self._conn() as conn:
+            conn.execute(sql, (lesson_id, symbol))
+
+    def remove_applicable_symbol(self, lesson_id: str, symbol: str) -> bool:
+        sql = "DELETE FROM lesson_symbols WHERE lesson_id = ? AND symbol = ?"
+        with self._conn() as conn:
+            cursor = conn.execute(sql, (lesson_id, symbol))
+        return cursor.rowcount > 0
+
+    def get_applicable_symbols(self, lesson_id: str) -> list[str]:
+        """Get symbols where this lesson applies."""
+        sql = "SELECT symbol FROM lesson_symbols WHERE lesson_id = ? ORDER BY symbol"
+        with self._conn() as conn:
+            rows = conn.execute(sql, (lesson_id,)).fetchall()
+        return [r["symbol"] for r in rows]
+
+    def get_lessons_for_symbol(self, symbol: str) -> list[Lesson]:
+        """Get all lessons applicable to a given symbol."""
+        sql = """
+            SELECT l.* FROM lesson_symbols ls
+            JOIN lessons l ON l.lesson_id = ls.lesson_id
+            WHERE (ls.symbol = ? OR ls.symbol = 'ALL') AND l.is_archived = 0
+            ORDER BY l.severity, l.confidence DESC
+        """
+        with self._conn() as conn:
+            rows = conn.execute(sql, (symbol,)).fetchall()
+        return [Lesson(**dict(r)) for r in rows]
+
+    def add_applicable_strategy(self, lesson_id: str, strategy_type: str) -> None:
+        """Link a strategy type to a lesson via junction table."""
+        sql = "INSERT OR IGNORE INTO lesson_strategies (lesson_id, strategy_type) VALUES (?, ?)"
+        with self._conn() as conn:
+            conn.execute(sql, (lesson_id, strategy_type))
+
+    def remove_applicable_strategy(self, lesson_id: str, strategy_type: str) -> bool:
+        sql = "DELETE FROM lesson_strategies WHERE lesson_id = ? AND strategy_type = ?"
+        with self._conn() as conn:
+            cursor = conn.execute(sql, (lesson_id, strategy_type))
+        return cursor.rowcount > 0
+
+    def get_applicable_strategies(self, lesson_id: str) -> list[str]:
+        """Get strategy types where this lesson applies."""
+        sql = "SELECT strategy_type FROM lesson_strategies WHERE lesson_id = ? ORDER BY strategy_type"
+        with self._conn() as conn:
+            rows = conn.execute(sql, (lesson_id,)).fetchall()
+        return [r["strategy_type"] for r in rows]
+
+    def get_lessons_for_strategy(self, strategy_type: str) -> list[Lesson]:
+        """Get all lessons applicable to a given strategy type."""
+        sql = """
+            SELECT l.* FROM lesson_strategies lstr
+            JOIN lessons l ON l.lesson_id = lstr.lesson_id
+            WHERE lstr.strategy_type = ? AND l.is_archived = 0
+            ORDER BY l.severity, l.confidence DESC
+        """
+        with self._conn() as conn:
+            rows = conn.execute(sql, (strategy_type,)).fetchall()
+        return [Lesson(**dict(r)) for r in rows]
+
     # ── Aggregate queries ────────────────────────────────────
 
     def get_lesson_stats(self) -> dict[str, Any]:

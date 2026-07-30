@@ -3,12 +3,35 @@
 Knowledge store implementations for the TSAR trading system.
 """
 
+from src.knowledge.db_pool import SQLitePool, get_pool
 from src.knowledge.fts_search import MemoryRecall, SearchResult, format_fts_query
 from src.knowledge.lesson_archive import LessonArchive
 from src.knowledge.pattern_library import PatternLibrary
-from src.knowledge.regime_state import RegimeStateStore
+from src.knowledge.regime_state import (
+    RegimeGraphSnapshot,
+    RegimeStateStore,
+    RegimeTransitionEdge,
+    TemporalRegimeGraph,
+)
 from src.knowledge.strategy_genomes import StrategyGenomes
 from src.knowledge.trade_memory import TradeMemory
+
+# ChromaDB optional import
+try:
+    from src.knowledge.chromadb_store import ChromaVectorStore, VectorSearchResult, is_chromadb_available
+except ImportError:
+    ChromaVectorStore = None  # type: ignore[assignment,misc]
+    VectorSearchResult = None  # type: ignore[assignment,misc]
+    is_chromadb_available = None  # type: ignore[assignment]
+
+# Knowledge graph
+try:
+    from src.knowledge.knowledge_graph import GraphEdge, GraphNode, GraphPath, KnowledgeGraph
+except ImportError:
+    KnowledgeGraph = None  # type: ignore[assignment,misc]
+    GraphNode = None  # type: ignore[assignment,misc]
+    GraphEdge = None  # type: ignore[assignment,misc]
+    GraphPath = None  # type: ignore[assignment,misc]
 
 # Heavy imports (require ccxt, openai, etc.) — wrapped in try/except so
 # the core knowledge stores remain importable without those dependencies.
@@ -27,14 +50,26 @@ except ImportError:
     MutatorConfig = None  # type: ignore[assignment,misc]
 
 __all__ = [
+    "SQLitePool",
+    "get_pool",
     "TradeMemory",
     "StrategyGenomes",
     "RegimeStateStore",
+    "TemporalRegimeGraph",
+    "RegimeTransitionEdge",
+    "RegimeGraphSnapshot",
     "PatternLibrary",
     "LessonArchive",
     "MemoryRecall",
     "SearchResult",
     "format_fts_query",
+    "ChromaVectorStore",
+    "VectorSearchResult",
+    "is_chromadb_available",
+    "KnowledgeGraph",
+    "GraphNode",
+    "GraphEdge",
+    "GraphPath",
     "ShadowExtractor",
     "TradingRule",
     "ExtractionResult",

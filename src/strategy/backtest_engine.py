@@ -55,6 +55,10 @@ class BacktestConfig:
         risk_free_rate: Annualized risk-free rate for Sharpe calculation.
         trading_days_per_year: Trading days per year for annualization.
         max_open_positions: Maximum concurrent open positions.
+        min_notional: Minimum order notional value (Binance: 10 USDT).
+        min_quantity: Minimum order quantity in base asset.
+        min_price_tick: Minimum price tick size.
+        use_micro_mode: Enable $10 capital mode with realistic constraints.
     """
 
     initial_capital: float = 100_000.0
@@ -64,6 +68,35 @@ class BacktestConfig:
     risk_free_rate: float = 0.04
     trading_days_per_year: int = 365
     max_open_positions: int = 1
+    min_notional: float = 10.0       # Binance minimum notional
+    min_quantity: float = 0.00001    # Minimum base asset quantity
+    min_price_tick: float = 0.01     # Minimum price increment
+    use_micro_mode: bool = False     # $10 capital mode
+
+    @classmethod
+    def micro_mode(cls, capital: float = 10.0) -> BacktestConfig:
+        """Create config for $10 micro-capital backtesting.
+
+        Models realistic Binance constraints:
+        - $10 starting capital
+        - 100% position allocation (can't diversify with $10)
+        - 0.1% taker fee (Binance spot)
+        - 0.05% slippage estimate
+        - $10 minimum notional enforcement
+        """
+        return cls(
+            initial_capital=capital,
+            position_size_pct=1.0,        # Full allocation with $10
+            commission_bps=10.0,          # Binance 0.1% taker fee
+            slippage_bps=5.0,             # Conservative slippage
+            risk_free_rate=0.04,
+            trading_days_per_year=365,
+            max_open_positions=1,         # Only 1 position with $10
+            min_notional=10.0,            # Binance minimum
+            min_quantity=0.00001,
+            min_price_tick=0.01,
+            use_micro_mode=True,
+        )
 
 
 # ═══════════════════════════════════════════════════════════════════════
@@ -249,7 +282,9 @@ class BacktestEngine:
             if open_position is None and i < len(ohlcv) - 1:
                 entry_signal = self._strategy.check_entry(data)
                 if entry_signal is not None:
-                    open_position = self._open_position(entry_signal, bar, i, capital)
+                    pos = self._open_position(entry_signal, bar, i, capital)
+                    if pos is not None:
+                        open_position = pos
 
             # ── Mark-to-market equity ──
             if open_position is not None:
@@ -335,8 +370,12 @@ class BacktestEngine:
         bar: OHLCV,
         bar_index: int,
         capital: float,
-    ) -> _OpenPosition:
-        """Open a new position from a strategy signal."""
+    ) -> _OpenPosition | None:
+        """Open a new position from a strategy signal.
+
+        Returns None if the position doesn't meet minimum constraints
+        (e.g., notional below $10 for Binance).
+        """
         entry_price_raw = signal.get("entry_price", bar.close)
         side = signal.get("side", "buy")
         entry_price = self._apply_slippage(entry_price_raw, side, is_entry=True)
@@ -344,7 +383,46 @@ class BacktestEngine:
         # Position sizing
         position_notional = capital * self._config.position_size_pct
         quantity = position_notional / entry_price if entry_price > 0 else 0.0
-        commission = self._apply_commission(position_notional)
+
+        # ── Minimum constraints (Binance realistic) ──
+        config = self._config
+
+        # Round quantity to min_quantity precision
+        if config.min_quantity > 0:
+            quantity = max(
+                config.min_quantity,
+                round(quantity / config.min_quantity) * config.min_quantity,
+            )
+
+        # Round price to tick size
+        if config.min_price_tick > 0:
+            entry_price = round(
+                entry_price / config.min_price_tick
+            ) * config.min_price_tick
+
+        # Check minimum notional
+        actual_notional = quantity * entry_price
+        if actual_notional < config.min_notional:
+            logger.debug(
+                "Position skipped: notional %.2f below minimum %.2f (qty=%.8f @ %.2f)",
+                actual_notional, config.min_notional, quantity, entry_price,
+            )
+            return None
+
+        # Check we have enough capital
+        if actual_notional > capital * 1.01:  # 1% tolerance
+            logger.debug(
+                "Position skipped: notional %.2f exceeds capital %.2f",
+                actual_notional, capital,
+            )
+            return None
+
+        commission = self._apply_commission(actual_notional)
+
+        # In micro mode, also account for minimum commission
+        if config.use_micro_mode:
+            # Binance minimum commission is typically 0.00000001 of quote
+            commission = max(commission, 0.001)  # Minimum ~$0.001 commission
 
         return _OpenPosition(
             entry_time=bar.timestamp,
@@ -609,3 +687,83 @@ class BacktestEngine:
             avg_trade_duration=0.0,
             expectancy=0.0,
         )
+
+    # ── Walk-Forward / Train-Test Split (H-002) ─────────────
+
+    def run_train_test_split(
+        self,
+        ohlcv: list[OHLCV],
+        train_ratio: float = 0.70,
+    ) -> dict[str, Any]:
+        """Run backtest with train/test split for overfitting detection.
+
+        Splits data into train (first train_ratio%) and test (remaining).
+        Returns both in-sample and out-of-sample results for comparison.
+
+        Args:
+            ohlcv: Full historical OHLCV data.
+            train_ratio: Fraction of data for training (default 0.70).
+
+        Returns:
+            Dict with 'train_result', 'test_result', 'overfit_score',
+            'is_overfit', and 'degradation_pct'.
+        """
+        if len(ohlcv) < 10:
+            raise ValueError(f"Need at least 10 bars for train/test split, got {len(ohlcv)}")
+
+        split_idx = int(len(ohlcv) * train_ratio)
+        split_idx = max(split_idx, 5)  # At least 5 bars in train
+        split_idx = min(split_idx, len(ohlcv) - 5)  # At least 5 bars in test
+
+        train_data = ohlcv[:split_idx]
+        test_data = ohlcv[split_idx:]
+
+        logger.info(
+            "Train/test split: %d train bars, %d test bars (%.0f/%.0f)",
+            len(train_data), len(test_data), train_ratio * 100, (1 - train_ratio) * 100,
+        )
+
+        # Run on train
+        train_result = self.run(train_data)
+
+        # Run on test (same strategy, same config — no re-optimization)
+        test_result = self.run(test_data)
+
+        # Compute overfitting score
+        train_sharpe = train_result.metrics.sharpe_ratio
+        test_sharpe = test_result.metrics.sharpe_ratio
+
+        if test_sharpe <= 0:
+            overfit_score = float("inf") if train_sharpe > 0 else 1.0
+        else:
+            overfit_score = abs(train_sharpe) / abs(test_sharpe)
+
+        is_overfit = overfit_score > 3.0  # Default threshold
+
+        # Performance degradation
+        if train_result.metrics.total_return != 0:
+            degradation_pct = (
+                (train_result.metrics.total_return - test_result.metrics.total_return)
+                / abs(train_result.metrics.total_return)
+                * 100
+            )
+        else:
+            degradation_pct = 0.0
+
+        logger.info(
+            "Train/test results: train_sharpe=%.2f test_sharpe=%.2f "
+            "overfit_score=%.2f is_overfit=%s degradation=%.1f%%",
+            train_sharpe, test_sharpe, overfit_score, is_overfit, degradation_pct,
+        )
+
+        return {
+            "train_result": train_result,
+            "test_result": test_result,
+            "train_sharpe": train_sharpe,
+            "test_sharpe": test_sharpe,
+            "overfit_score": round(overfit_score, 4),
+            "is_overfit": is_overfit,
+            "degradation_pct": round(degradation_pct, 2),
+            "train_bars": len(train_data),
+            "test_bars": len(test_data),
+        }

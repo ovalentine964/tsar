@@ -1,6 +1,7 @@
 """TSAR Telegram Bot — real-time monitoring and control."""
 import asyncio
 import logging
+import os
 
 import aiohttp
 
@@ -14,6 +15,20 @@ class TsarBot:
         self.base_url = f"https://api.telegram.org/bot{token}"
         self.system = tsar_system
         self.offset = 0
+
+        # SECURITY (C-020): Build whitelist of authorized chat IDs.
+        # The primary chat_id is always authorized. Additional IDs can be
+        # added via TELEGRAM_ALLOWED_CHAT_IDS (comma-separated).
+        self._allowed_chat_ids: set[str] = {str(chat_id)}
+        extra_ids = os.environ.get("TELEGRAM_ALLOWED_CHAT_IDS", "")
+        for cid in extra_ids.split(","):
+            cid = cid.strip()
+            if cid:
+                self._allowed_chat_ids.add(cid)
+        logger.info(
+            "Telegram bot initialized with %d authorized chat ID(s)",
+            len(self._allowed_chat_ids),
+        )
 
     async def send_message(self, text: str):
         async with aiohttp.ClientSession() as session:
@@ -32,6 +47,12 @@ class TsarBot:
         emoji = {"LOW": "🟡", "MEDIUM": "🟠", "HIGH": "🔴", "CRITICAL": "🚨"}.get(level, "⚠️")
         await self.send_message(f"{emoji} <b>RISK [{level}]</b>\n{message}")
 
+    def _is_authorized(self, msg: dict) -> bool:
+        """SECURITY (C-020): Check if the message sender is in the chat whitelist."""
+        chat = msg.get("chat", {})
+        chat_id = str(chat.get("id", ""))
+        return chat_id in self._allowed_chat_ids
+
     async def poll_loop(self):
         while True:
             try:
@@ -44,6 +65,17 @@ class TsarBot:
                         self.offset = update["update_id"] + 1
                         msg = update.get("message", {})
                         text = msg.get("text", "")
+
+                        # SECURITY (C-020): Reject commands from unauthorized chat IDs.
+                        if not self._is_authorized(msg):
+                            chat = msg.get("chat", {})
+                            logger.warning(
+                                "Unauthorized Telegram command from chat_id=%s user=%s",
+                                chat.get("id"),
+                                msg.get("from", {}).get("username", "unknown"),
+                            )
+                            continue
+
                         if text.startswith("/"):
                             await self.handle_command(text)
             except Exception:

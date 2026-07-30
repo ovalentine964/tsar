@@ -9,6 +9,7 @@ Persistence: SQLite (WAL mode, tsar.db)
 from __future__ import annotations
 
 import hashlib
+import json
 import sqlite3
 import uuid
 from contextlib import contextmanager
@@ -361,3 +362,145 @@ class StrategyGenomes:
         self.update_genome(strategy_id, gates_passed=bitmask, gates_evaluated_at=_utcnow_iso())
         logger.info("gates_evaluated", strategy_id=strategy_id, results=results)
         return results
+
+    # ── Shadow lesson → genome mutation pipeline ─────────────
+
+    def apply_shadow_lesson(
+        self,
+        strategy_id: str,
+        lesson: dict[str, Any],
+        loss_weight: float = 1.0,
+    ) -> str | None:
+        """Apply a shadow account lesson as a genome mutation.
+
+        This wires shadow account lessons directly into the strategy
+        genome mutation pipeline. Lessons from losing trades are
+        weighted more heavily (loss_weight > 1.0) because avoiding
+        losses is more valuable than capturing marginal wins.
+
+        Args:
+            strategy_id: Target genome to mutate.
+            lesson: Lesson dict with keys:
+                - rule (str): The lesson/rule content
+                - conditions (list): Conditions that triggered losses
+                - confidence (float): Lesson confidence (0-1)
+                - source (str): 'shadow_winners' or 'shadow_losers'
+                - loss_severity (float): Loss percentage (for weighting)
+            loss_weight: Multiplier for loss-derived lessons.
+                Default 1.0. Loss lessons use higher values.
+
+        Returns:
+            mutation_id if a mutation was recorded, None if skipped.
+        """
+        genome = self.get_genome(strategy_id)
+        if genome is None:
+            logger.warning("apply_shadow_lesson: genome %s not found", strategy_id)
+            return None
+
+        confidence = lesson.get("confidence", 0.5)
+        source = lesson.get("source", "unknown")
+
+        # Loss-weighted confidence: multiply by loss_weight for loser-derived lessons
+        effective_confidence = min(1.0, confidence * loss_weight)
+
+        # Only apply if effective confidence is high enough
+        if effective_confidence < 0.4:
+            logger.debug(
+                "apply_shadow_lesson: skipping low-confidence lesson "
+                "(genome=%s, confidence=%.2f, effective=%.2f)",
+                strategy_id, confidence, effective_confidence,
+            )
+            return None
+
+        # Build the mutation
+        rule_text = lesson.get("rule", "")
+        conditions = lesson.get("conditions", [])
+        loss_severity = lesson.get("loss_severity", 0.0)
+
+        change_description = (
+            f"Shadow lesson [{source}]: {rule_text}. "
+            f"Confidence: {effective_confidence:.2f} "
+            f"(base={confidence:.2f}, weight={loss_weight:.1f})"
+        )
+
+        # Determine mutation type based on lesson source
+        if source == "shadow_losers":
+            mutation_type = "risk_tightening"
+            # For loss lessons, tighten exit rules
+            proposed_exit = self._build_tighter_exit_rules(
+                genome.exit_rules, conditions, loss_severity
+            )
+            proposed_entry = None
+        else:
+            mutation_type = "rule_addition"
+            proposed_exit = None
+            proposed_entry = json.dumps(conditions, indent=2) if conditions else None
+
+        mutation = StrategyMutation(
+            strategy_name=genome.name,
+            parent_id=genome.strategy_id,
+            mutation_type=mutation_type,
+            change_description=change_description,
+            mutation_detail=json.dumps(lesson, default=str),
+            rationale=lesson.get("rationale", rule_text),
+            outcome="pending",
+        )
+
+        mutation_id = self.record_mutation(mutation)
+
+        logger.info(
+            "shadow_lesson_applied",
+            genome_id=strategy_id,
+            mutation_id=mutation_id,
+            source=source,
+            effective_confidence=round(effective_confidence, 3),
+            loss_weight=loss_weight,
+            mutation_type=mutation_type,
+        )
+
+        return mutation_id
+
+    @staticmethod
+    def _build_tighter_exit_rules(
+        existing_exit: str | None,
+        loss_conditions: list[dict[str, Any]],
+        loss_severity: float,
+    ) -> str:
+        """Build tighter exit rules based on loss patterns.
+
+        For losing trades, we add exit conditions that would have
+        reduced losses. The tighter the loss, the more aggressive
+        the exit rules.
+
+        Args:
+            existing_exit: Current exit rules JSON string.
+            loss_conditions: Conditions from losing trades.
+            loss_severity: Average loss percentage.
+
+        Returns:
+            JSON string with updated exit rules.
+        """
+        try:
+            current = json.loads(existing_exit) if existing_exit else []
+            if not isinstance(current, list):
+                current = [current]
+        except (json.JSONDecodeError, TypeError):
+            current = []
+
+        # Add tighter stop-loss conditions based on loss severity
+        if loss_severity > 5.0:
+            current.append({"type": "tight_stop", "max_loss_pct": 2.0})
+        elif loss_severity > 3.0:
+            current.append({"type": "tight_stop", "max_loss_pct": 3.0})
+        elif loss_severity > 1.0:
+            current.append({"type": "tight_stop", "max_loss_pct": 5.0})
+
+        # Add time-based exit for trades that held too long
+        for cond in loss_conditions:
+            if cond.get("type") == "holding_period_above":
+                current.append({
+                    "type": "time_exit",
+                    "max_hours": cond.get("value", 48),
+                })
+
+        return json.dumps(current, indent=2)

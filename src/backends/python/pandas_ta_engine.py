@@ -4,12 +4,16 @@ PandasTAEngine — Technical indicators via pandas-ta + numpy.
 Day1 implementation of PricingEngine. Uses pandas-ta for RSI, EMA,
 MACD, Bollinger Bands, ATR, and pivot-based support/resistance detection.
 
+All sync pandas-ta computations are wrapped in asyncio.run_in_executor()
+to avoid blocking the event loop.
+
 Level 2: RustTickEngine (Rust tick processor via PyO3)
 Level 3: QuantLibEngine (C++ QuantLib via pybind11)
 """
 
 from __future__ import annotations
 
+import asyncio
 import logging
 from typing import Any
 
@@ -31,18 +35,33 @@ logger = logging.getLogger(__name__)
 class PandasTAEngine(PricingEngine):
     """Pricing engine using pandas-ta for technical indicators.
 
-    All methods are stateless — they convert input lists to pandas Series,
-    call the appropriate pandas-ta function, and return typed results.
+    All public methods are async (per the PricingEngine interface).
+    The sync pandas-ta computations are dispatched to a thread pool
+    executor so they don't block the event loop.
     """
 
     def __init__(self, **kwargs: Any) -> None:
-        pass
+        self._loop: asyncio.AbstractEventLoop | None = None
+
+    def _get_loop(self) -> asyncio.AbstractEventLoop:
+        """Get or create the event loop for executor calls."""
+        if self._loop is None or self._loop.is_closed():
+            try:
+                self._loop = asyncio.get_running_loop()
+            except RuntimeError:
+                self._loop = asyncio.new_event_loop()
+        return self._loop
+
+    async def _run_sync(self, func: Any, *args: Any) -> Any:
+        """Run a synchronous function in an executor to avoid blocking."""
+        loop = self._get_loop()
+        return await loop.run_in_executor(None, func, *args)
 
     # ═══════════════════════════════════════════════════════════════
-    # TECHNICAL INDICATORS
+    # TECHNICAL INDICATORS (async wrappers around sync pandas-ta)
     # ═══════════════════════════════════════════════════════════════
 
-    def calculate_rsi(self, closes: list[float], period: int = 14) -> float:
+    async def calculate_rsi(self, closes: list[float], period: int = 14) -> float:
         """Calculate Relative Strength Index (RSI).
 
         Args:
@@ -60,6 +79,10 @@ class PandasTAEngine(PricingEngine):
         if period < 1:
             raise ValueError(f"period must be >= 1, got {period}")
 
+        return await self._run_sync(self._sync_rsi, closes, period)
+
+    @staticmethod
+    def _sync_rsi(closes: list[float], period: int) -> float:
         import pandas_ta as ta
 
         series = pd.Series(closes, dtype=float)
@@ -71,7 +94,7 @@ class PandasTAEngine(PricingEngine):
         logger.warning("RSI returned no data (len=%d, period=%d), defaulting to 50.0", len(closes), period)
         return 50.0
 
-    def calculate_macd(
+    async def calculate_macd(
         self,
         closes: list[float],
         fast: int = 12,
@@ -99,14 +122,16 @@ class PandasTAEngine(PricingEngine):
         if fast >= slow:
             raise ValueError(f"fast ({fast}) must be less than slow ({slow})")
 
+        return await self._run_sync(self._sync_macd, closes, fast, slow, signal)
+
+    @staticmethod
+    def _sync_macd(closes: list[float], fast: int, slow: int, signal: int) -> MACDResult:
         import pandas_ta as ta
 
         series = pd.Series(closes, dtype=float)
         macd_df = ta.macd(series, fast=fast, slow=slow, signal=signal)
 
         if macd_df is not None and not macd_df.dropna(how="all").empty:
-            # pandas-ta MACD columns: MACD_{fast}_{slow}_{signal},
-            # MACDh_{fast}_{slow}_{signal}, MACDs_{fast}_{slow}_{signal}
             macd_line = tuple(macd_df.iloc[:, 0].fillna(0.0).tolist())
             histogram = tuple(macd_df.iloc[:, 1].fillna(0.0).tolist())
             signal_line = tuple(macd_df.iloc[:, 2].fillna(0.0).tolist())
@@ -120,7 +145,7 @@ class PandasTAEngine(PricingEngine):
         zeros = tuple(0.0 for _ in closes)
         return MACDResult(macd_line=zeros, signal_line=zeros, histogram=zeros)
 
-    def calculate_bollinger(
+    async def calculate_bollinger(
         self,
         closes: list[float],
         period: int = 20,
@@ -144,13 +169,16 @@ class PandasTAEngine(PricingEngine):
         if period < 1:
             raise ValueError(f"period must be >= 1, got {period}")
 
+        return await self._run_sync(self._sync_bollinger, closes, period, std_dev)
+
+    @staticmethod
+    def _sync_bollinger(closes: list[float], period: int, std_dev: float) -> BollingerResult:
         import pandas_ta as ta
 
         series = pd.Series(closes, dtype=float)
         bb = ta.bbands(series, length=period, std=std_dev)
 
         if bb is not None and not bb.dropna(how="all").empty:
-            # pandas-ta bbands columns: BBL, BBM, BBU, BBB, BBP
             lower = tuple(bb.iloc[:, 0].fillna(0.0).tolist())
             mid = tuple(bb.iloc[:, 1].fillna(0.0).tolist())
             upper = tuple(bb.iloc[:, 2].fillna(0.0).tolist())
@@ -166,7 +194,7 @@ class PandasTAEngine(PricingEngine):
         zeros = tuple(0.0 for _ in closes)
         return BollingerResult(upper=zeros, middle=zeros, lower=zeros, bandwidth=zeros)
 
-    def calculate_atr(
+    async def calculate_atr(
         self,
         highs: list[float],
         lows: list[float],
@@ -198,6 +226,10 @@ class PandasTAEngine(PricingEngine):
         if period < 1:
             raise ValueError(f"period must be >= 1, got {period}")
 
+        return await self._run_sync(self._sync_atr, highs, lows, closes, period)
+
+    @staticmethod
+    def _sync_atr(highs: list[float], lows: list[float], closes: list[float], period: int) -> float:
         import pandas_ta as ta
 
         h = pd.Series(highs, dtype=float)
@@ -211,7 +243,7 @@ class PandasTAEngine(PricingEngine):
         logger.warning("ATR returned no data (len=%d, period=%d), defaulting to 0.0", len(closes), period)
         return 0.0
 
-    def calculate_ema(self, data: list[float], period: int = 20) -> list[float]:
+    async def calculate_ema(self, data: list[float], period: int = 20) -> list[float]:
         """Calculate Exponential Moving Average (EMA).
 
         Args:
@@ -229,6 +261,10 @@ class PandasTAEngine(PricingEngine):
         if period < 1:
             raise ValueError(f"period must be >= 1, got {period}")
 
+        return await self._run_sync(self._sync_ema, data, period)
+
+    @staticmethod
+    def _sync_ema(data: list[float], period: int) -> list[float]:
         import pandas_ta as ta
 
         series = pd.Series(data, dtype=float)
@@ -237,11 +273,10 @@ class PandasTAEngine(PricingEngine):
         if ema is not None and not ema.dropna().empty:
             return [float(v) for v in ema.dropna().tolist()]
 
-        # Fallback: return last value repeated if EMA can't be computed
         logger.warning("EMA returned no data (len=%d, period=%d), returning fallback", len(data), period)
         return [data[-1]]
 
-    def detect_support_resistance(
+    async def detect_support_resistance(
         self,
         ohlcv: list[OHLCV],
     ) -> SRLevels:
@@ -249,12 +284,6 @@ class PandasTAEngine(PricingEngine):
 
         Uses a combination of pivot point detection and volume clustering
         to identify key price levels.
-
-        Algorithm:
-        1. Find local pivot highs and lows (swing points)
-        2. Cluster nearby levels within a tolerance band
-        3. Score each cluster by number of touches and volume
-        4. Classify as support (below current price) or resistance (above)
 
         Args:
             ohlcv: List of OHLCV candles, oldest first.
@@ -268,6 +297,10 @@ class PandasTAEngine(PricingEngine):
         if not ohlcv:
             raise ValueError("ohlcv must not be empty")
 
+        return await self._run_sync(self._sync_detect_sr, ohlcv)
+
+    @staticmethod
+    def _sync_detect_sr(ohlcv: list[OHLCV]) -> SRLevels:
         # Need at least 5 candles for pivot detection
         if len(ohlcv) < 5:
             current_price = ohlcv[-1].close
@@ -283,33 +316,28 @@ class PandasTAEngine(PricingEngine):
         current_price = closes[-1]
 
         # ── Step 1: Find pivot points ───────────────────────────
-        pivot_window = max(2, len(ohlcv) // 20)  # adaptive window
+        pivot_window = max(2, len(ohlcv) // 20)
         pivot_highs: list[tuple[int, float]] = []
         pivot_lows: list[tuple[int, float]] = []
 
         for i in range(pivot_window, len(ohlcv) - pivot_window):
-            # Pivot high: highest high in window
             if highs[i] == max(highs[i - pivot_window: i + pivot_window + 1]):
                 pivot_highs.append((i, highs[i]))
-            # Pivot low: lowest low in window
             if lows[i] == min(lows[i - pivot_window: i + pivot_window + 1]):
                 pivot_lows.append((i, lows[i]))
 
         # ── Step 2: Cluster nearby levels ───────────────────────
         avg_range = float(np.mean(highs - lows))
-        tolerance = avg_range * 1.5  # cluster tolerance
+        tolerance = avg_range * 1.5
 
         def _cluster_levels(
             points: list[tuple[int, float]],
         ) -> list[dict[str, Any]]:
-            """Cluster nearby price points into levels."""
             if not points:
                 return []
-
             sorted_pts = sorted(points, key=lambda x: x[1])
             clusters: list[dict[str, Any]] = []
             current_cluster: list[tuple[int, float]] = [sorted_pts[0]]
-
             for pt in sorted_pts[1:]:
                 if pt[1] - current_cluster[-1][1] <= tolerance:
                     current_cluster.append(pt)
@@ -322,7 +350,6 @@ class PandasTAEngine(PricingEngine):
         def _summarize_cluster(
             points: list[tuple[int, float]],
         ) -> dict[str, Any]:
-            """Create a summary for a cluster of points."""
             prices = [p[1] for p in points]
             indices = [p[0] for p in points]
             avg_price = float(np.mean(prices))
@@ -347,11 +374,9 @@ class PandasTAEngine(PricingEngine):
         resistances: list[SRLevel] = []
 
         for cluster in high_clusters:
-            # Strength: weighted by touches and volume
             touch_score = cluster["touches"] / max_touches
             vol_score = min(cluster["volume"] / total_vol * 10, 1.0)
             strength = min(touch_score * 0.6 + vol_score * 0.4, 1.0)
-
             level = SRLevel(
                 price=round(cluster["price"], 8),
                 strength=round(strength, 4),
@@ -367,7 +392,6 @@ class PandasTAEngine(PricingEngine):
             touch_score = cluster["touches"] / max_touches
             vol_score = min(cluster["volume"] / total_vol * 10, 1.0)
             strength = min(touch_score * 0.6 + vol_score * 0.4, 1.0)
-
             level = SRLevel(
                 price=round(cluster["price"], 8),
                 strength=round(strength, 4),
@@ -379,11 +403,8 @@ class PandasTAEngine(PricingEngine):
             else:
                 supports.append(level)
 
-        # Deduplicate nearby levels (keep strongest)
         supports = _dedupe_levels(supports, tolerance)
         resistances = _dedupe_levels(resistances, tolerance)
-
-        # Sort: supports ascending, resistances ascending
         supports = tuple(sorted(supports, key=lambda x: x.price))
         resistances = tuple(sorted(resistances, key=lambda x: x.price))
 
@@ -400,7 +421,6 @@ def _dedupe_levels(levels: list[SRLevel], tolerance: float) -> tuple[SRLevel, ..
 
     for level in sorted_levels[1:]:
         if level.price - result[-1].price <= tolerance:
-            # Keep the one with more touches / higher strength
             if level.strength > result[-1].strength:
                 result[-1] = level
         else:

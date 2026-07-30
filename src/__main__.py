@@ -13,6 +13,7 @@ Usage:
 import argparse
 import asyncio
 import contextlib
+import os
 import sys
 import time
 from pathlib import Path
@@ -23,6 +24,85 @@ logger = structlog.get_logger()
 # Ensure data directory exists
 Path("data").mkdir(exist_ok=True)
 Path("logs").mkdir(exist_ok=True)
+
+
+# ═══════════════════════════════════════════════════════════════════════
+# SECURITY (H-010): Secret Validation
+# ═══════════════════════════════════════════════════════════════════════
+
+# Known weak/default values that must not be used in production
+_WEAK_SECRETS = {
+    "tsar-secret-key-change-me",
+    "tsar_redis_2026",
+    "change-me",
+    "secret",
+    "password",
+    "123456",
+    "default",
+    "test",
+    "← FILL IN",
+}
+
+
+def _validate_secrets() -> None:
+    """Validate that no critical secrets use weak/default values.
+
+    SECURITY (H-010): Refuses to start if secrets are empty or use
+    known weak defaults. This prevents running with insecure credentials.
+
+    Raises:
+        SystemExit: If any secret is missing or uses a known weak value.
+    """
+    errors: list[str] = []
+
+    # TSAR_API_KEY — required for API authentication
+    api_key = os.environ.get("TSAR_API_KEY", "").strip()
+    if not api_key:
+        errors.append(
+            "TSAR_API_KEY is empty. Generate one with: "
+            "python3 -c 'import secrets; print(secrets.token_urlsafe(48))'"
+        )
+    elif api_key.lower() in _WEAK_SECRETS:
+        errors.append(
+            f"TSAR_API_KEY uses a known weak default value. "
+            f"Generate a strong key with: "
+            f"python3 -c 'import secrets; print(secrets.token_urlsafe(48))'"
+        )
+    elif len(api_key) < 16:
+        errors.append(
+            f"TSAR_API_KEY is too short ({len(api_key)} chars). "
+            f"Use at least 16 characters."
+        )
+
+    # REDIS_PASSWORD — required for Redis auth
+    redis_pw = os.environ.get("REDIS_PASSWORD", "").strip()
+    if redis_pw and redis_pw.lower() in _WEAK_SECRETS:
+        errors.append(
+            "REDIS_PASSWORD uses a known weak default value. "
+            "Generate a strong password."
+        )
+
+    # Exchange secrets — critical for trading
+    for key_name in ["EXCHANGE_API_KEY", "EXCHANGE_SECRET"]:
+        val = os.environ.get(key_name, "").strip()
+        if val and val.lower() in _WEAK_SECRETS:
+            errors.append(
+                f"{key_name} uses a known weak default value. "
+                f"Use real credentials from your exchange."
+            )
+
+    if errors:
+        print("\n❌ SECURITY VALIDATION FAILED — refusing to start:\n", file=sys.stderr)
+        for i, err in enumerate(errors, 1):
+            print(f"  {i}. {err}", file=sys.stderr)
+        print(
+            "\nSet these values in your .env file, then try again.\n"
+            "See .env.example for guidance.\n",
+            file=sys.stderr,
+        )
+        raise SystemExit(1)
+
+    logger.info("✅ Secret validation passed")
 
 
 def parse_args() -> argparse.Namespace:
@@ -346,6 +426,11 @@ def run_dashboard(args: argparse.Namespace) -> None:
 
 
 def main() -> None:
+    # SECURITY (H-010): Validate secrets before any startup logic.
+    # This catches weak/missing secrets early and prevents running
+    # with insecure defaults.
+    _validate_secrets()
+
     args = parse_args()
 
     if args.dashboard:

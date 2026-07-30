@@ -36,6 +36,7 @@ from src.strategy.monte_carlo import (
     MonteCarloSimulator,
     PercentileDistribution,
 )
+from src.strategy.ml_scorer import MLScorer, ScorerConfig
 from src.strategy.walk_forward import (
     WalkForwardConfig,
     WalkForwardResult,
@@ -44,6 +45,8 @@ from src.strategy.walk_forward import (
 )
 
 __all__: list[str] = [
+    "MLScorer",
+    "ScorerConfig",
     "BacktestConfig",
     "BacktestEngine",
     "BacktestMetrics",

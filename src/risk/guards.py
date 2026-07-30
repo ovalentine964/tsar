@@ -15,10 +15,11 @@ from __future__ import annotations
 import logging
 import time
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from src.interfaces.types import Signal
+    from src.risk.guard_state import GuardStatePersistence
 
 logger = logging.getLogger(__name__)
 
@@ -85,14 +86,20 @@ class AntiBehavioralGuards:
 
     Tracks trade outcomes and applies progressive restrictions.
     All logic is rule-based — zero LLM involvement.
+
+    Can use either:
+      - In-memory GuardState (default, for testing)
+      - Persistent GuardStatePersistence (for production, survives restarts)
     """
 
     def __init__(
         self,
         config: GuardsConfig | None = None,
         state: GuardState | None = None,
+        persistent_state: GuardStatePersistence | None = None,
     ) -> None:
         self._config = config or GuardsConfig()
+        self._persistent = persistent_state
         self._state = state or GuardState()
 
     # ------------------------------------------------------------------
@@ -151,11 +158,35 @@ class AntiBehavioralGuards:
     def record_outcome(self, is_win: bool) -> None:
         """Record a trade outcome and update streak counters.
 
+        Uses persistent state if available (survives restarts).
+        Falls back to in-memory state for testing.
+
         Args:
             is_win: True if the trade was profitable, False otherwise.
         """
-        state = self._state
+        if self._persistent:
+            # Use persistent storage — survives process restart
+            if is_win:
+                self._persistent.record_win()
+            else:
+                self._persistent.record_loss()
+            self._persistent.append_trade_result(is_win)
+        else:
+            # In-memory fallback
+            state = self._state
+            if is_win:
+                state.consecutive_wins += 1
+                state.consecutive_losses = 0
+            else:
+                state.consecutive_losses += 1
+                state.consecutive_wins = 0
+                state.last_loss_timestamp = time.time()
+            state.trade_results.append(is_win)
+            if len(state.trade_results) > 100:
+                state.trade_results = state.trade_results[-100:]
 
+        # Update in-memory state for immediate checks
+        state = self._state
         if is_win:
             state.consecutive_wins += 1
             state.consecutive_losses = 0
@@ -163,10 +194,7 @@ class AntiBehavioralGuards:
             state.consecutive_losses += 1
             state.consecutive_wins = 0
             state.last_loss_timestamp = time.time()
-
         state.trade_results.append(is_win)
-
-        # Keep last 100 outcomes for analysis
         if len(state.trade_results) > 100:
             state.trade_results = state.trade_results[-100:]
 
@@ -177,6 +205,8 @@ class AntiBehavioralGuards:
 
     def reset(self) -> None:
         """Reset all guard state (e.g., after kill switch recovery)."""
+        if self._persistent:
+            self._persistent.reset()
         self._state = GuardState()
 
     # ------------------------------------------------------------------
@@ -184,33 +214,58 @@ class AntiBehavioralGuards:
     # ------------------------------------------------------------------
 
     def _check_revenge(self) -> str | None:
-        """Anti-Revenge: block trading after consecutive losses + cooldown."""
-        cfg = self._config
-        state = self._state
+        """Anti-Revenge: block trading after consecutive losses + cooldown.
 
-        if state.consecutive_losses < cfg.anti_revenge_loss_streak:
+        Uses persistent state if available to survive restarts.
+        """
+        cfg = self._config
+
+        # Get state from persistent or in-memory
+        if self._persistent:
+            consec_losses = self._persistent.get_consecutive_losses()
+            is_cooling = self._persistent.is_on_cooldown()
+            remaining_sec = self._persistent.get_cooldown_remaining_seconds()
+        else:
+            state = self._state
+            consec_losses = state.consecutive_losses
+            is_cooling = False
+            remaining_sec = 0.0
+            if state.last_loss_timestamp > 0:
+                elapsed = time.time() - state.last_loss_timestamp
+                cooldown_sec = cfg.anti_revenge_cooldown_minutes * 60
+                if elapsed < cooldown_sec:
+                    is_cooling = True
+                    remaining_sec = cooldown_sec - elapsed
+
+        if consec_losses < cfg.anti_revenge_loss_streak:
             return None
 
-        # Check if cooldown has elapsed
-        if state.last_loss_timestamp > 0:
-            elapsed_seconds = time.time() - state.last_loss_timestamp
-            cooldown_seconds = cfg.anti_revenge_cooldown_minutes * 60
+        # Check cooldown
+        if is_cooling and remaining_sec > 0:
+            remaining_min = int(remaining_sec / 60) + 1
+            return (
+                f"Anti-Revenge: {consec_losses} consecutive losses. "
+                f"Cooldown active — {remaining_min} min remaining."
+            )
 
-            if elapsed_seconds < cooldown_seconds:
-                remaining = int((cooldown_seconds - elapsed_seconds) / 60) + 1
-                return (
-                    f"Anti-Revenge: {state.consecutive_losses} consecutive losses. "
-                    f"Cooldown active — {remaining} min remaining."
-                )
-            else:
-                # Cooldown elapsed, allow trading
-                return None
+        # Persistent cooldown check (overrides in-memory for restart survival)
+        if self._persistent and self._persistent.is_on_cooldown():
+            remaining_min = int(self._persistent.get_cooldown_remaining_seconds() / 60) + 1
+            return (
+                f"Anti-Revenge: {consec_losses} consecutive losses. "
+                f"Cooldown active — {remaining_min} min remaining."
+            )
 
-        # Losses but no timestamp (shouldn't happen, but be safe)
-        return (
-            f"Anti-Revenge: {state.consecutive_losses} consecutive losses. "
-            f"Cooldown of {cfg.anti_revenge_cooldown_minutes} min required."
-        )
+        # Losses exceeded threshold but no cooldown active — set one
+        if consec_losses >= cfg.anti_revenge_loss_streak:
+            if self._persistent:
+                self._persistent.set_cooldown(cfg.anti_revenge_cooldown_minutes)
+            return (
+                f"Anti-Revenge: {consec_losses} consecutive losses. "
+                f"Cooldown of {cfg.anti_revenge_cooldown_minutes} min activated."
+            )
+
+        return None
 
     def _check_fomo(self, signal: Signal) -> str | None:
         """Anti-FOMO: block low-confidence signals."""
@@ -227,15 +282,20 @@ class AntiBehavioralGuards:
     def _check_greed(self) -> tuple[float, str]:
         """Anti-Greed: cap sizing during win streaks.
 
+        Uses persistent state if available.
         Returns (size_multiplier, warning_message).
         """
         cfg = self._config
-        state = self._state
+        consec_wins = (
+            self._persistent.get_consecutive_wins()
+            if self._persistent
+            else self._state.consecutive_wins
+        )
 
-        if state.consecutive_wins >= cfg.anti_greed_win_streak:
+        if consec_wins >= cfg.anti_greed_win_streak:
             return (
                 cfg.anti_greed_sizing_factor,
-                f"Anti-Greed: {state.consecutive_wins}-win streak detected. "
+                f"Anti-Greed: {consec_wins}-win streak detected. "
                 f"Position size capped at {cfg.anti_greed_sizing_factor:.0%}.",
             )
 
@@ -244,22 +304,27 @@ class AntiBehavioralGuards:
     def _check_overconfidence(self) -> tuple[float, str]:
         """Anti-Overconfidence: warn and cap after extended win streaks.
 
+        Uses persistent state if available.
         Returns (size_multiplier, warning_message).
         """
         cfg = self._config
-        state = self._state
+        consec_wins = (
+            self._persistent.get_consecutive_wins()
+            if self._persistent
+            else self._state.consecutive_wins
+        )
 
-        if state.consecutive_wins >= cfg.anti_overconfidence_win_streak:
+        if consec_wins >= cfg.anti_overconfidence_win_streak:
             # More aggressive cap at higher streaks
-            if state.consecutive_wins >= 10:
+            if consec_wins >= 10:
                 return (
                     0.5,
-                    f"Anti-Overconfidence: {state.consecutive_wins}-win streak! "
+                    f"Anti-Overconfidence: {consec_wins}-win streak! "
                     f"Position size capped at 50%.",
                 )
             return (
                 0.7,
-                f"Anti-Overconfidence: {state.consecutive_wins}-win streak. "
+                f"Anti-Overconfidence: {consec_wins}-win streak. "
                 f"Position size capped at 70%.",
             )
 

@@ -4,7 +4,14 @@
 # Stage 1: Build dependencies
 # Stage 2: Lean production image
 
-# --- Stage 1: Builder ---
+# --- Stage 1a: Rust Builder ---
+FROM rust:1.79-slim AS rust-builder
+
+WORKDIR /build/rust
+COPY rust/ ./
+RUN cargo build --release 2>/dev/null || echo "Rust build skipped (no compatible deps)"
+
+# --- Stage 1b: Python Builder ---
 FROM python:3.12-slim AS builder
 
 WORKDIR /build
@@ -18,6 +25,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 COPY pyproject.toml .
 RUN pip install --no-cache-dir --prefix=/install .
+
+# Copy Rust release artifacts if available
+COPY --from=rust-builder /build/rust/target/release/ /build/rust-binaries/ 2>/dev/null || true
 
 # --- Stage 2: Production ---
 FROM python:3.12-slim AS production
@@ -64,6 +74,9 @@ ENV PYTHONUNBUFFERED=1 \
 # Health check — hits the FastAPI /health endpoint
 HEALTHCHECK --interval=30s --timeout=10s --start-period=15s --retries=3 \
     CMD curl -f http://localhost:8000/health || exit 1
+
+# Graceful shutdown signal
+STOPSIGNAL SIGTERM
 
 # Use tini as PID 1 for proper signal handling
 ENTRYPOINT ["tini", "--"]

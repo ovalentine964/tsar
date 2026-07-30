@@ -73,6 +73,9 @@ class Orchestrator(BaseAgent):
         self._agent_health: dict[str, dict[str, Any]] = {}
         self._last_health_check: dict[str, float] = {}
 
+        # Flywheel orchestrator reference (for trade event forwarding)
+        self._flywheel_orchestrator = None
+
         # Pipeline state
         self._scan_interval = config.get("agents", {}).get("orchestrator", {}).get(
             "scan_interval_s", 300
@@ -96,6 +99,10 @@ class Orchestrator(BaseAgent):
         self._event_bus = EventBus()
         self._trade_count = 0
 
+        # Wire event bus to flywheel orchestrator for trade forwarding
+        self._event_bus.subscribe("tsar.trade.executed", self._forward_to_flywheel)
+        self._event_bus.subscribe("tsar.trade.recorded", self._forward_to_flywheel)
+
         # Graceful shutdown
         self._shutdown_event = asyncio.Event()
 
@@ -111,6 +118,8 @@ class Orchestrator(BaseAgent):
             "signal_scout",
             "risk_guardian",
             "execution_sniper",
+            "strategy_geneticist",
+            "flywheel_orchestrator",
         ])
 
         # Shared pub/sub for all agents
@@ -123,6 +132,9 @@ class Orchestrator(BaseAgent):
                 self._agents[agent_name] = agent
                 await agent.start()
                 logger.info("  ✓ Started %s", agent_name)
+                # Track flywheel orchestrator reference for trade forwarding
+                if agent_name == "flywheel_orchestrator":
+                    self._flywheel_orchestrator = agent
             else:
                 logger.warning("  ✗ Failed to create agent: %s", agent_name)
 
@@ -160,15 +172,22 @@ class Orchestrator(BaseAgent):
         await super().stop()
 
     def _load_agent_registry(self) -> None:
-        """Load agent classes into the registry."""
+        """Load agent classes into the registry.
+
+        Includes StrategyGeneticist for the flywheel EXTRACT→ADAPT pipeline.
+        """
         from src.agents.execution_sniper import ExecutionSniper
+        from src.agents.flywheel_orchestrator import FlywheelOrchestrator
         from src.agents.risk_guardian import RiskGuardian
         from src.agents.signal_scout import SignalScout
+        from src.agents.strategy_geneticist import StrategyGeneticist
 
         self.AGENT_REGISTRY = {
             "signal_scout": SignalScout,
             "risk_guardian": RiskGuardian,
             "execution_sniper": ExecutionSniper,
+            "strategy_geneticist": StrategyGeneticist,
+            "flywheel_orchestrator": FlywheelOrchestrator,
         }
 
     def _create_agent(
@@ -379,11 +398,24 @@ class Orchestrator(BaseAgent):
         except Exception as e:
             logger.error("Shadow extraction cycle failed: %s", e)
 
+    async def _forward_to_flywheel(self, data: dict[str, Any]) -> None:
+        """Forward trade events to the FlywheelOrchestrator if registered.
+
+        This connects the orchestrator's trade event bus to the
+        flywheel's trade monitoring, enabling automatic flywheel
+        activation after trade completions.
+        """
+        if self._flywheel_orchestrator and hasattr(self._flywheel_orchestrator, "_on_trade_executed"):
+            try:
+                await self._flywheel_orchestrator._on_trade_executed(data)
+            except Exception as e:
+                logger.warning("Failed to forward trade to flywheel: %s", e)
+
     async def handle_event(self, stream: str, event: CloudEvent) -> None:
         """Handle events from subscribed streams.
 
         - health: Update agent health tracking
-        - trades: Track trade execution results
+        - trades: Track trade execution results and forward to flywheel
         """
         if stream == "health" and event.type == "tsar.agent.heartbeat.v1":
             agent_id = event.data.get("agent_id", "unknown")
@@ -404,21 +436,10 @@ class Orchestrator(BaseAgent):
                 )
 
                 # Flywheel: publish trade event to event bus
+                # The FlywheelOrchestrator subscribes to these events
                 await self._event_bus.publish("tsar.trade.executed", event.data)
                 await self._event_bus.publish("tsar.trade.recorded", event.data)
 
-                # Flywheel: periodic shadow extraction (every 10 trades)
-                if self._trade_count % 10 == 0 and self._shadow_extractor and self._rule_validator and self._genome_mutator:
-                    try:
-                        rules = await self._shadow_extractor.extract(min_trades=5, min_win_rate=0.55)
-                        if rules and rules.rules:
-                            for rule in rules.rules:
-                                validated = await self._rule_validator.validate_batch([rule])
-                                for vr in validated:
-                                    if vr.validation_status == "passed":
-                                        await self._genome_mutator.propose_mutations([vr])
-                    except Exception as e:
-                        logger.warning("Flywheel shadow extraction failed: %s", e)
             elif event.type == "tsar.trade.failed.v1":
                 self._trades_failed += 1
                 logger.warning(

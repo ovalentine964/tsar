@@ -14,14 +14,29 @@ router = APIRouter()
 
 @router.get("/trades")
 async def get_trades(limit: int = 100, symbol: str | None = None):
-    """Get trade history."""
-    return {"trades": [], "total": 0}
+    """Get trade history from TradeMemory."""
+    from src.knowledge.trade_memory import TradeMemory
+    import os
+
+    db_path = os.environ.get("TSAR_DB_PATH", "./data/tsar.db")
+    trade_mem = TradeMemory(db_path)
+    trades = trade_mem.list_trades(symbol=symbol, limit=limit)
+    return {
+        "trades": [t.to_dict() for t in trades],
+        "total": trade_mem.get_trade_count(),
+    }
 
 
 @router.get("/strategies")
 async def get_strategies():
-    """Get strategy performance."""
-    return {"strategies": []}
+    """Get strategy performance from TradeMemory."""
+    from src.knowledge.trade_memory import TradeMemory
+    import os
+
+    db_path = os.environ.get("TSAR_DB_PATH", "./data/tsar.db")
+    trade_mem = TradeMemory(db_path)
+    summaries = trade_mem.get_strategy_summary()
+    return {"strategies": summaries}
 
 
 @router.post("/kill-switch")

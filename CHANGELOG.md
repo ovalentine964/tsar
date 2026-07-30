@@ -2,6 +2,61 @@
 
 All notable changes to TSAR are documented here.
 
+## [0.6.0] — 2026-07-30
+
+### Added
+- **NVIDIA Skills Integration**: 5 GPU-accelerated skills — cuFOLIO (portfolio optimization), cuOpt (multi-objective optimization), RAG Blueprint (enhanced retrieval), Nemo Evaluator (output quality), Nemotron Policy (risk policy generation)
+- **Flywheel Orchestrator**: Auto-triggers the TRADE → OBSERVE → REFLECT → EXTRACT → ADAPT loop
+- **Sentiment Agent**: Aggregates sentiment from CryptoPanic API + Fear & Greed Index
+- **ChromaDB Store**: Vector similarity search for semantic pattern matching
+- **Knowledge Graph**: Cross-store graph traversal with recursive CTEs
+- **RAG Blueprint Search**: NVIDIA-enhanced retrieval with semantic chunking and reranking
+- **Paper Execution Engine**: Simulated order execution against live market data
+- **cuFOLIO Backend**: GPU-accelerated Mean-CVaR portfolio optimization
+- **cuOpt Optimizer**: Multi-objective strategy parameter optimization
+- **ML Signal Scorer**: XGBoost/LightGBM hybrid signal scoring
+- **LLM Evaluation Framework**: Signal accuracy and prediction quality tracking
+- **Token Counter**: Accurate token counting with tiktoken (replaces heuristic)
+- **Prometheus Exporter**: Full metrics export with graceful degradation
+- **Watchdog**: External process health monitor for kill switch reliability
+- **Nemotron Policy Generator**: AI-generated adaptive risk policies
+- **DB Connection Pool**: Thread-safe SQLite connection pool with WAL mode
+- **JWT Authentication**: API endpoints protected with token-based auth
+- **CORS Fix**: Strict origin validation via `TSAR_CORS_ORIGINS`
+- **Telegram Auth**: Chat ID verification for bot commands
+- **Micro-capital Mode**: Adjusted risk parameters for accounts under $50
+- **Fee-Aware Sizing**: Kelly calculation accounts for exchange fees
+- **Phased Recovery**: Graduated re-entry after circuit breaker trips
+- **Economic Blackout**: Auto-block trading around FOMC, CPI, NFP events
+- **Grafana Dashboards**: Pre-built monitoring dashboards
+- **Prometheus Config**: Scraping configuration for all TSAR metrics
+- **Database Migrations**: Junction tables and temporal regime graph
+- **Benchmark Script**: LLM performance benchmarking utility
+- **config/nvidia_skills.yaml**: Centralized NVIDIA skills configuration
+
+### Changed
+- **17 council reviews** completed — 72 issues found and addressed
+- **12 fix teams** executed across security, risk, strategy, AI, infrastructure, knowledge, market, and NVIDIA domains
+- `config/models.yaml` updated with NVIDIA NIM provider and model definitions
+- `config/risk.yaml` consolidated as single source of truth for all risk parameters
+- `config/tsar.yaml` updated with current working defaults
+- `.env.example` updated with all required variables (NVIDIA, CORS, Redis, TSAR API)
+- `README.md` overhauled: NVIDIA skills section, updated architecture, removed OANDA/MT5 references
+- Agent count updated from 10 to 12 (Flywheel Orchestrator, Sentiment Agent)
+- Knowledge store count updated from 5 to 6 (ChromaDB added)
+- LLM routing updated with NVIDIA NIM as primary for Tier 3 tasks
+- Architecture diagram updated with new agents and components
+
+### Fixed
+- Security: JWT auth, CORS origin validation, Telegram chat ID verification
+- Risk: Fee-aware Kelly sizing, micro-capital mode, phased recovery protocol
+- Strategy: HMM regime detection hardening, multi-timeframe correlation
+- AI: Sentiment pipeline, XGBoost scoring, hallucination mitigation
+- Market: WebSocket streaming reliability, paper execution engine
+- Infrastructure: CI/CD for all languages, Docker hardening, monitoring
+- Knowledge: ChromaDB integration, graph traversal, temporal regime graph
+- Kill Switch: Watchdog process, dual-write, stale-process detection
+
 ## [0.5.0] — 2026-07-27
 
 ### Added

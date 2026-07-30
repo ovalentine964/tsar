@@ -56,6 +56,21 @@ rules:
     - buy
     - sell
 
+  # Paper trading gate (M-001)
+  # Minimum paper trades required before live trading.
+  # Set to e.g. 100 to require 100 paper trades before going live.
+  min_paper_trades: 0
+
+  # Minimum days in paper mode before live trading.
+  # Set to e.g. 30 to require 30 days of paper trading.
+  min_paper_days: 0
+
+  # Auto-tracked: number of paper trades completed.
+  paper_trades_completed: 0
+
+  # Auto-tracked: ISO date when paper trading started.
+  paper_start_date: ""
+
 # --- Mandate Lifecycle Metadata ---
 # (Managed automatically — do not edit manually)
 status: draft
