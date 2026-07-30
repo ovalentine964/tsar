@@ -56,7 +56,8 @@ class TestBasicSizing:
         assert result.quantity > 0
         assert result.notional_value > 0
         assert result.risk_amount > 0
-        assert result.method == "half_kelly"
+        # Method may be fee_adjusted_half_kelly when fee adjustment is enabled (default)
+        assert "half_kelly" in result.method
 
     def test_risk_amount_capped_at_2_pct(self, sizer):
         """Risk per trade should not exceed 2% of equity."""

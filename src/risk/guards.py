@@ -171,21 +171,8 @@ class AntiBehavioralGuards:
             else:
                 self._persistent.record_loss()
             self._persistent.append_trade_result(is_win)
-        else:
-            # In-memory fallback
-            state = self._state
-            if is_win:
-                state.consecutive_wins += 1
-                state.consecutive_losses = 0
-            else:
-                state.consecutive_losses += 1
-                state.consecutive_wins = 0
-                state.last_loss_timestamp = time.time()
-            state.trade_results.append(is_win)
-            if len(state.trade_results) > 100:
-                state.trade_results = state.trade_results[-100:]
 
-        # Update in-memory state for immediate checks
+        # Update in-memory state for immediate checks (always, but only once)
         state = self._state
         if is_win:
             state.consecutive_wins += 1
