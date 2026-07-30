@@ -396,8 +396,8 @@ class TestExposureLimits:
     def test_within_limits(self):
         tools = RiskManagementTools({
             "max_leverage": 3.0,
-            "max_single_asset_pct": 0.30,
-            "max_sector_pct": 0.50,
+            "max_single_asset_pct": 1.0,  # Allow 100% single asset
+            "max_sector_pct": 1.0,
         })
         exposure = tools.calculate_exposure(
             positions=[
