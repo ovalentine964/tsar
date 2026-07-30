@@ -123,24 +123,23 @@ fn connect(&mut self) -> PyResult<()> {
 }
 ```
 
-**After (fixed):**
+**After (fixed — uses pre-existing `runtime.rs`):**
 ```rust
-// ✅ Single persistent runtime, shared across all calls
-static TOKIO_RT: OnceLock<tokio::runtime::Runtime> = OnceLock::new();
+// ✅ Single persistent runtime via once_cell::sync::Lazy
+use once_cell::sync::Lazy;
+use tokio::runtime::Runtime;
 
-pub(crate) fn get_runtime() -> &'static tokio::runtime::Runtime {
-    TOKIO_RT.get_or_init(|| {
-        tokio::runtime::Builder::new_multi_thread()
-            .worker_threads(4)
-            .enable_all()
-            .thread_name("tsar-worker")
-            .build()
-            .expect("Failed to create tokio runtime")
-    })
-}
+pub static RUNTIME: Lazy<Runtime> = Lazy::new(|| {
+    tokio::runtime::Builder::new_multi_thread()
+        .worker_threads(4)
+        .enable_all()
+        .thread_name("tsar-pyo3")
+        .build()
+        .expect("Failed to create shared tokio runtime")
+});
 
 fn connect(&mut self) -> PyResult<()> {
-    get_runtime().block_on(self.inner.connect())...
+    RUNTIME.block_on(self.inner.connect())...
 }
 ```
 
@@ -266,7 +265,7 @@ cargo build --release # Production build
 | `rust/crates/order-executor/src/client.rs` | **NEW** — Binance REST client |
 | `rust/crates/order-executor/src/executor.rs` | **Rewritten** — Paper + Live dual-mode |
 | `rust/crates/order-executor/src/safety.rs` | **Rewritten** — Proper types |
-| `rust/crates/pyo3-bindings/src/lib.rs` | **Rewritten** — Shared runtime, new classes |
+| `rust/crates/pyo3-bindings/src/lib.rs` | **Rewritten** — Added compute module, new classes |
 | `rust/crates/pyo3-bindings/src/ws_bridge.rs` | **Rewritten** — Uses shared runtime |
 | `rust/crates/pyo3-bindings/src/tick_bridge.rs` | **Rewritten** — VwapCalculator, TickStats |
 | `rust/crates/pyo3-bindings/src/order_bridge.rs` | **Rewritten** — Paper/Live modes, shared runtime |

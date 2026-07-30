@@ -29,7 +29,18 @@ static int to_c_code(tsar::pricing::PricingError e) {
 }
 
 static int to_c_code(tsar::fix::FIXError e) {
-    return static_cast<int>(e);
+    using FE = tsar::fix::FIXError;
+    switch (e) {
+        case FE::Ok:              return TSAR_OK;
+        case FE::NotConnected:    return TSAR_ERR_NOT_CONNECTED;
+        case FE::SessionNotFound: return TSAR_ERR_INDEX_OUT_OF_RANGE;
+        case FE::SendFailed:      return TSAR_ERR_SEND_FAILED;
+        case FE::InvalidMessage:  return TSAR_ERR_INVALID_MSG;
+        case FE::LogonRejected:   return TSAR_ERR_LOGON_REJECTED;
+        case FE::Timeout:         return TSAR_ERR_TIMEOUT;
+        case FE::InvalidInput:    return TSAR_ERR_INVALID_INPUT;
+        default:                  return TSAR_ERR_COMPUTATION;
+    }
 }
 
 // ---------------------------------------------------------------------------
