@@ -7,8 +7,9 @@
 //!
 //! ## Architecture
 //!
-//! Uses a **single persistent tokio runtime** shared across all async operations,
-//! avoiding the anti-pattern of creating a new runtime per method call.
+//! Uses a **single persistent tokio runtime** (via `runtime.rs`) shared across
+//! all async operations, avoiding the anti-pattern of creating a new runtime
+//! per method call.
 //!
 //! ## Python Usage
 //!
@@ -47,11 +48,17 @@ fn trading_rs(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<tick_bridge::PyTickProcessor>()?;
     m.add_class::<tick_bridge::PySpreadCalculator>()?;
     m.add_class::<tick_bridge::PyRingBuffer>()?;
+    m.add_class::<tick_bridge::PyVwapCalculator>()?;
+    m.add_class::<tick_bridge::PyTickStats>()?;
 
     // ── Order Executor ───────────────────────────────────────────
     m.add_class::<order_bridge::PyOrderExecutor>()?;
 
-    // ── Compute Functions (Rust-accelerated Python hot paths) ───
+    // ── Utility Functions ────────────────────────────────────────
+    m.add_function(wrap_pyfunction!(version, m)?)?;
+    m.add_function(wrap_pyfunction!(ping, m)?)?;
+
+    // ── Compute Functions (migrated from Python) ─────────────────
     m.add_function(wrap_pyfunction!(compute::correlation_matrix_py, m)?)?;
     m.add_function(wrap_pyfunction!(compute::rolling_correlation_py, m)?)?;
     m.add_function(wrap_pyfunction!(compute::monte_carlo_simulate_py, m)?)?;
@@ -59,10 +66,6 @@ fn trading_rs(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(compute::garman_klass_vol_py, m)?)?;
     m.add_function(wrap_pyfunction!(compute::garch_forecast_py, m)?)?;
     m.add_function(wrap_pyfunction!(compute::batch_factors_py, m)?)?;
-
-    // ── Utility Functions ────────────────────────────────────────
-    m.add_function(wrap_pyfunction!(version, m)?)?;
-    m.add_function(wrap_pyfunction!(ping, m)?)?;
 
     tracing::info!("trading_rs module initialized");
     Ok(())
