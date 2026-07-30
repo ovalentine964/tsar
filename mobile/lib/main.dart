@@ -11,9 +11,18 @@ import 'providers/strategy_provider.dart';
 import 'providers/knowledge_provider.dart';
 import 'providers/settings_provider.dart';
 import 'services/api_service.dart';
+import 'services/websocket_service.dart';
+import 'services/notification_service.dart';
 
-void main() {
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+
   final apiService = ApiService();
+  final wsService = WebSocketService(apiService);
+  final notificationService = NotificationService();
+
+  // Initialize notifications (non-blocking)
+  notificationService.initialize();
 
   runApp(
     MultiProvider(
@@ -22,11 +31,13 @@ void main() {
         ChangeNotifierProvider(create: (_) => DashboardProvider(apiService)),
         ChangeNotifierProvider(create: (_) => TradeProvider(apiService)),
         ChangeNotifierProvider(create: (_) => PortfolioProvider(apiService)),
-        ChangeNotifierProvider(create: (_) => RiskProvider(apiService)),
+        ChangeNotifierProvider(create: (_) => RiskProvider(apiService, notificationService)),
         ChangeNotifierProvider(create: (_) => MandateProvider(apiService)),
         ChangeNotifierProvider(create: (_) => FactorProvider(apiService)),
         ChangeNotifierProvider(create: (_) => StrategyProvider(apiService)),
         ChangeNotifierProvider(create: (_) => KnowledgeProvider(apiService)),
+        Provider.value(value: wsService),
+        Provider.value(value: notificationService),
       ],
       child: const TsarApp(),
     ),

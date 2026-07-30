@@ -66,6 +66,95 @@ _CCXT_AUTH_ERRORS = (
 )
 _CCXT_RATE_LIMIT_ERRORS = (ccxt.RateLimitExceeded,)
 _CCXT_NOT_FOUND_ERRORS = (ccxt.ExchangeError,)
+
+# Freqtrade-inspired retry constants
+API_RETRY_COUNT = 4  # Max retries (called RETRY_COUNT + 1 times total)
+API_FETCH_ORDER_RETRY_COUNT = 5
+
+
+def _calculate_backoff(retrycount: int, max_retries: int) -> float:
+    """Calculate backoff delay using Freqtrade's quadratic formula.
+
+    Formula: (max_retries - retrycount)^2 + 1
+    Produces delays like: retry4->2s, retry3->5s, retry2->10s, retry1->17s
+    """
+    return (max_retries - retrycount) ** 2 + 1
+
+
+# ═══════════════════════════════════════════════════════════════════════
+# PRECISION HANDLING (from Freqtrade exchange_utils.py)
+# ═══════════════════════════════════════════════════════════════════════
+
+def _amount_to_precision(
+    amount: float,
+    amount_precision: float | None,
+    precision_mode: int | None,
+) -> float:
+    """Truncate amount to exchange-accepted precision.
+
+    Mirrors Freqtrade's amount_to_precision() from exchange_utils.py.
+    Uses ccxt's decimal_to_precision with TRUNCATE mode.
+    """
+    if amount_precision is not None and precision_mode is not None:
+        precision = int(amount_precision) if precision_mode != TICK_SIZE else amount_precision
+        amount = float(
+            decimal_to_precision(
+                amount,
+                TRUNCATE,
+                precision,
+                precision_mode,
+            )
+        )
+    return amount
+
+
+def _price_to_precision(
+    price: float,
+    price_precision: float | None,
+    precision_mode: int | None,
+    *,
+    rounding_mode: int = ROUND,
+) -> float:
+    """Round price to exchange-accepted precision.
+
+    Mirrors Freqtrade's price_to_precision() from exchange_utils.py.
+    Supports ROUND_UP/ROUND_DOWN for stoploss calculations.
+    """
+    if price_precision is not None and precision_mode is not None:
+        if rounding_mode not in (ROUND_UP, ROUND_DOWN):
+            return float(
+                decimal_to_precision(
+                    price,
+                    rounding_mode,
+                    int(price_precision) if precision_mode != TICK_SIZE else price_precision,
+                    precision_mode,
+                )
+            )
+
+        if precision_mode == TICK_SIZE:
+            from decimal import Decimal
+            prec = Decimal(str(price_precision))
+            dec = Decimal(str(price))
+            missing = dec % prec
+            if missing != Decimal('0'):
+                if rounding_mode == ROUND_UP:
+                    res = dec - missing + prec
+                else:
+                    res = dec - missing
+                return round(float(str(res)), 14)
+            return price
+        elif precision_mode == DECIMAL_PLACES:
+            from math import ceil, floor
+            ndigits = round(price_precision)
+            ticks = price * (10 ** ndigits)
+            if rounding_mode == ROUND_UP:
+                return ceil(ticks) / (10 ** ndigits)
+            if rounding_mode == ROUND_DOWN:
+                return floor(ticks) / (10 ** ndigits)
+
+    return price
+
+
 def _utcnow() -> datetime:
     """Return timezone-aware UTC now."""
     return datetime.now(UTC)
@@ -1027,38 +1116,28 @@ class CcxtGateway(ExchangeGateway):
     async def _retry_on_transient(self, coro_func: Any, *args: Any, **kwargs: Any) -> Any:
         """Execute a ccxt call with retry on transient errors.
 
-        Retries on network errors, timeouts, and rate limits with
-        exponential backoff. Does NOT retry on auth or symbol errors.
-
-        Args:
-            coro_func: Async callable (e.g. self._exchange.fetch_ticker).
-            *args: Positional args to pass to coro_func.
-            **kwargs: Keyword args to pass to coro_func.
-
-        Returns:
-            The result of coro_func.
-
-        Raises:
-            The last exception if all retries are exhausted.
+        Uses Freqtrade-style quadratic backoff: (max_retries - count)^2 + 1.
+        Retries on network errors, timeouts, and rate limits.
+        Does NOT retry on auth or symbol errors.
         """
         last_exc: Exception | None = None
 
         for attempt in range(self._max_retries + 1):
             try:
-                # Rate limit check
                 await self._enforce_rate_limit()
-
-                # Track request timestamp
                 async with self._rate_limit_lock:
                     self._request_timestamps.append(time.monotonic())
-
                 return await coro_func(*args, **kwargs)
 
             except _CCXT_RATE_LIMIT_ERRORS as exc:
                 last_exc = exc
-                # Respect Retry-After header if available
                 retry_after = getattr(exc, "retry_after", None)
-                wait_s = float(retry_after) if retry_after else min(2.0 ** (attempt + 1), 30.0)
+                if retry_after:
+                    wait_s = float(retry_after)
+                else:
+                    # Freqtrade-style quadratic backoff
+                    remaining = self._max_retries - attempt
+                    wait_s = _calculate_backoff(remaining, self._max_retries)
                 logger.warning(
                     "Rate limited (attempt %d/%d), waiting %.1fs: %s",
                     attempt + 1,
@@ -1071,7 +1150,9 @@ class CcxtGateway(ExchangeGateway):
             except _CCXT_NETWORK_ERRORS as exc:
                 last_exc = exc
                 if attempt < self._max_retries:
-                    wait_s = min(2.0 ** attempt, 10.0)
+                    # Freqtrade-style quadratic backoff
+                    remaining = self._max_retries - attempt
+                    wait_s = _calculate_backoff(remaining, self._max_retries)
                     logger.warning(
                         "Network error (attempt %d/%d), retrying in %.1fs: %s",
                         attempt + 1,
@@ -1088,10 +1169,8 @@ class CcxtGateway(ExchangeGateway):
                     )
 
             except (ccxt.AuthenticationError, ccxt.BadSymbol, ccxt.InvalidOrder):
-                # Don't retry auth errors, bad symbols, or invalid orders
                 raise
 
-        # All retries exhausted
         assert last_exc is not None
         raise last_exc
 

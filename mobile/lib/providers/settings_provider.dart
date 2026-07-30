@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -18,34 +19,51 @@ class SettingsProvider extends ChangeNotifier {
   String? _apiKey;
   bool _autoRefresh = true;
   int _refreshIntervalSeconds = 30;
+  bool _initialized = false;
 
   bool get isDarkMode => _isDarkMode;
   String get baseUrl => _baseUrl;
   String? get apiKey => _apiKey;
   bool get autoRefresh => _autoRefresh;
   int get refreshIntervalSeconds => _refreshIntervalSeconds;
+  bool get initialized => _initialized;
+
+  /// Future that completes when settings have been loaded from disk
+  /// and the ApiService has been configured. Other providers / screens
+  /// should await this before making API calls.
+  final Completer<void> _readyCompleter = Completer<void>();
+  Future<void> get ready => _readyCompleter.future;
 
   SettingsProvider(this._apiService) {
     _load();
   }
 
   Future<void> _load() async {
-    final prefs = await SharedPreferences.getInstance();
-    _isDarkMode = prefs.getBool(_keyDarkMode) ?? true;
-    _baseUrl = prefs.getString(_keyBaseUrl) ?? 'http://localhost:8000';
-    _autoRefresh = prefs.getBool(_keyAutoRefresh) ?? true;
-    _refreshIntervalSeconds = prefs.getInt(_keyRefreshInterval) ?? 30;
-
-    // Read API key from secure storage
     try {
-      _apiKey = await _secureStorage.read(key: _keyApiKeySecure);
-    } catch (_) {
-      _apiKey = null;
+      final prefs = await SharedPreferences.getInstance();
+      _isDarkMode = prefs.getBool(_keyDarkMode) ?? true;
+      _baseUrl = prefs.getString(_keyBaseUrl) ?? 'http://localhost:8000';
+      _autoRefresh = prefs.getBool(_keyAutoRefresh) ?? true;
+      _refreshIntervalSeconds = prefs.getInt(_keyRefreshInterval) ?? 30;
+
+      // Read API key from secure storage
+      try {
+        _apiKey = await _secureStorage.read(key: _keyApiKeySecure);
+      } catch (_) {
+        _apiKey = null;
+      }
+
+      // Configure ApiService with loaded settings — this unblocks all API calls
+      _apiService.configure(baseUrl: _baseUrl, apiKey: _apiKey);
+    } catch (e) {
+      // If loading fails, still configure with defaults so the app doesn't hang
+      _apiService.configure(baseUrl: _baseUrl, apiKey: null);
     }
 
-    // Configure ApiService with loaded settings
-    _apiService.configure(baseUrl: _baseUrl, apiKey: _apiKey);
-
+    _initialized = true;
+    if (!_readyCompleter.isCompleted) {
+      _readyCompleter.complete();
+    }
     notifyListeners();
   }
 
