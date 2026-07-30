@@ -243,7 +243,13 @@ class AntiBehavioralGuards:
                 f"Cooldown active — {remaining_min} min remaining."
             )
 
-        # Losses exceeded threshold but no cooldown active — set one
+        # Losses exceeded threshold but cooldown already elapsed — allow trade
+        # The cooldown served its purpose. Don't re-activate it.
+        # The streak will reset when the next win is recorded.
+        if consec_losses >= cfg.anti_revenge_loss_streak and not is_cooling:
+            return None
+
+        # First time hitting the threshold — activate cooldown
         if consec_losses >= cfg.anti_revenge_loss_streak:
             if self._persistent:
                 self._persistent.set_cooldown(cfg.anti_revenge_cooldown_minutes)

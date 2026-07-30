@@ -7,7 +7,7 @@
 [![Mobile](https://img.shields.io/badge/Mobile-Flutter-blue?style=for-badge)]()
 [![NVIDIA](https://img.shields.io/badge/NVIDIA-Skills_Integrated-76B900?style=for-badge)]()
 [![License](https://img.shields.io/badge/License-MIT-blue?style=for-badge)]()
-[![Status](https://img.shields.io/badge/Status-v0.6.0-green?style=for-badge)]()
+[![Status](https://img.shields.io/badge/Status-v0.1.0-green?style=for-badge)]()
 
 ## What Is TSAR?
 
@@ -37,8 +37,8 @@ TRADE → OBSERVE → REFLECT → EXTRACT → ADAPT → BETTER TRADE
  ✅ Phase 4   — Factor Library (IC/IR scoring, category taxonomy, strategy factors)
  ✅ Integration Wiring — All components connected via CloudEvents + FastAPI
  ✅ Mobile App — Flutter app with full API integration (28+ endpoints)
- ✅ Engineering — Production hardening, deployment (v0.5.0)
- ✅ v0.6.0 — 72 issues fixed, 5 NVIDIA skills, 17 council reviews
+ ✅ Engineering — Production hardening, deployment (v0.1.0)
+ ✅ v0.1.0 — 72 issues fixed, 5 NVIDIA skills, 17 council reviews
  ⬜ Live Trading — Paper validation → live with mandate
 ```
 
@@ -140,7 +140,7 @@ Future-ready from day one. Python + Rust + C++ via abstract interfaces.
 | Lesson Archive | Distilled wisdom from failures and successes |
 | **ChromaDB** | Vector embeddings for semantic similarity search |
 
-## NVIDIA Skills Integration (v0.6.0)
+## NVIDIA Skills Integration (v0.1.0)
 
 TSAR integrates 5 NVIDIA GPU-accelerated skills for enhanced trading intelligence:
 
@@ -154,7 +154,7 @@ TSAR integrates 5 NVIDIA GPU-accelerated skills for enhanced trading intelligenc
 
 All skills degrade gracefully when GPU hardware is unavailable. See [`config/nvidia_skills.yaml`](config/nvidia_skills.yaml) for configuration.
 
-## Security (v0.6.0)
+## Security (v0.1.0)
 
 - **JWT Authentication** — API endpoints protected with token-based auth
 - **CORS Fix** — Strict origin validation via `TSAR_CORS_ORIGINS`
