@@ -18,6 +18,13 @@ class ApiService {
   String _baseUrl = 'http://localhost:8000';
   String? _apiKey;
   Duration _timeout = const Duration(seconds: 15);
+  bool _configured = false;
+
+  /// Completes when [configure] has been called at least once.
+  final Completer<void> _readyCompleter = Completer<void>();
+  Future<void> get ready => _readyCompleter.future;
+
+  bool get isConfigured => _configured;
 
   void configure({required String baseUrl, String? apiKey, Duration? timeout}) {
     _baseUrl = baseUrl.endsWith('/')
@@ -25,6 +32,10 @@ class ApiService {
         : baseUrl;
     _apiKey = apiKey;
     if (timeout != null) _timeout = timeout;
+    _configured = true;
+    if (!_readyCompleter.isCompleted) {
+      _readyCompleter.complete();
+    }
   }
 
   Map<String, String> get _headers => {
@@ -35,12 +46,14 @@ class ApiService {
   // ─── Generic HTTP helpers ────────────────────────────────────────────
 
   Future<Map<String, dynamic>> _get(String path, {Map<String, String>? queryParams}) async {
+    await ready; // Block until configured
     final uri = Uri.parse('$_baseUrl$path').replace(queryParameters: queryParams);
     final resp = await http.get(uri, headers: _headers).timeout(_timeout);
     return _handleResponse(resp);
   }
 
   Future<Map<String, dynamic>> _post(String path, {Map<String, dynamic>? body}) async {
+    await ready;
     final uri = Uri.parse('$_baseUrl$path');
     final resp = await http
         .post(uri, headers: _headers, body: jsonEncode(body ?? {}))
@@ -49,6 +62,7 @@ class ApiService {
   }
 
   Future<Map<String, dynamic>> _put(String path, {Map<String, dynamic>? body}) async {
+    await ready;
     final uri = Uri.parse('$_baseUrl$path');
     final resp = await http
         .put(uri, headers: _headers, body: jsonEncode(body ?? {}))
@@ -57,6 +71,7 @@ class ApiService {
   }
 
   Future<Map<String, dynamic>> _delete(String path) async {
+    await ready;
     final uri = Uri.parse('$_baseUrl$path');
     final resp = await http.delete(uri, headers: _headers).timeout(_timeout);
     return _handleResponse(resp);
@@ -151,6 +166,12 @@ class ApiService {
   Future<Map<String, dynamic>> benchmarkFactors() =>
       _get('/api/v1/factors/benchmark');
 
+  Future<Map<String, dynamic>> getFactorsRank({String? sortBy}) {
+    final params = <String, String>{};
+    if (sortBy != null) params['sort'] = sortBy;
+    return _get('/api/v1/factors/rank', queryParams: params);
+  }
+
   // ─── Strategies ──────────────────────────────────────────────────────
 
   Future<Map<String, dynamic>> getStrategies() => _get('/api/v1/strategies');
@@ -162,6 +183,12 @@ class ApiService {
           {Map<String, dynamic>? params}) =>
       _post('/api/v1/backtest',
           body: {'strategy': strategyId, ...?params});
+
+  Future<Map<String, dynamic>> activateStrategy(String strategyId) =>
+      _post('/api/v1/strategies/$strategyId/activate');
+
+  Future<Map<String, dynamic>> deactivateStrategy(String strategyId) =>
+      _post('/api/v1/strategies/$strategyId/deactivate');
 
   // ─── Shadow Account ──────────────────────────────────────────────────
 
