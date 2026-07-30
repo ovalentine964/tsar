@@ -1,12 +1,14 @@
 //! PyO3 bridge for the WebSocket manager.
 //!
 //! Exposes [`WsConnection`] and [`ConnectionPool`] to Python.
+//! All async operations use the shared global tokio runtime.
 
 use pyo3::prelude::*;
 use pyo3::types::PyDict;
 
+use crate::runtime::RUNTIME;
 use tsar_ws_manager::connection::{ConnectionState, WsConnection};
-use tsar_ws_manager::pool::ConnectionPool;
+use tsar_ws_manager::pool::{BinanceStreamConfig, ConnectionPool};
 use tsar_ws_manager::reconnect::ReconnectPolicy;
 
 /// Python-visible WebSocket connection wrapper.
@@ -27,29 +29,44 @@ impl PyWsConnection {
 
     /// Connect to the WebSocket endpoint.
     ///
-    /// Stub: sets state to connected without actually connecting.
+    /// Uses the shared tokio runtime (no new runtime created).
     fn connect(&mut self) -> PyResult<()> {
-        // We need to block on the async connect since PyO3 methods are sync.
-        // In production, this would use pyo3-asyncio or a dedicated runtime.
-        let rt = tokio::runtime::Runtime::new()
-            .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?;
-        rt.block_on(self.inner.connect())
+        RUNTIME
+            .block_on(self.inner.connect())
             .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))
     }
 
     /// Send a text message.
     fn send(&mut self, message: &str) -> PyResult<()> {
-        let rt = tokio::runtime::Runtime::new()
-            .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?;
-        rt.block_on(self.inner.send(message))
+        RUNTIME
+            .block_on(self.inner.send(message))
+            .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))
+    }
+
+    /// Receive the next message (non-blocking).
+    ///
+    /// Returns the message text, or None if no message is available.
+    fn receive(&mut self) -> PyResult<Option<String>> {
+        RUNTIME
+            .block_on(self.inner.receive())
+            .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))
+    }
+
+    /// Receive the next message, waiting up to `timeout_ms` milliseconds.
+    ///
+    /// Returns the message text, or None on timeout.
+    #[pyo3(signature = (timeout_ms=1000))]
+    fn receive_timeout(&mut self, timeout_ms: u64) -> PyResult<Option<String>> {
+        let timeout = std::time::Duration::from_millis(timeout_ms);
+        RUNTIME
+            .block_on(self.inner.receive_timeout(timeout))
             .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))
     }
 
     /// Disconnect from the WebSocket endpoint.
     fn disconnect(&mut self) -> PyResult<()> {
-        let rt = tokio::runtime::Runtime::new()
-            .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?;
-        rt.block_on(self.inner.disconnect())
+        RUNTIME
+            .block_on(self.inner.disconnect())
             .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))
     }
 
@@ -92,6 +109,9 @@ impl PyWsConnection {
 }
 
 /// Python-visible WebSocket manager wrapping a connection pool.
+///
+/// Manages multiple WebSocket connections with health monitoring
+/// and automatic reconnection.
 #[pyclass(name = "WsManager")]
 pub struct PyWsManager {
     pool: ConnectionPool,
@@ -120,19 +140,44 @@ impl PyWsManager {
         Ok(id.to_string())
     }
 
+    /// Create and add a Binance combined stream for the given symbols and streams.
+    ///
+    /// Example: `add_binance_stream(["btcusdt", "ethusdt"], ["trade", "kline_1m"])`
+    #[pyo3(signature = (symbols, streams, testnet=false))]
+    fn add_binance_stream(
+        &mut self,
+        symbols: Vec<String>,
+        streams: Vec<String>,
+        testnet: bool,
+    ) -> PyResult<String> {
+        let config = BinanceStreamConfig {
+            symbols,
+            streams,
+            combined: true,
+            testnet,
+        };
+        let url = config.build_url();
+        let conn = WsConnection::new(&url);
+        let id = self
+            .pool
+            .add(conn)
+            .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?;
+
+        tracing::info!(url = %url, connection_id = %id, "Added Binance stream");
+        Ok(id.to_string())
+    }
+
     /// Connect all disconnected connections in the pool.
     fn connect_all(&mut self) -> PyResult<()> {
-        let rt = tokio::runtime::Runtime::new()
-            .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?;
-        rt.block_on(self.pool.connect_all())
+        RUNTIME
+            .block_on(self.pool.connect_all())
             .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))
     }
 
     /// Disconnect all connections in the pool.
     fn disconnect_all(&mut self) -> PyResult<()> {
-        let rt = tokio::runtime::Runtime::new()
-            .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?;
-        rt.block_on(self.pool.disconnect_all())
+        RUNTIME
+            .block_on(self.pool.disconnect_all())
             .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))
     }
 
@@ -153,6 +198,11 @@ impl PyWsManager {
             .iter()
             .map(|id| id.to_string())
             .collect()
+    }
+
+    /// Return all connection IDs.
+    fn connection_ids(&self) -> Vec<String> {
+        self.pool.connection_ids().iter().map(|id| id.to_string()).collect()
     }
 
     fn __repr__(&self) -> String {

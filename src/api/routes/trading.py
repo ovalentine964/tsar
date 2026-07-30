@@ -1,57 +1,62 @@
 """
-Trading endpoints — Trade execution, history, and control.
+Trading endpoints — Extended trade analytics.
 
-GET  /api/v1/trades      — Trade history
-GET  /api/v1/strategies  — Strategy performance
-POST /api/v1/kill-switch — Emergency halt (TRADE_ADMIN)
-POST /api/v1/resume      — Resume trading (TRADE_ADMIN)
+These supplement the main /api/v1/trades endpoint in app.py
+with additional analytics wired to the tools.
 """
+
+import os
 
 from fastapi import APIRouter
 
 router = APIRouter()
 
 
-@router.get("/trades")
-async def get_trades(limit: int = 100, symbol: str | None = None):
-    """Get trade history from TradeMemory."""
-    from src.knowledge.trade_memory import TradeMemory
-    import os
+def _db_path() -> str:
+    return os.environ.get("TSAR_DB_PATH", "data/tsar.db")
 
-    db_path = os.environ.get("TSAR_DB_PATH", "./data/tsar.db")
-    trade_mem = TradeMemory(db_path)
-    trades = trade_mem.list_trades(symbol=symbol, limit=limit)
+
+@router.get("/trades/by-strategy")
+async def get_trades_by_strategy(strategy_id: str = "", limit: int = 50):
+    """Get trades filtered by strategy from TradeMemory tool."""
+    from src.knowledge.trade_memory import TradeMemory
+
+    db = TradeMemory(_db_path())
+    trades = db.list_trades(limit=limit)
+    if strategy_id:
+        trades = [t for t in trades if hasattr(t, "strategy_id") and t.strategy_id == strategy_id]
     return {
-        "trades": [t.to_dict() for t in trades],
-        "total": trade_mem.get_trade_count(),
+        "trades": [t.to_dict() if hasattr(t, "to_dict") else t for t in trades],
+        "strategy_id": strategy_id,
+        "count": len(trades),
     }
 
 
-@router.get("/strategies")
-async def get_strategies():
-    """Get strategy performance from TradeMemory."""
+@router.get("/trades/by-symbol")
+async def get_trades_by_symbol(symbol: str = "", limit: int = 50):
+    """Get trades filtered by symbol from TradeMemory tool."""
     from src.knowledge.trade_memory import TradeMemory
-    import os
 
-    db_path = os.environ.get("TSAR_DB_PATH", "./data/tsar.db")
-    trade_mem = TradeMemory(db_path)
-    summaries = trade_mem.get_strategy_summary()
-    return {"strategies": summaries}
-
-
-@router.post("/kill-switch")
-async def activate_kill_switch(reason: str = "manual"):
-    """Emergency halt — stop all trading immediately."""
-    from src.risk.kill_switch import KillSwitch
-    ks = KillSwitch()
-    await ks.activate(reason)
-    return {"status": "activated", "reason": reason}
+    db = TradeMemory(_db_path())
+    trades = db.list_trades(symbol=symbol, limit=limit)
+    return {
+        "trades": [t.to_dict() if hasattr(t, "to_dict") else t for t in trades],
+        "symbol": symbol,
+        "count": len(trades),
+    }
 
 
-@router.post("/resume")
-async def resume_trading():
-    """Resume trading after kill switch."""
-    from src.risk.kill_switch import KillSwitch
-    ks = KillSwitch()
-    await ks.deactivate()
-    return {"status": "resumed"}
+@router.get("/trades/performance")
+async def get_trade_performance():
+    """Get strategy performance summary from TradeMemory tool."""
+    from src.knowledge.trade_memory import TradeMemory
+
+    db = TradeMemory(_db_path())
+    stats = db.get_trade_stats()
+    summaries = db.get_strategy_summary()
+    regime_perf = db.get_performance_by_regime()
+    return {
+        "overall": stats,
+        "by_strategy": summaries,
+        "by_regime": regime_perf,
+    }

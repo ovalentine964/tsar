@@ -16,7 +16,7 @@ namespace tsar::gpu {
 // Optimisation result
 // ---------------------------------------------------------------------------
 struct OptResult {
-    double* weights;       // Caller-allocated, length = n_assets
+    double* weights;       // Caller-allocated, length = n_assets. MUST be set before calling.
     double  portfolio_vol{0.0};
     double  portfolio_return{0.0};
     double  sharpe_ratio{0.0};

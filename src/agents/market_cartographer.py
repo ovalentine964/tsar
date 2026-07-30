@@ -24,6 +24,11 @@ import pandas as pd
 
 from src.agents.base import BaseAgent
 
+# ── Domain Tools (Tools-to-Agents Wiring) ──────────────────────────
+from src.tools.correlation import CorrelationAnalyzer
+from src.tools.market_data import MarketDataTools
+from src.tools.fundamental import FundamentalAnalysisTools
+
 logger = logging.getLogger(__name__)
 
 
@@ -286,11 +291,16 @@ class MarketCartographer(BaseAgent):
         # Macro symbols
         self._macro_symbols = carto_cfg.get("macro_symbols", ["DXY", "US10Y", "GOLD"])
 
-        # Engine
+        # Engine (inline CorrelationEngine for backward compat)
         self._engine = CorrelationEngine(
             lookback_hours=self._lookback,
             anomaly_z_threshold=self._anomaly_z,
         )
+
+        # ── Domain Tools (Tools-to-Agents Wiring) ───────
+        self._correlation_analyzer: CorrelationAnalyzer | None = None
+        self._market_data_tools: MarketDataTools | None = None
+        self._fundamental_tools: FundamentalAnalysisTools | None = None
 
         # State
         self._pricing_engine = None
@@ -298,13 +308,26 @@ class MarketCartographer(BaseAgent):
         self._latest_result: CartographyResult | None = None
 
     async def on_initialize(self) -> None:
-        """Initialize pricing engine reference."""
-        from src.interfaces import get_pricing_engine
+        """Initialize pricing engine and domain tools."""
+        from src.interfaces import get_exchange_gateway, get_pricing_engine
+
         self._pricing_engine = get_pricing_engine()
-        logger.info(
-            "MarketCartographer initialized: crypto=%s, macro=%s",
-            self._crypto_symbols, self._macro_symbols,
-        )
+
+        # Initialize domain tools
+        try:
+            gateway = get_exchange_gateway()
+            self._correlation_analyzer = CorrelationAnalyzer(config=self.config)
+            self._market_data_tools = MarketDataTools(
+                gateway=gateway, config=self.config.get("market_data", {}),
+            )
+            self._fundamental_tools = FundamentalAnalysisTools(config=self.config)
+            logger.info(
+                "MarketCartographer initialized: crypto=%s, macro=%s, "
+                "tools=[correlation, market_data, fundamental]",
+                self._crypto_symbols, self._macro_symbols,
+            )
+        except Exception as e:
+            logger.warning("MarketCartographer tool init failed: %s", e)
 
     async def run_cycle(self) -> None:
         """Compute cross-asset correlations and detect anomalies."""

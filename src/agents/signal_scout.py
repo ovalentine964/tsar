@@ -44,6 +44,14 @@ from src.strategy.factor_library import FactorLibrary
 # SECURITY (H-009): Import prompt sanitization for market data
 from src.llm.prompts import sanitize_field, validate_llm_output
 
+# ── Domain Tools (Tools-to-Agents Wiring) ──────────────────────────
+from src.tools.market_data import MarketDataTools
+from src.tools.technical_analysis import TechnicalAnalysisTools
+from src.tools.multi_timeframe import MultiTimeframeAnalyzer
+from src.tools.volatility import VolatilityAnalyzer
+from src.tools.correlation import CorrelationAnalyzer
+from src.tools.pattern_recognition import PatternRecognitionTools
+
 if TYPE_CHECKING:
     from src.comms.events import CloudEvent
 
@@ -169,6 +177,14 @@ class SignalScout(BaseAgent):
             self._factor_library = None
             self._use_factors = False
 
+        # ── Domain Tools (initialized in on_initialize) ───────
+        self._market_data_tools: MarketDataTools | None = None
+        self._ta_tools: TechnicalAnalysisTools | None = None
+        self._mtf_analyzer: MultiTimeframeAnalyzer | None = None
+        self._volatility_analyzer: VolatilityAnalyzer | None = None
+        self._correlation_analyzer: CorrelationAnalyzer | None = None
+        self._pattern_tools: PatternRecognitionTools | None = None
+
         # LLM availability tracking (H-003)
         # If LLM is unavailable, signal generation degrades to pure
         # statistical/technical analysis — never blocks signal generation.
@@ -178,13 +194,25 @@ class SignalScout(BaseAgent):
         self._statistical_only_mode: bool = False
 
     async def on_initialize(self) -> None:
-        """Initialize exchange gateway and pricing engine."""
+        """Initialize exchange gateway, pricing engine, and domain tools."""
         from src.interfaces import get_exchange_gateway, get_pricing_engine
 
         self._gateway = get_exchange_gateway()
         self._pricing_engine = get_pricing_engine()
+
+        # Initialize domain tools
+        self._market_data_tools = MarketDataTools(
+            gateway=self._gateway, config=self.config.get("market_data", {}),
+        )
+        self._ta_tools = TechnicalAnalysisTools(config=self.config)
+        self._mtf_analyzer = MultiTimeframeAnalyzer(config=self.config)
+        self._volatility_analyzer = VolatilityAnalyzer(config=self.config)
+        self._correlation_analyzer = CorrelationAnalyzer(config=self.config)
+        self._pattern_tools = PatternRecognitionTools(config=self.config)
+
         logger.info(
-            "SignalScout initialized: symbols=%s, cycle_interval=%ds",
+            "SignalScout initialized: symbols=%s, cycle_interval=%ds, "
+            "tools=[market_data, ta, mtf, volatility, correlation, pattern_recognition]",
             self._symbols, self._cycle_interval,
         )
 
@@ -243,7 +271,7 @@ class SignalScout(BaseAgent):
         volumes = [bar.volume for bar in ohlcv]
         current_price = closes[-1]
 
-        # ── Calculate Indicators ──────────────────────────────────
+        # ── Calculate Indicators (via pricing engine + domain tools) ──
         rsi = self._pricing_engine.calculate_rsi(closes, self._params["rsi_period"])
         macd: MACDResult = self._pricing_engine.calculate_macd(
             closes,
@@ -261,6 +289,36 @@ class SignalScout(BaseAgent):
         ema_trend = self._pricing_engine.calculate_ema(
             closes, self._params["ema_trend_period"]
         )
+
+        # ── Advanced Analysis via Domain Tools ──────────────────────
+        # Volatility regime analysis
+        vol_regime = None
+        if self._volatility_analyzer:
+            try:
+                vol_regime = self._volatility_analyzer.classify_volatility_regime(ohlcv)
+                logger.info(
+                    "  %s: volatility regime=%s (factor=%.2f)",
+                    symbol, vol_regime.regime, vol_regime.recommended_position_size_factor,
+                )
+            except Exception:
+                logger.debug("Volatility regime analysis failed for %s", symbol, exc_info=True)
+
+        # Pattern recognition scan
+        patterns_detected: list[str] = []
+        if self._pattern_tools:
+            try:
+                chart_patterns = self._pattern_tools.detect_chart_patterns(ohlcv)
+                candle_patterns = self._pattern_tools.detect_candlestick_patterns(ohlcv)
+                for p in chart_patterns:
+                    if p.confidence > 0.6:
+                        patterns_detected.append(f"chart:{p.pattern}({p.direction},{p.confidence:.2f})")
+                for p in candle_patterns:
+                    if p.reliability > 0.5:
+                        patterns_detected.append(f"candle:{p.pattern}({p.direction},{p.reliability:.2f})")
+                if patterns_detected:
+                    logger.info("  %s: patterns detected: %s", symbol, patterns_detected)
+            except Exception:
+                logger.debug("Pattern recognition failed for %s", symbol, exc_info=True)
 
         logger.info(
             "  %s: price=%.2f rsi=%.1f atr=%.2f",
@@ -313,12 +371,27 @@ class SignalScout(BaseAgent):
             logger.info("  %s: No signal (RSI=%.1f, no S/R proximity)", symbol, rsi)
             return
 
-        # ── Multi-Timeframe Confluence ─────────────────────────
+        # ── Multi-Timeframe Confluence (via tool) ─────────────
         mtf_score = 0.0
         if self._params.get("mtf_enabled", True):
             try:
-                mtf_score = await self._compute_mtf_confluence(symbol, signal_side)
-                logger.info("  %s: MTF confluence=%.3f", symbol, mtf_score)
+                if self._mtf_analyzer and self._gateway:
+                    # Use MultiTimeframeAnalyzer tool
+                    tf_data: dict[str, list[OHLCV]] = {}
+                    for tf in self._params.get("mtf_timeframes", ["4h", "1h", "15m"]):
+                        tf_ohlcv = await self._gateway.get_ohlcv(symbol, Timeframe(tf), limit=60)
+                        if tf_ohlcv and len(tf_ohlcv) >= 30:
+                            tf_data[tf] = tf_ohlcv
+                    if tf_data:
+                        mtf_result = await self._mtf_analyzer.analyze(symbol, tf_data)
+                        # Confluence score: average signal strength weighted by timeframe
+                        if mtf_result and mtf_result.confluence_zones:
+                            mtf_score = min(1.0, len(mtf_result.confluence_zones) * 0.2)
+                        logger.info("  %s: MTF tool confluence=%.3f", symbol, mtf_score)
+                else:
+                    # Fallback to inline computation
+                    mtf_score = await self._compute_mtf_confluence(symbol, signal_side)
+                    logger.info("  %s: MTF inline confluence=%.3f", symbol, mtf_score)
             except Exception:
                 logger.debug("MTF computation failed for %s", symbol, exc_info=True)
 
@@ -408,6 +481,9 @@ class SignalScout(BaseAgent):
                 "score_breakdown": score_breakdown,
                 "ema_trend": ema_trend[-1] if ema_trend else 0,
                 "timeframe": "1h",
+                "volatility_regime": vol_regime.regime if vol_regime else "unknown",
+                "vol_position_factor": vol_regime.recommended_position_size_factor if vol_regime else 1.0,
+                "patterns_detected": patterns_detected,
             },
             timestamp=datetime.now(UTC),
         )

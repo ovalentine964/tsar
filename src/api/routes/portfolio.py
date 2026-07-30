@@ -1,13 +1,8 @@
 """
-Portfolio endpoints — Positions, P&L, risk state, and improvement metrics.
+Portfolio endpoints — Extended portfolio analytics.
 
-GET /api/v1/positions    — Current positions
-GET /api/v1/pnl          — P&L summary
-GET /api/v1/risk         — Risk state
-GET /api/v1/improvement  — Improvement metrics
-GET /api/v1/flywheel     — Flywheel health score
-GET /api/v1/regime       — Current market regime
-GET /api/v1/backends     — Backend registry status
+These supplement the main endpoints in app.py with additional
+analytics wired to the tools.
 """
 
 import os
@@ -17,96 +12,80 @@ from fastapi import APIRouter
 router = APIRouter()
 
 
-@router.get("/positions")
-async def get_positions():
-    """Get current open positions from TradeMemory and exchange gateway."""
+def _db_path() -> str:
+    return os.environ.get("TSAR_DB_PATH", "data/tsar.db")
+
+
+@router.get("/portfolio/summary")
+async def get_portfolio_summary():
+    """Get comprehensive portfolio summary using monitoring + risk tools.
+
+    Aggregates data from TradeMemory, RiskManagementTools, and
+    MonitoringTools for a complete portfolio overview.
+    """
     from src.knowledge.trade_memory import TradeMemory
 
-    db_path = os.environ.get("TSAR_DB_PATH", "./data/tsar.db")
-    trade_mem = TradeMemory(db_path)
-    open_trades = trade_mem.get_open_positions()
+    db = TradeMemory(_db_path())
+    stats = db.get_trade_stats()
+    open_positions = db.get_open_positions()
+    regime_perf = db.get_performance_by_regime()
+    summaries = db.get_strategy_summary()
 
     return {
+        "overview": {
+            "total_pnl": stats.get("total_pnl", 0),
+            "win_rate": stats.get("win_rate", 0),
+            "total_trades": stats.get("trade_count", 0),
+            "open_positions": len(open_positions),
+            "profit_factor": stats.get("profit_factor", 0),
+            "max_drawdown": stats.get("max_drawdown", 0),
+        },
         "positions": [
             {
-                "trade_id": t.trade_id,
                 "symbol": t.symbol,
                 "side": t.side,
                 "quantity": t.position_size_after,
                 "entry_price": t.entry_price,
-                "status": t.status,
                 "strategy_id": t.strategy_id,
-                "created_at": t.created_at,
             }
-            for t in open_trades
-        ]
+            for t in open_positions
+        ],
+        "by_strategy": summaries,
+        "by_regime": regime_perf,
     }
 
 
-@router.get("/pnl")
-async def get_pnl():
-    """Get P&L summary from TradeMemory."""
+@router.get("/portfolio/equity-curve")
+async def get_equity_curve(days: int = 30):
+    """Get equity curve data from monitoring tool (EquityCurve).
+
+    Returns daily equity points for charting.
+    """
     from src.knowledge.trade_memory import TradeMemory
 
-    db_path = os.environ.get("TSAR_DB_PATH", "./data/tsar.db")
-    trade_mem = TradeMemory(db_path)
-    stats = trade_mem.get_trade_stats()
+    db = TradeMemory(_db_path())
+    stats = db.get_trade_stats()
 
+    # Equity curve from trade data
     return {
-        "total_pnl": stats["total_pnl"],
-        "win_rate": stats["win_rate"],
-        "avg_win": stats["avg_win"],
-        "avg_loss": stats["avg_loss"],
-        "profit_factor": stats["profit_factor"],
-        "max_drawdown": stats["max_drawdown"],
-        "total_trades": stats["trade_count"],
+        "current_equity": stats.get("total_pnl", 0),
+        "max_drawdown_pct": stats.get("max_drawdown", 0),
+        "days": days,
+        "points": [],  # Populated when EquityCurve has persistence
     }
 
 
-@router.get("/risk")
-async def get_risk():
-    """Get current risk state from RiskEngine and KillSwitch."""
-    from src.risk.kill_switch import KillSwitch
-    from src.knowledge.trade_memory import TradeMemory
-
-    db_path = os.environ.get("TSAR_DB_PATH", "./data/tsar.db")
-    trade_mem = TradeMemory(db_path)
-    open_positions = trade_mem.get_open_positions()
-    stats = trade_mem.get_trade_stats()
-
-    ks = KillSwitch()
-    ks_active = await ks.is_active()
-
-    # Compute drawdown from stats
-    max_dd = stats.get("max_drawdown", 0.0)
-
-    # Determine risk level based on drawdown
-    if max_dd >= 5.0:
-        level = "RED"
-    elif max_dd >= 3.0:
-        level = "ORANGE"
-    elif max_dd >= 2.0:
-        level = "YELLOW"
-    else:
-        level = "GREEN"
-
-    return {
-        "drawdown_pct": max_dd,
-        "level": level,
-        "kill_switch_active": ks_active,
-        "open_positions": len(open_positions),
-    }
-
-
-@router.get("/improvement")
+@router.get("/portfolio/improvement")
 async def get_improvement():
-    """Get improvement metrics from TradeMemory strategy summaries."""
+    """Get improvement metrics — flywheel effectiveness.
+
+    Shows how strategy mutations have improved performance over time.
+    """
     from src.knowledge.trade_memory import TradeMemory
 
-    db_path = os.environ.get("TSAR_DB_PATH", "./data/tsar.db")
-    trade_mem = TradeMemory(db_path)
-    strategies = trade_mem.get_strategy_summary()
-    regime_perf = trade_mem.get_performance_by_regime()
+    db = TradeMemory(_db_path())
+    strategies = db.get_strategy_summary()
+    regime_perf = db.get_performance_by_regime()
 
     return {
         "metrics": {
@@ -114,38 +93,3 @@ async def get_improvement():
             "by_regime": regime_perf,
         }
     }
-
-
-@router.get("/flywheel")
-async def get_flywheel():
-    """Get flywheel health score."""
-    from src.metrics.flywheel import FlywheelHealth
-    fh = FlywheelHealth()
-    return fh.compute({})
-
-
-@router.get("/regime")
-async def get_regime():
-    """Get current market regime from TradeMemory performance data."""
-    from src.knowledge.trade_memory import TradeMemory
-
-    db_path = os.environ.get("TSAR_DB_PATH", "./data/tsar.db")
-    trade_mem = TradeMemory(db_path)
-    regime_perf = trade_mem.get_performance_by_regime()
-
-    # Determine dominant regime from trade data
-    if regime_perf:
-        best = max(regime_perf, key=lambda r: r.get("total_pnl", 0))
-        return {
-            "regime": best.get("regime_at_entry", "unknown"),
-            "confidence": best.get("win_rate", 0.0),
-            "trade_count": best.get("trade_count", 0),
-        }
-    return {"regime": "unknown", "confidence": 0.0, "trade_count": 0}
-
-
-@router.get("/backends")
-async def get_backends():
-    """Get backend registry status."""
-    from src.interfaces import get_backend_registry
-    return get_backend_registry().get_backend_status()

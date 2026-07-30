@@ -88,6 +88,13 @@ def _ensure_registered() -> None:
     register_tool("backtesting", BacktestingTools)
     register_tool("portfolio", PortfolioTools)
 
+    # Monitoring tools
+    try:
+        from src.tools.monitoring import MonitoringTools
+        register_tool("monitoring", MonitoringTools)
+    except ImportError:
+        pass
+
     # Knowledge tools (may have unmet dependencies)
     try:
         from src.tools.knowledge import KnowledgeTools
@@ -141,6 +148,22 @@ def _ensure_registered() -> None:
     try:
         from src.tools.pattern_recognition import PatternRecognitionTools
         register_tool("pattern_recognition", PatternRecognitionTools)
+    except ImportError:
+        pass
+
+    try:
+        from src.tools.multi_timeframe import MultiTimeframeAnalyzer
+        register_tool("multi_timeframe", MultiTimeframeAnalyzer)
+    except ImportError:
+        pass
+
+    try:
+        from src.tools.monitoring import PnLTracker, WinRateTracker, EquityCurve, RiskStateMonitor, AlertGenerator
+        register_tool("pnl_tracker", PnLTracker)
+        register_tool("win_rate_tracker", WinRateTracker)
+        register_tool("equity_curve", EquityCurve)
+        register_tool("risk_state_monitor", RiskStateMonitor)
+        register_tool("alert_generator", AlertGenerator)
     except ImportError:
         pass
 

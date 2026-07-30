@@ -36,6 +36,10 @@ from src.comms.events import (
 from src.comms.publisher import EventPublisher
 from src.comms.subscriber import EventSubscriber
 
+# ── Domain Tools (Tools-to-Agents Wiring) ──────────────────────────
+from src.tools.knowledge import KnowledgeTools
+from src.tools.monitoring import PnLTracker, WinRateTracker, AlertGenerator
+
 logger = logging.getLogger(__name__)
 
 
@@ -95,6 +99,12 @@ class Orchestrator(BaseAgent):
         self._genome_mutator = None
         self._last_shadow_extraction: float = 0
 
+        # ── Domain Tools (Tools-to-Agents Wiring) ───────
+        self._knowledge_tools: KnowledgeTools | None = None
+        self._pnl_tracker: PnLTracker | None = None
+        self._win_rate_tracker: WinRateTracker | None = None
+        self._alert_generator: AlertGenerator | None = None
+
         # Event bus for flywheel
         self._event_bus = EventBus()
         self._trade_count = 0
@@ -140,6 +150,9 @@ class Orchestrator(BaseAgent):
 
         # Register signal handlers for graceful shutdown
         self._register_signal_handlers()
+
+        # Initialize domain tools for orchestrator-level monitoring
+        await self._initialize_orchestrator_tools()
 
         # Initialize shadow extraction loop
         await self._initialize_shadow_loop()
@@ -227,6 +240,27 @@ class Orchestrator(BaseAgent):
             logger.info("Signal handlers registered (SIGINT, SIGTERM)")
         except NotImplementedError:
             logger.warning("Signal handlers not supported on this platform")
+
+    async def _initialize_orchestrator_tools(self) -> None:
+        """Initialize orchestrator-level domain tools.
+
+        Sets up KnowledgeTools (for shadow extraction pipeline access),
+        and monitoring tools (P&L, win rate, alerts) for system-wide visibility.
+        """
+        try:
+            db_path = self.config.get("database", {}).get("db_path", "data/tsar.db")
+            self._knowledge_tools = KnowledgeTools(db_path)
+            logger.info("Orchestrator: KnowledgeTools initialized")
+        except Exception as e:
+            logger.warning("Orchestrator KnowledgeTools init failed: %s", e)
+
+        try:
+            self._pnl_tracker = PnLTracker()
+            self._win_rate_tracker = WinRateTracker()
+            self._alert_generator = AlertGenerator()
+            logger.info("Orchestrator: monitoring tools initialized")
+        except Exception as e:
+            logger.warning("Orchestrator monitoring tools init failed: %s", e)
 
     async def _initialize_shadow_loop(self) -> None:
         """Initialize the shadow extraction → validation → mutation pipeline.

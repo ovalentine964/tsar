@@ -11,6 +11,8 @@
 #include "tsar/pricing/option_pricer.h"
 #include "tsar/pricing/pricing_engine.h"
 #include "tsar/fix/fix_gateway.h"
+#include "tsar/gpu/monte_carlo.h"
+#include "tsar/gpu/portfolio_opt.h"
 
 #include <algorithm>
 #include <cstring>
@@ -348,4 +350,115 @@ size_t tsar_fix_gateway_session_count(TsarFIXGateway gw) {
 int tsar_fix_gateway_any_connected(TsarFIXGateway gw) {
     if (!gw) return 0;
     return static_cast<FIXGatewayHandle*>(gw)->gateway->any_connected() ? 1 : 0;
+}
+
+// ===========================================================================
+//  GPU Monte Carlo + Portfolio Optimisation
+// ===========================================================================
+
+int tsar_gpu_monte_carlo_batch(const TsarMCOptionParams* params,
+                                size_t n_options,
+                                uint64_t n_paths,
+                                uint64_t seed,
+                                TsarMCResult* results) {
+    if (!params || !results || n_options == 0 || n_paths == 0) {
+        return TSAR_ERR_INVALID_INPUT;
+    }
+
+    // Convert C structs to C++ structs
+    std::vector<tsar::gpu::MCOptionParams> cpp_params(n_options);
+    for (size_t i = 0; i < n_options; ++i) {
+        cpp_params[i] = {
+            .spot        = params[i].spot,
+            .strike      = params[i].strike,
+            .rate        = params[i].rate,
+            .vol         = params[i].vol,
+            .time_years  = params[i].time_years,
+            .is_call     = params[i].is_call,
+        };
+    }
+
+    std::vector<tsar::gpu::MCResult> cpp_results(n_options);
+    auto err = tsar::gpu::monte_carlo_batch(
+        cpp_params.data(), n_options, n_paths, seed, cpp_results.data());
+
+    if (err != tsar::gpu::GPUError::Ok) {
+        return TSAR_ERR_COMPUTATION;
+    }
+
+    for (size_t i = 0; i < n_options; ++i) {
+        results[i].price      = cpp_results[i].price;
+        results[i].std_error  = cpp_results[i].std_error;
+        results[i].delta      = cpp_results[i].delta;
+    }
+    return TSAR_OK;
+}
+
+int tsar_gpu_var_historical(const double* returns,
+                             size_t n_returns,
+                             double portfolio_value,
+                             double confidence,
+                             double* var_out) {
+    if (!returns || !var_out || n_returns == 0) {
+        return TSAR_ERR_INVALID_INPUT;
+    }
+
+    auto err = tsar::gpu::var_historical(
+        returns, n_returns, portfolio_value, confidence, var_out);
+    return (err == tsar::gpu::GPUError::Ok) ? TSAR_OK : TSAR_ERR_COMPUTATION;
+}
+
+int tsar_gpu_mean_variance_opt(const double* expected_returns,
+                                const double* cov_matrix,
+                                size_t n_assets,
+                                double target_return,
+                                double* weights_out,
+                                TsarOptResult* result) {
+    if (!expected_returns || !cov_matrix || !weights_out || !result || n_assets == 0) {
+        return TSAR_ERR_INVALID_INPUT;
+    }
+
+    tsar::gpu::OptResult opt;
+    opt.weights = weights_out;
+
+    auto err = tsar::gpu::mean_variance_opt(
+        expected_returns, cov_matrix, n_assets, target_return, &opt);
+
+    if (err != tsar::gpu::OptError::Ok) {
+        return TSAR_ERR_COMPUTATION;
+    }
+
+    result->portfolio_vol    = opt.portfolio_vol;
+    result->portfolio_return = opt.portfolio_return;
+    result->sharpe_ratio     = opt.sharpe_ratio;
+    result->iterations       = opt.iterations;
+    result->converged        = opt.converged;
+    return TSAR_OK;
+}
+
+int tsar_gpu_risk_parity(const double* volatilities,
+                          const double* cov_matrix,
+                          size_t n_assets,
+                          double* weights_out,
+                          TsarOptResult* result) {
+    if (!volatilities || !cov_matrix || !weights_out || !result || n_assets == 0) {
+        return TSAR_ERR_INVALID_INPUT;
+    }
+
+    tsar::gpu::OptResult opt;
+    opt.weights = weights_out;
+
+    auto err = tsar::gpu::risk_parity(
+        volatilities, cov_matrix, n_assets, &opt);
+
+    if (err != tsar::gpu::OptError::Ok) {
+        return TSAR_ERR_COMPUTATION;
+    }
+
+    result->portfolio_vol    = opt.portfolio_vol;
+    result->portfolio_return = opt.portfolio_return;
+    result->sharpe_ratio     = opt.sharpe_ratio;
+    result->iterations       = opt.iterations;
+    result->converged        = opt.converged;
+    return TSAR_OK;
 }

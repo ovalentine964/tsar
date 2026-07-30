@@ -34,6 +34,10 @@ from src.strategy.factor_library import FactorLibrary
 from src.strategy.monte_carlo import MonteCarloConfig, MonteCarloResult, MonteCarloSimulator
 from src.strategy.walk_forward import WalkForwardConfig, WalkForwardResult, WalkForwardValidator
 
+# ── Domain Tools (Tools-to-Agents Wiring) ──────────────────────────
+from src.tools.knowledge import KnowledgeTools
+from src.tools.backtesting import BacktestingTools
+
 logger = logging.getLogger(__name__)
 
 
@@ -170,8 +174,30 @@ class StrategyGeneticist(BaseAgent):
         # Genome store reference (lazy)
         self._genomes: Any = None
 
+        # ── Domain Tools (Tools-to-Agents Wiring) ───────
+        self._knowledge_tools: KnowledgeTools | None = None
+        self._backtesting_tools: BacktestingTools | None = None
+
     async def on_initialize(self) -> None:
-        """Initialize backtest and analysis components."""
+        """Initialize backtest, analysis components, and domain tools."""
+        # Initialize KnowledgeTools for strategy_genomes access
+        try:
+            db_path = self._config.get("database", {}).get("db_path", "data/tsar.db")
+            self._knowledge_tools = KnowledgeTools(db_path)
+            # Wire genomes from KnowledgeTools if not already set
+            if self._genomes is None:
+                self._genomes = self._knowledge_tools.strategy_genomes
+            logger.info("KnowledgeTools initialized for StrategyGeneticist")
+        except Exception as e:
+            logger.warning("KnowledgeTools init failed: %s", e)
+
+        # Initialize BacktestingTools
+        try:
+            self._backtesting_tools = BacktestingTools(config=self._config)
+            logger.info("BacktestingTools initialized for StrategyGeneticist")
+        except Exception as e:
+            logger.warning("BacktestingTools init failed: %s", e)
+
         # Factor library (G9)
         if self._factor_library is None:
             factor_cfg = self._config.get("factor_library", {})

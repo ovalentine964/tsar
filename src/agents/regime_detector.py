@@ -26,6 +26,12 @@ import pandas_ta as ta
 
 from src.agents.base import BaseAgent
 
+# ── Domain Tools (Tools-to-Agents Wiring) ──────────────────────────
+from src.tools.market_data import MarketDataTools
+from src.tools.technical_analysis import TechnicalAnalysisTools
+from src.tools.volatility import VolatilityAnalyzer
+from src.tools.correlation import CorrelationAnalyzer
+
 logger = logging.getLogger(__name__)
 
 # Try importing hmmlearn — graceful fallback if not installed
@@ -343,6 +349,12 @@ class RegimeDetector(BaseAgent):
         self.pricing_engine = None
         self.regime_state = None
 
+        # ── Domain Tools (Tools-to-Agents Wiring) ───────
+        self._market_data_tools: MarketDataTools | None = None
+        self._ta_tools: TechnicalAnalysisTools | None = None
+        self._volatility_analyzer: VolatilityAnalyzer | None = None
+        self._correlation_analyzer: CorrelationAnalyzer | None = None
+
         # HMM configuration
         regime_cfg = config.get("agents", {}).get("regime_detector", {})
         self._use_hmm = regime_cfg.get("use_hmm", True) and HMM_AVAILABLE
@@ -358,6 +370,26 @@ class RegimeDetector(BaseAgent):
         else:
             self._hmm_classifier = None
             logger.info("RegimeDetector: using rule-based classification")
+
+    async def on_initialize(self) -> None:
+        """Initialize pricing engine and domain tools."""
+        from src.interfaces import get_pricing_engine, get_exchange_gateway
+
+        self.pricing_engine = get_pricing_engine()
+
+        try:
+            gateway = get_exchange_gateway()
+            self._market_data_tools = MarketDataTools(
+                gateway=gateway, config=self.config.get("market_data", {}),
+            )
+            self._ta_tools = TechnicalAnalysisTools(config=self.config)
+            self._volatility_analyzer = VolatilityAnalyzer(config=self.config)
+            self._correlation_analyzer = CorrelationAnalyzer(config=self.config)
+            logger.info(
+                "RegimeDetector tools initialized: [market_data, ta, volatility, correlation]"
+            )
+        except Exception as e:
+            logger.warning("RegimeDetector tool init failed: %s", e)
 
     async def run_cycle(self) -> None:
         """Classify market regime using HMM or rule-based fallback."""
@@ -404,6 +436,19 @@ class RegimeDetector(BaseAgent):
         ema = ta.ema(df["close"], length=21)
         ema_slope = (ema.iloc[-1] - ema.iloc[-5]) / ema.iloc[-5] * 100 if ema is not None else 0
 
+        # ── Volatility regime from domain tool ──────────────
+        vol_regime_label = None
+        if self._volatility_analyzer:
+            try:
+                vol_regime = self._volatility_analyzer.classify_volatility_regime(ohlcv)
+                vol_regime_label = vol_regime.regime
+                logger.debug(
+                    "%s: volatility tool regime=%s (percentile=%.1f)",
+                    symbol, vol_regime.regime, vol_regime.percentile,
+                )
+            except Exception:
+                logger.debug("Volatility tool failed for %s", symbol, exc_info=True)
+
         # ── HMM classification ──
         regime = "UNCERTAIN"
         confidence = 0.0
@@ -448,6 +493,7 @@ class RegimeDetector(BaseAgent):
                     if bb is not None else 0
                 ),
                 "classifier": "hmm" if (self._use_hmm and confidence >= 0.3) else "rule_based",
+                "volatility_regime": vol_regime_label or "unknown",
             },
         )
         self.regime_state.update_asset_regime(symbol, state)

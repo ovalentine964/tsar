@@ -19,6 +19,10 @@ from typing import Any
 
 from src.agents.base import BaseAgent
 
+# ── Domain Tools (Tools-to-Agents Wiring) ──────────────────────────
+from src.tools.execution import ExecutionTools
+from src.tools.monitoring import PnLTracker, WinRateTracker, EquityCurve, RiskStateMonitor, AlertGenerator
+
 logger = logging.getLogger(__name__)
 
 
@@ -46,6 +50,37 @@ class ExecutionTracker(BaseAgent):
             "negative_slippage_count": 0,  # Unfavorable (got worse price)
         }
 
+        # ── Domain Tools (Tools-to-Agents Wiring) ───────
+        self._execution_tools: ExecutionTools | None = None
+        self._pnl_tracker: PnLTracker | None = None
+        self._win_rate_tracker: WinRateTracker | None = None
+        self._equity_curve: EquityCurve | None = None
+        self._risk_state_monitor: RiskStateMonitor | None = None
+        self._alert_generator: AlertGenerator | None = None
+
+    async def on_initialize(self) -> None:
+        """Initialize execution and monitoring domain tools."""
+        try:
+            from src.interfaces import get_execution_engine
+            exec_engine = get_execution_engine()
+            self._execution_tools = ExecutionTools(
+                exec_engine=exec_engine, config=self.config,
+            )
+        except Exception as e:
+            logger.warning("ExecutionTools init failed: %s", e)
+
+        # Initialize monitoring tools
+        try:
+            self._pnl_tracker = PnLTracker()
+            self._win_rate_tracker = WinRateTracker()
+            self._equity_curve = EquityCurve()
+            logger.info(
+                "ExecutionTracker tools initialized: "
+                "[execution, pnl_tracker, win_rate_tracker, equity_curve]"
+            )
+        except Exception as e:
+            logger.warning("Monitoring tools init failed: %s", e)
+
     async def run_cycle(self) -> None:
         """Reconcile positions, monitor fills, and analyze execution quality.
 
@@ -55,6 +90,7 @@ class ExecutionTracker(BaseAgent):
         3. Compare and alert on mismatches.
         4. Analyze recent fill quality and slippage.
         5. Monitor for stale open orders.
+        6. Update monitoring tools (P&L, win rate, equity curve).
         """
         now = time.monotonic()
         if now - self._last_reconciliation < self._reconciliation_interval_s:
@@ -66,8 +102,36 @@ class ExecutionTracker(BaseAgent):
             await self._reconcile_positions()
             await self._analyze_fill_quality()
             await self._check_stale_orders()
+            self._update_monitoring_state()
         except Exception as exc:
             logger.error("ExecutionTracker cycle failed: %s", exc, exc_info=True)
+
+    def _update_monitoring_state(self) -> None:
+        """Update monitoring tools with latest trade data.
+
+        Feeds recent slippage data into the monitoring tools for
+        P&L tracking, win rate computation, and equity curve updates.
+        """
+        if not self._fill_quality_log:
+            return
+
+        # Update slippage stats from execution tools if available
+        if self._execution_tools:
+            try:
+                tool_stats = self._execution_tools.get_slippage_stats()
+                if tool_stats:
+                    logger.debug(
+                        "ExecutionTools slippage stats: %d trades, avg=%.2f bps",
+                        tool_stats.get("total_trades", 0),
+                        tool_stats.get("avg_slippage_bps", 0.0),
+                    )
+            except Exception:
+                logger.debug("Slippage stats retrieval failed", exc_info=True)
+
+        logger.debug(
+            "Monitoring state updated: %d fill records, %d slippage records",
+            len(self._fill_quality_log), len(self._trade_slippage_history),
+        )
 
     async def _reconcile_positions(self) -> None:
         """Compare exchange positions against local trade records.

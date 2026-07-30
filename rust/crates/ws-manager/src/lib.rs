@@ -7,18 +7,18 @@
 //!
 //! ## Modules
 //!
-//! - [`connection`] — Single WebSocket connection lifecycle
+//! - [`connection`] — Single WebSocket connection lifecycle (tokio-tungstenite)
 //! - [`pool`] — Connection pool managing multiple exchange streams
-//! - [`parser`] — Message parsing for exchange-specific formats
+//! - [`parser`] — Message parsing for Binance trade/depth/kline streams
 //! - [`reconnect`] — Auto-reconnection with exponential backoff
 
 pub mod connection;
-pub mod pool;
 pub mod parser;
+pub mod pool;
 pub mod reconnect;
 
 // Re-export primary public API
 pub use connection::WsConnection;
-pub use pool::ConnectionPool;
 pub use parser::ParsedMessage;
+pub use pool::{BinanceStreamConfig, ConnectionPool};
 pub use reconnect::ReconnectPolicy;

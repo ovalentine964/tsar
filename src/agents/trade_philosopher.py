@@ -21,6 +21,9 @@ from typing import Any
 
 from src.agents.base import BaseAgent
 
+# ── Domain Tools (Tools-to-Agents Wiring) ──────────────────────────
+from src.tools.knowledge import KnowledgeTools
+
 logger = logging.getLogger(__name__)
 
 # ═══════════════════════════════════════════════════════════════════════
@@ -173,6 +176,29 @@ class TradePhilosopher(BaseAgent):
         self.llm_provider = None
         self.prompts = {}
 
+        # ── Domain Tools (Tools-to-Agents Wiring) ───────
+        self._knowledge_tools: KnowledgeTools | None = None
+        self._db_path = config.get("database", {}).get("db_path", "data/tsar.db")
+
+    async def on_initialize(self) -> None:
+        """Initialize KnowledgeTools and wire trade_memory/lesson_archive."""
+        try:
+            self._knowledge_tools = KnowledgeTools(self._db_path)
+            # Wire knowledge stores into the philosopher's references
+            if self.trade_memory is None:
+                self.trade_memory = self._knowledge_tools.trade_memory
+            if self.lesson_archive is None:
+                self.lesson_archive = self._knowledge_tools.lesson_archive
+            logger.info(
+                "TradePhilosopher initialized with KnowledgeTools: "
+                "trade_memory=%s, lesson_archive=%s, pattern_library=%s",
+                self.trade_memory is not None,
+                self.lesson_archive is not None,
+                self._knowledge_tools.pattern_library is not None,
+            )
+        except Exception as e:
+            logger.warning("KnowledgeTools initialization failed: %s", e)
+
     async def run_cycle(self) -> dict[str, Any]:
         """Process completed trades and generate structured reflections.
 
@@ -218,6 +244,23 @@ class TradePhilosopher(BaseAgent):
                         severity=severity,
                         trade_id=trade_id,
                     )
+
+                # Match patterns via KnowledgeTools pattern_library
+                if self._knowledge_tools and self._knowledge_tools.pattern_library:
+                    try:
+                        pattern_tags = structured.get("pattern_tags", [])
+                        for tag in pattern_tags:
+                            matched = self._knowledge_tools.pattern_library.match_pattern(
+                                pattern_name=tag, min_confidence=0.5,
+                            )
+                            if matched:
+                                logger.info(
+                                    "TradePhilosopher: pattern '%s' matched %d library entries",
+                                    tag, len(matched),
+                                )
+                    except Exception:
+                        logger.debug("Pattern library matching failed", exc_info=True)
+
                 reflections.append(trade_id)
 
             except Exception as e:

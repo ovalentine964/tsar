@@ -1,4 +1,16 @@
-"""TSAR Telegram Bot — real-time monitoring and control."""
+"""TSAR Telegram Bot — real-time monitoring and control.
+
+Wired to real TSAR tools via commands.py:
+  /status    → system health from monitoring tool
+  /pnl       → P&L from monitoring tool (TradeMemory)
+  /positions → positions from market_data (TradeMemory)
+  /risk      → risk state from risk_management tool (KillSwitch + TradeMemory)
+  /regime    → regime from regime_detector (TradeMemory)
+  /flywheel  → flywheel health from flywheel_orchestrator (FlywheelHealth)
+  /stop      → activate kill switch
+  /start     → deactivate kill switch
+"""
+
 import asyncio
 import logging
 import os
@@ -17,8 +29,6 @@ class TsarBot:
         self.offset = 0
 
         # SECURITY (C-020): Build whitelist of authorized chat IDs.
-        # The primary chat_id is always authorized. Additional IDs can be
-        # added via TELEGRAM_ALLOWED_CHAT_IDS (comma-separated).
         self._allowed_chat_ids: set[str] = {str(chat_id)}
         extra_ids = os.environ.get("TELEGRAM_ALLOWED_CHAT_IDS", "")
         for cid in extra_ids.split(","):
@@ -54,6 +64,7 @@ class TsarBot:
         return chat_id in self._allowed_chat_ids
 
     async def poll_loop(self):
+        """Main polling loop — routes commands to commands.py handlers."""
         while True:
             try:
                 async with aiohttp.ClientSession() as session:
@@ -82,10 +93,27 @@ class TsarBot:
                 await asyncio.sleep(5)
 
     async def handle_command(self, text: str):
-        cmd = text.split()[0].lower()
-        if cmd == "/status":
-            await self.send_message("🏰 TSAR is running")
-        elif cmd == "/pnl":
-            await self.send_message("📊 P&L: $0.00 (no trades yet)")
-        elif cmd == "/kill":
-            await self.send_message("🚨 Kill switch activated!")
+        """Route Telegram commands to commands.py handlers.
+
+        Each command is handled by the real TSAR tools:
+        - /status → system health from monitoring (KillSwitch + TradeMemory)
+        - /pnl → P&L from monitoring tool (TradeMemory stats)
+        - /positions → positions from market_data (TradeMemory open positions)
+        - /risk → risk state from risk_management (KillSwitch + drawdown)
+        - /regime → regime from regime_detector (TradeMemory regime perf)
+        - /flywheel → flywheel health from flywheel_orchestrator (FlywheelHealth)
+        - /stop → activate kill switch
+        - /start → deactivate kill switch
+        """
+        from src.bot.commands import handle_command
+
+        parts = text.split()
+        cmd = parts[0].lower()
+        args = parts[1:] if len(parts) > 1 else []
+
+        try:
+            response = await handle_command(cmd, args)
+            await self.send_message(response)
+        except Exception as e:
+            logger.error("Command %s failed: %s", cmd, e)
+            await self.send_message(f"❌ Error executing {cmd}: {str(e)}")

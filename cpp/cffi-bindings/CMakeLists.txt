@@ -19,6 +19,7 @@ target_include_directories(tsar_cffi
 target_link_libraries(tsar_cffi
     PRIVATE tsar_pricing
     PRIVATE tsar_fix
+    PRIVATE tsar_cuda
 )
 
 # Versioned .so

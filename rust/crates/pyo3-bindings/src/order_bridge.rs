@@ -1,17 +1,21 @@
 //! PyO3 bridge for the order executor.
 //!
 //! Exposes the order executor and its tracking capabilities to Python.
+//! All async operations use the shared global tokio runtime.
 
 use pyo3::prelude::*;
 use pyo3::types::PyDict;
 
-use tsar_order_executor::executor::OrderExecutor;
+use crate::runtime::RUNTIME;
+use tsar_order_executor::client::BinanceConfig;
+use tsar_order_executor::executor::{ExecutionMode, OrderExecutor};
 use tsar_order_executor::types::{OrderRequest, TimeInForce};
 use tsar_core::types::{OrderSide, OrderStatus, OrderType};
 
 /// Python-visible order executor.
 ///
 /// Provides order placement, cancellation, and status tracking.
+/// Supports both paper and live trading modes.
 #[pyclass(name = "OrderExecutor")]
 pub struct PyOrderExecutor {
     inner: OrderExecutor,
@@ -19,11 +23,52 @@ pub struct PyOrderExecutor {
 
 #[pymethods]
 impl PyOrderExecutor {
-    /// Create a new order executor.
+    /// Create a new paper-trading order executor.
     #[new]
-    fn new() -> Self {
-        Self {
-            inner: OrderExecutor::new(),
+    #[pyo3(signature = (mode="paper", api_key=None, api_secret=None, testnet=true))]
+    fn new(
+        mode: &str,
+        api_key: Option<String>,
+        api_secret: Option<String>,
+        testnet: bool,
+    ) -> PyResult<Self> {
+        let inner = match mode {
+            "paper" => OrderExecutor::new(),
+            "live" => {
+                let key = api_key.ok_or_else(|| {
+                    pyo3::exceptions::PyValueError::new_err(
+                        "api_key required for live mode",
+                    )
+                })?;
+                let secret = api_secret.ok_or_else(|| {
+                    pyo3::exceptions::PyValueError::new_err(
+                        "api_secret required for live mode",
+                    )
+                })?;
+                let config = if testnet {
+                    BinanceConfig::testnet(key, secret)
+                } else {
+                    BinanceConfig::mainnet(key, secret)
+                };
+                OrderExecutor::live(config).map_err(|e| {
+                    pyo3::exceptions::PyRuntimeError::new_err(e.to_string())
+                })?
+            }
+            _ => {
+                return Err(pyo3::exceptions::PyValueError::new_err(format!(
+                    "Invalid mode: '{mode}'. Use 'paper' or 'live'"
+                )));
+            }
+        };
+
+        Ok(Self { inner })
+    }
+
+    /// Get the current execution mode.
+    fn mode(&self) -> &str {
+        match self.inner.mode() {
+            ExecutionMode::Paper => "paper",
+            ExecutionMode::Live => "live",
         }
     }
 
@@ -48,9 +93,7 @@ impl PyOrderExecutor {
         let mut request = OrderRequest::market(symbol, order_side, quantity);
         request.strategy = strategy.map(|s| s.to_string());
 
-        let rt = tokio::runtime::Runtime::new()
-            .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?;
-        let result = rt
+        let result = RUNTIME
             .block_on(self.inner.place_order(&request))
             .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?;
 
@@ -80,9 +123,7 @@ impl PyOrderExecutor {
         let mut request = OrderRequest::limit(symbol, order_side, quantity, price);
         request.strategy = strategy.map(|s| s.to_string());
 
-        let rt = tokio::runtime::Runtime::new()
-            .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?;
-        let result = rt
+        let result = RUNTIME
             .block_on(self.inner.place_order(&request))
             .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?;
 
@@ -93,9 +134,8 @@ impl PyOrderExecutor {
     ///
     /// Returns True if cancellation was successful.
     fn cancel_order(&mut self, order_id: &str, symbol: &str) -> PyResult<bool> {
-        let rt = tokio::runtime::Runtime::new()
-            .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?;
-        rt.block_on(self.inner.cancel_order(order_id, symbol))
+        RUNTIME
+            .block_on(self.inner.cancel_order(order_id, symbol))
             .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))
     }
 
@@ -112,7 +152,11 @@ impl PyOrderExecutor {
 
     fn __repr__(&self) -> String {
         format!(
-            "OrderExecutor(open_orders={})",
+            "OrderExecutor(mode={}, open_orders={})",
+            match self.inner.mode() {
+                ExecutionMode::Paper => "paper",
+                ExecutionMode::Live => "live",
+            },
             self.inner.get_open_orders(None).len()
         )
     }

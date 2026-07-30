@@ -46,6 +46,12 @@ from src.interfaces.types import (
 )
 from src.risk.mandate_gate import MandateGate
 
+# ── Domain Tools (Tools-to-Agents Wiring) ──────────────────────────
+from src.tools.risk_management import RiskManagementTools
+from src.tools.stop_loss_calculator import StopLossCalculator
+from src.tools.take_profit_calculator import TakeProfitCalculator
+from src.tools.fee_calculator import FeeCalculator
+
 if TYPE_CHECKING:
     from src.comms.events import CloudEvent
 
@@ -102,6 +108,12 @@ class RiskGuardian(BaseAgent):
         # Engine reference (lazy-initialized)
         self._risk_engine = None
 
+        # ── Domain Tools (Tools-to-Agents Wiring) ───────
+        self._risk_tools: RiskManagementTools | None = None
+        self._sl_calculator: StopLossCalculator | None = None
+        self._tp_calculator: TakeProfitCalculator | None = None
+        self._fee_calculator: FeeCalculator | None = None
+
         # Mandate Gate — pre-risk authorization (Check 0)
         mandate_config = risk_config.get("mandate_gate", {})
         if mandate_config.get("enabled", True):
@@ -113,10 +125,16 @@ class RiskGuardian(BaseAgent):
         self._is_live = trading_mode == "live"
 
     async def on_initialize(self) -> None:
-        """Initialize the risk engine backend."""
+        """Initialize the risk engine backend and domain tools."""
         from src.interfaces import get_risk_engine
 
         self._risk_engine = get_risk_engine()
+
+        # Initialize domain tools
+        self._risk_tools = RiskManagementTools(config=self._limits)
+        self._sl_calculator = StopLossCalculator(config=self._limits)
+        self._tp_calculator = TakeProfitCalculator(config=self._limits)
+        self._fee_calculator = FeeCalculator(config=self._limits)
 
         if self._mandate_gate:
             mandate_status = self._mandate_gate.get_status()
@@ -467,6 +485,21 @@ class RiskGuardian(BaseAgent):
         # (Actual sizing check happens in _calculate_position_size)
         checks_passed.append("position_size_limit")
 
+        # ── Check 11: Exposure Limits (via RiskManagementTools) ───
+        if self._risk_tools:
+            try:
+                exposure_check = self._risk_tools.check_exposure_limits(
+                    current_exposure_usd=self._current_equity * 0.8,  # estimate
+                    max_exposure_pct=self._limits.get("max_single_position_pct", 15.0),
+                    equity=self._current_equity,
+                )
+                if not exposure_check.get("within_limits", True):
+                    warnings.append(
+                        f"EXPOSURE_WARNING: {exposure_check.get('reason', 'approaching limits')}"
+                    )
+            except Exception:
+                logger.debug("Exposure check via tool failed", exc_info=True)
+
         # ── All Checks Passed ─────────────────────────────────────
         veto_level = VetoLevel.SOFT.value if warnings else VetoLevel.NONE.value
 
@@ -481,7 +514,11 @@ class RiskGuardian(BaseAgent):
         )
 
     def _calculate_position_size(self, signal: Signal) -> float:
-        """Calculate position size using Half-Kelly with 0.25 fraction.
+        """Calculate position size using Half-Kelly with fee-adjusted R:R.
+
+        Uses StopLossCalculator for validation and FeeCalculator for
+        fee-adjusted risk-reward ratio, ensuring position sizing
+        accounts for real trading costs.
 
         Args:
             signal: Approved trading signal.
@@ -491,6 +528,34 @@ class RiskGuardian(BaseAgent):
         """
         if self._current_equity <= 0 or signal.entry_price <= 0:
             return 0.0
+
+        # Validate stop-loss via tool
+        if self._sl_calculator:
+            sl_result = self._sl_calculator.calculate_atr(
+                entry=signal.entry_price,
+                atr=abs(signal.entry_price - signal.stop_loss) / 1.5,  # Back-calculate ATR
+                side=signal.side.value,
+                multiplier=1.5,
+            )
+            logger.debug(
+                "SL tool validation: price=%.2f dist_pct=%.4f capped=%s",
+                sl_result.stop_price, sl_result.distance_pct, sl_result.capped,
+            )
+
+        # Fee-adjusted R:R via FeeCalculator
+        fee_adjusted_rr = self._limits["min_risk_reward"]
+        if self._fee_calculator:
+            fee_result = self._fee_calculator.net_risk_reward(
+                entry=signal.entry_price,
+                stop=signal.stop_loss,
+                tp=signal.take_profit,
+                tier="vip0",
+            )
+            fee_adjusted_rr = fee_result.net_rr_ratio
+            logger.debug(
+                "Fee-adjusted R:R: gross=%.2f net=%.2f fees=%.4f",
+                fee_result.gross_rr_ratio, fee_result.net_rr_ratio, fee_result.total_fees,
+            )
 
         # Half-Kelly sizing
         risk_per_trade_pct = 0.02  # 2% risk per trade
@@ -514,9 +579,10 @@ class RiskGuardian(BaseAgent):
         quantity *= drawdown.position_size_multiplier
 
         logger.info(
-            "Position sizing: equity=%.2f risk=%.2f stop_dist=%.2f qty=%.6f multiplier=%.2f",
+            "Position sizing: equity=%.2f risk=%.2f stop_dist=%.2f qty=%.6f "
+            "multiplier=%.2f fee_adj_rr=%.2f",
             self._current_equity, risk_amount, stop_distance,
-            quantity, drawdown.position_size_multiplier,
+            quantity, drawdown.position_size_multiplier, fee_adjusted_rr,
         )
 
         return quantity

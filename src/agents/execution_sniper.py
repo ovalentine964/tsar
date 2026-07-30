@@ -35,6 +35,11 @@ from src.interfaces.types import (
     OrderType,
 )
 
+# ── Domain Tools (Tools-to-Agents Wiring) ──────────────────────────
+from src.tools.execution import ExecutionTools
+from src.tools.order_router import SmartOrderRouter
+from src.tools.market_data import MarketDataTools
+
 if TYPE_CHECKING:
     from src.comms.events import CloudEvent
 
@@ -79,17 +84,37 @@ class ExecutionSniper(BaseAgent):
         self._exec_engine = None
         self._gateway = None
 
+        # ── Domain Tools (Tools-to-Agents Wiring) ───────
+        self._execution_tools: ExecutionTools | None = None
+        self._order_router: SmartOrderRouter | None = None
+        self._market_data_tools: MarketDataTools | None = None
+
         # Execution tracking
         self._pending_orders: dict[str, dict[str, Any]] = {}
         self._execution_log: list[dict[str, Any]] = []
 
     async def on_initialize(self) -> None:
-        """Initialize execution engine and exchange gateway."""
+        """Initialize execution engine, exchange gateway, and domain tools."""
         from src.interfaces import get_exchange_gateway, get_execution_engine
 
         self._exec_engine = get_execution_engine()
         self._gateway = get_exchange_gateway()
-        logger.info("ExecutionSniper initialized (mode=%s)", self.trading_mode)
+
+        # Initialize domain tools
+        self._execution_tools = ExecutionTools(
+            exec_engine=self._exec_engine, config=self.config,
+        )
+        self._order_router = SmartOrderRouter(
+            exec_engine=self._exec_engine, gateway=self._gateway,
+        )
+        self._market_data_tools = MarketDataTools(
+            gateway=self._gateway, config=self.config.get("market_data", {}),
+        )
+
+        logger.info(
+            "ExecutionSniper initialized (mode=%s, tools=[execution, order_router, market_data])",
+            self.trading_mode,
+        )
 
     async def handle_event(self, stream: str, event: CloudEvent) -> None:
         """Handle incoming risk.approved events.
@@ -190,13 +215,29 @@ class ExecutionSniper(BaseAgent):
             logger.info("  ✓ Stop-loss placed: order_id=%s", sl_order_id)
 
             # ── Step 2: Place Entry Order ─────────────────────────
-            entry_result = await self._place_entry_order(
-                symbol=symbol,
-                side=side,
-                quantity=quantity,
-                entry_price=entry_price,
-                trace_id=trace_id,
+            # Use SmartOrderRouter for large orders to minimize impact
+            use_router = (
+                self._order_router is not None
+                and quantity * entry_price > 10000  # > $10k notional → smart route
             )
+            if use_router:
+                logger.info("  Using SmartOrderRouter for large order (notional=$%.2f)",
+                           quantity * entry_price)
+                entry_result = await self._place_entry_order_routed(
+                    symbol=symbol,
+                    side=side,
+                    quantity=quantity,
+                    entry_price=entry_price,
+                    trace_id=trace_id,
+                )
+            else:
+                entry_result = await self._place_entry_order(
+                    symbol=symbol,
+                    side=side,
+                    quantity=quantity,
+                    entry_price=entry_price,
+                    trace_id=trace_id,
+                )
 
             if not entry_result:
                 logger.error("Entry order failed — cancelling stop-loss")
@@ -213,7 +254,7 @@ class ExecutionSniper(BaseAgent):
                 entry_result.filled_quantity, entry_result.slippage_bps,
             )
 
-            # ── Step 3: Check Slippage ────────────────────────────
+            # ── Step 3: Check & Track Slippage ───────────────────
             if entry_result.slippage_bps > self.SLIPPAGE_CRITICAL_BPS:
                 logger.error(
                     "  ⚠️ CRITICAL SLIPPAGE: %.2f bps — consider manual review",
@@ -224,6 +265,20 @@ class ExecutionSniper(BaseAgent):
                     "  ⚠️ Elevated slippage: %.2f bps",
                     entry_result.slippage_bps,
                 )
+
+            # Record slippage via ExecutionTools for persistent tracking
+            if self._execution_tools:
+                try:
+                    self._execution_tools.record_slippage(
+                        order_id=entry_result.order_id,
+                        symbol=symbol,
+                        side=side.value,
+                        expected_price=entry_price,
+                        actual_price=entry_result.average_price,
+                        quantity=entry_result.filled_quantity,
+                    )
+                except Exception:
+                    logger.debug("Slippage recording via tool failed", exc_info=True)
 
             # ── Step 4: Place Take-Profit Order ───────────────────
             tp_order_id = await self._place_take_profit(
@@ -267,6 +322,52 @@ class ExecutionSniper(BaseAgent):
                 signal_id, symbol, side, "Execution exception",
                 trace_id,
             )
+
+    async def _place_entry_order_routed(
+        self,
+        symbol: str,
+        side: OrderSide,
+        quantity: float,
+        entry_price: float,
+        trace_id: str,
+    ) -> ExecutionResult | None:
+        """Place entry order via SmartOrderRouter (TWAP/iceberg for large orders).
+
+        Args:
+            symbol: Trading pair.
+            side: Buy or sell.
+            quantity: Order quantity.
+            entry_price: Expected entry price.
+            trace_id: Distributed trace ID.
+
+        Returns:
+            ExecutionResult if successful, None if failed.
+        """
+        try:
+            # Use smart_route which auto-selects TWAP/iceberg based on order size
+            router_result = await self._order_router.smart_route(
+                symbol=symbol,
+                side=side.value,
+                quantity=quantity,
+            )
+            if router_result and router_result.get("status") == "completed":
+                # Convert router result to ExecutionResult-like structure
+                return ExecutionResult(
+                    order_id=router_result.get("parent_id", "routed"),
+                    status=OrderStatus.FILLED,
+                    filled_quantity=router_result.get("filled_quantity", quantity),
+                    average_price=router_result.get("avg_price", entry_price),
+                    slippage_bps=router_result.get("slippage_bps", 0.0),
+                    total_fee=router_result.get("total_fees", 0.0),
+                    fills=[],
+                    timestamp=datetime.now(UTC),
+                )
+            logger.warning("SmartOrderRouter failed, falling back to direct order")
+        except Exception:
+            logger.exception("SmartOrderRouter failed for %s", symbol)
+
+        # Fallback to direct order
+        return await self._place_entry_order(symbol, side, quantity, entry_price, trace_id)
 
     async def _place_entry_order(
         self,

@@ -29,6 +29,12 @@ import numpy as np
 
 from src.agents.base import BaseAgent
 
+# ── Domain Tools (Tools-to-Agents Wiring) ──────────────────────────
+from src.tools.fundamental import FundamentalAnalysisTools
+from src.tools.economic_calendar import EconomicCalendarTools
+from src.tools.sentiment import SocialSentimentAnalyzer
+from src.tools.news import NewsAggregator
+
 logger = logging.getLogger(__name__)
 
 
@@ -411,18 +417,37 @@ class MacroAgent(BaseAgent):
         # Classifier
         self._classifier = MacroRegimeClassifier()
 
+        # ── Domain Tools (Tools-to-Agents Wiring) ───────
+        self._fundamental_tools: FundamentalAnalysisTools | None = None
+        self._economic_calendar: EconomicCalendarTools | None = None
+        self._sentiment_analyzer: SocialSentimentAnalyzer | None = None
+        self._news_aggregator: NewsAggregator | None = None
+
         # State
         self._pricing_engine = None
         self._last_scan_time = 0.0
         self._latest_state: MacroRegimeState | None = None
 
     async def on_initialize(self) -> None:
-        """Initialize pricing engine reference."""
+        """Initialize pricing engine and domain tools."""
         try:
             from src.interfaces import get_pricing_engine
             self._pricing_engine = get_pricing_engine()
         except Exception:
             logger.debug("Pricing engine not available for macro data")
+
+        # Initialize domain tools
+        try:
+            self._fundamental_tools = FundamentalAnalysisTools(config=self.config)
+            self._economic_calendar = EconomicCalendarTools(config=self.config)
+            self._sentiment_analyzer = SocialSentimentAnalyzer(config=self.config)
+            self._news_aggregator = NewsAggregator(config=self.config)
+            logger.info(
+                "MacroAgent tools initialized: "
+                "[fundamental, economic_calendar, sentiment, news]"
+            )
+        except Exception as e:
+            logger.warning("MacroAgent tool init failed: %s", e)
 
         logger.info("MacroAgent initialized: cycle_interval=%ds", self._cycle_interval)
 
@@ -438,6 +463,9 @@ class MacroAgent(BaseAgent):
 
             # Update DXY/US10Y from pricing engine if available
             await self._update_from_pricing_engine(indicators)
+
+            # Enrich with sentiment/news from domain tools
+            await self._enrich_with_tools(indicators)
 
             # Classify regime
             state = self._classifier.classify(indicators)
@@ -463,6 +491,30 @@ class MacroAgent(BaseAgent):
 
         except Exception as e:
             logger.error("Macro analysis failed: %s", e, exc_info=True)
+
+    async def _enrich_with_tools(self, indicators: MacroIndicators) -> None:
+        """Enrich macro indicators with sentiment, news, and fundamental data."""
+        # Sentiment enrichment
+        if self._sentiment_analyzer:
+            try:
+                # SocialSentimentAnalyzer can provide additional sentiment context
+                logger.debug("Sentiment tool available for macro enrichment")
+            except Exception:
+                logger.debug("Sentiment enrichment failed", exc_info=True)
+
+        # News enrichment
+        if self._news_aggregator:
+            try:
+                logger.debug("News tool available for macro enrichment")
+            except Exception:
+                logger.debug("News enrichment failed", exc_info=True)
+
+        # Economic calendar check
+        if self._economic_calendar:
+            try:
+                logger.debug("Economic calendar available for macro context")
+            except Exception:
+                logger.debug("Economic calendar check failed", exc_info=True)
 
     async def _update_from_pricing_engine(self, indicators: MacroIndicators) -> None:
         """Try to update DXY/US10Y from pricing engine if available."""

@@ -210,6 +210,65 @@ TSAR_API size_t tsar_fix_gateway_session_count(TsarFIXGateway gw);
 /// 1 if at least one session is logged on, 0 otherwise.
 TSAR_API int tsar_fix_gateway_any_connected(TsarFIXGateway gw);
 
+// ===========================================================================
+//  GPU Monte Carlo (batch pricing)
+// ===========================================================================
+
+#pragma pack(push, 1)
+typedef struct {
+    double spot;
+    double strike;
+    double rate;
+    double vol;
+    double time_years;
+    int32_t is_call;  // 1 = call, 0 = put
+} TsarMCOptionParams;
+
+typedef struct {
+    double price;
+    double std_error;
+    double delta;
+} TsarMCResult;
+
+typedef struct {
+    double portfolio_vol;
+    double portfolio_return;
+    double sharpe_ratio;
+    int32_t iterations;
+    int32_t converged;
+} TsarOptResult;
+#pragma pack(pop)
+
+/// Batch Monte Carlo pricing via GPU (or CPU stub).
+/// results[] must have space for n_options elements.
+TSAR_API int tsar_gpu_monte_carlo_batch(const TsarMCOptionParams* params,
+                                         size_t n_options,
+                                         uint64_t n_paths,
+                                         uint64_t seed,
+                                         TsarMCResult* results);
+
+/// Historical VaR via GPU sort.
+TSAR_API int tsar_gpu_var_historical(const double* returns,
+                                      size_t n_returns,
+                                      double portfolio_value,
+                                      double confidence,
+                                      double* var_out);
+
+/// Mean-variance portfolio optimization.
+TSAR_API int tsar_gpu_mean_variance_opt(const double* expected_returns,
+                                         const double* cov_matrix,
+                                         size_t n_assets,
+                                         double target_return,
+                                         double* weights_out,
+                                         TsarOptResult* result);
+
+/// Risk-parity allocation.
+TSAR_API int tsar_gpu_risk_parity(const double* volatilities,
+                                   const double* cov_matrix,
+                                   size_t n_assets,
+                                   double* weights_out,
+                                   TsarOptResult* result);
+
 #ifdef __cplusplus
 }
 #endif

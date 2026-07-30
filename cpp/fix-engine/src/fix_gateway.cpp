@@ -92,7 +92,7 @@ Expected<void> FIXGateway::logout_session(size_t index) {
 
 void FIXGateway::logout_all() {
     for (auto& session : impl_->sessions) {
-        session->logout();  // Best-effort
+        (void)session->logout();  // Best-effort
     }
 }
 

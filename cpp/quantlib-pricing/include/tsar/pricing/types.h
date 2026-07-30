@@ -78,7 +78,7 @@ concept OptionLike = requires(const T& o) {
     { o.rate }   -> std::convertible_to<double>;
     { o.vol }    -> std::convertible_to<double>;
     { o.time }   -> std::convertible_to<double>;
-    { o.side }   -> std::same_as<OptionSide>;
+    { o.side }   -> std::convertible_to<OptionSide>;
 };
 
 // ---------------------------------------------------------------------------
