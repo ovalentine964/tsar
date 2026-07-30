@@ -125,6 +125,22 @@ models:
     cost_per_1k_output_tokens: 0.0
     notes: "Free-tier NIM model; strong reasoning for complex tasks"
 
+  nvidia_nim/minimaxai/minimax-m3:
+    display_name: "MiniMax M3 via NVIDIA NIM"
+    provider: "nvidia_nim"
+    capabilities:
+      - text_generation
+      - streaming
+      - tool_use
+      - json_mode
+      - reasoning
+      - vision
+    max_context_tokens: 131072
+    max_output_tokens: 8192
+    cost_per_1k_input_tokens: 0.0
+    cost_per_1k_output_tokens: 0.0
+    notes: "Multimodal MoE model; free-tier NIM; strong for complex analysis"
+
   nvidia_nim/nvidia/nv-embed-v2:
     display_name: "NV-Embed-v2 (Embeddings)"
     provider: "nvidia_nim"
@@ -231,6 +247,7 @@ routing:
     fallback:
       - "deepseek/deepseek-reasoner"
       - "nvidia_nim/nvidia/nemotron-3-ultra"
+      - "nvidia_nim/minimaxai/minimax-m3"
       - "ollama/qwen2.5:32b"
       - "ollama/qwen2.5:7b"  # Final local fallback (H-004)
     params:
@@ -242,6 +259,7 @@ routing:
     fallback:
       - "deepseek/deepseek-reasoner"
       - "nvidia_nim/nvidia/nemotron-3-ultra"
+      - "nvidia_nim/minimaxai/minimax-m3"
       - "ollama/qwen2.5:32b"
       - "ollama/qwen2.5:7b"  # Final local fallback (H-004)
     params:
@@ -253,6 +271,7 @@ routing:
     fallback:
       - "deepseek/deepseek-reasoner"
       - "nvidia_nim/nvidia/nemotron-3-ultra"
+      - "nvidia_nim/minimaxai/minimax-m3"
       - "ollama/qwen2.5:32b"
       - "ollama/qwen2.5:7b"  # Final local fallback (H-004)
     params:
@@ -264,6 +283,7 @@ routing:
     fallback:
       - "deepseek/deepseek-reasoner"
       - "nvidia_nim/nvidia/nemotron-3-ultra"
+      - "nvidia_nim/minimaxai/minimax-m3"
       - "ollama/qwen2.5:32b"
       - "ollama/qwen2.5:7b"  # Final local fallback (H-004)
     params:

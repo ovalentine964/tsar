@@ -41,11 +41,13 @@ class OpenAIProvider(LLMProvider):
         base_url: str = "https://api.openai.com/v1",
         default_model: str = "gpt-4o-mini",
         timeout_s: int = 60,
+        provider_name: str = "openai",
     ) -> None:
         self._api_key = api_key or os.environ.get("OPENAI_API_KEY", "")
         self._base_url = base_url
         self._default_model = default_model
         self._timeout = timeout_s
+        self._provider_name = provider_name
         self._client: Any = None  # openai.AsyncOpenAI
 
     # ------------------------------------------------------------------
@@ -57,6 +59,11 @@ class OpenAIProvider(LLMProvider):
         "gpt-4o": {"input": 0.0025, "output": 0.01},
         "gpt-4-turbo": {"input": 0.01, "output": 0.03},
         "gpt-3.5-turbo": {"input": 0.0005, "output": 0.0015},
+        # NVIDIA NIM free-tier models
+        "deepseek-ai/deepseek-r1": {"input": 0.0, "output": 0.0},
+        "nvidia/nemotron-3-ultra": {"input": 0.0, "output": 0.0},
+        "nvidia/nv-embed-v2": {"input": 0.0, "output": 0.0},
+        "minimaxai/minimax-m3": {"input": 0.0, "output": 0.0},
     }
 
     # ------------------------------------------------------------------
@@ -132,7 +139,7 @@ class OpenAIProvider(LLMProvider):
         return LLMResponse(
             content=choice.message.content or "",
             model=model,
-            provider="openai",
+            provider=self._provider_name,
             prompt_tokens=prompt_tokens,
             completion_tokens=completion_tokens,
             total_tokens=prompt_tokens + completion_tokens,

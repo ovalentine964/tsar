@@ -169,6 +169,7 @@ def _create_provider(name: str, provider_cfg: dict[str, Any]) -> LLMProvider:
             api_key=provider_cfg.get("api_key", ""),
             base_url=provider_cfg.get("base_url", "https://api.openai.com/v1"),
             timeout_s=provider_cfg.get("timeout_s", 60),
+            provider_name="openai",
         )
     elif name == "nvidia_nim":
         # NVIDIA NIM uses OpenAI-compatible API — use OpenAIProvider with custom base
@@ -176,6 +177,7 @@ def _create_provider(name: str, provider_cfg: dict[str, Any]) -> LLMProvider:
             api_key=provider_cfg.get("api_key", ""),
             base_url=provider_cfg.get("base_url", "https://integrate.api.nvidia.com/v1"),
             timeout_s=provider_cfg.get("timeout_s", 60),
+            provider_name="nvidia_nim",
         )
     else:
         raise ValueError(f"Unknown provider: {name} (type={ptype})")
