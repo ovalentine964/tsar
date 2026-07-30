@@ -25,6 +25,16 @@ from datetime import UTC, datetime
 from typing import Any
 
 import ccxt.async_support as ccxt
+from ccxt import (
+    DECIMAL_PLACES,
+    ROUND,
+    ROUND_DOWN,
+    ROUND_UP,
+    SIGNIFICANT_DIGITS,
+    TICK_SIZE,
+    TRUNCATE,
+    decimal_to_precision,
+)
 
 from src.interfaces.execution_engine import ExecutionEngine
 from src.interfaces.types import (
@@ -146,6 +156,11 @@ class CcxtExecEngine(ExecutionEngine):
     def _validate_order(self, order: Order) -> None:
         """Validate order parameters before execution.
 
+        Checks:
+        1. Basic parameter validation (quantity, price, symbol format)
+        2. Exchange-level limits (min/max amount, min/max cost)
+        3. Amount and price precision
+
         Args:
             order: The Order to validate.
 
@@ -176,6 +191,149 @@ class CcxtExecEngine(ExecutionEngine):
                 f"Invalid symbol format: '{order.symbol}' — expected 'BASE/QUOTE'"
             )
 
+        # Exchange-level validation (requires loaded markets)
+        if self._exchange is not None and self._markets_loaded:
+            self._validate_exchange_limits(order)
+
+    def _validate_exchange_limits(self, order: Order) -> None:
+        """Validate order against exchange-enforced limits.
+
+        Checks minimum/maximum amount and cost from market data.
+        Mirrors Freqtrade's get_min_pair_stake_amount() pattern.
+
+        Args:
+            order: The Order to validate.
+
+        Raises:
+            ValueError: If order violates exchange limits.
+        """
+        assert self._exchange is not None
+        market = self._exchange.markets.get(order.symbol)
+        if market is None:
+            return  # Can't validate without market data
+
+        limits = market.get("limits", {})
+
+        # Check amount limits
+        min_amount = limits.get("amount", {}).get("min")
+        if min_amount is not None and order.quantity < min_amount:
+            raise ValueError(
+                f"Order quantity {order.quantity} below exchange minimum "
+                f"{min_amount} for {order.symbol}"
+            )
+
+        max_amount = limits.get("amount", {}).get("max")
+        if max_amount is not None and order.quantity > max_amount:
+            raise ValueError(
+                f"Order quantity {order.quantity} above exchange maximum "
+                f"{max_amount} for {order.symbol}"
+            )
+
+        # Check cost limits (requires price)
+        price = order.price or order.stop_price
+        if price is not None and price > 0:
+            cost = order.quantity * price
+            min_cost = limits.get("cost", {}).get("min")
+            if min_cost is not None and cost < min_cost:
+                raise ValueError(
+                    f"Order cost {cost:.2f} below exchange minimum "
+                    f"{min_cost} for {order.symbol}"
+                )
+
+            max_cost = limits.get("cost", {}).get("max")
+            if max_cost is not None and cost > max_cost:
+                raise ValueError(
+                    f"Order cost {cost:.2f} above exchange maximum "
+                    f"{max_cost} for {order.symbol}"
+                )
+
+    def _apply_precision(self, order: Order) -> Order:
+        """Apply exchange precision to order amount and price.
+
+        Truncates amount and rounds price to exchange-accepted precision.
+        Creates a new Order with corrected values.
+
+        Args:
+            order: Original order.
+
+        Returns:
+            New Order with precision-adjusted values.
+        """
+        if self._exchange is None or not self._markets_loaded:
+            return order
+
+        market = self._exchange.markets.get(order.symbol)
+        if market is None:
+            return order
+
+        precision = market.get("precision", {})
+        amount_prec = precision.get("amount")
+        price_prec = precision.get("price")
+        prec_mode = self._exchange.precisionMode
+
+        # Apply amount precision (truncate)
+        new_quantity = order.quantity
+        if amount_prec is not None and prec_mode is not None:
+            prec = int(amount_prec) if prec_mode != TICK_SIZE else amount_prec
+            new_quantity = float(
+                decimal_to_precision(order.quantity, TRUNCATE, prec, prec_mode)
+            )
+
+        # Apply price precision (round)
+        new_price = order.price
+        if order.price is not None and price_prec is not None and prec_mode is not None:
+            new_price = float(
+                decimal_to_precision(
+                    order.price,
+                    ROUND,
+                    int(price_prec) if prec_mode != TICK_SIZE else price_prec,
+                    prec_mode,
+                )
+            )
+
+        # Apply stop price precision
+        new_stop_price = order.stop_price
+        if order.stop_price is not None and price_prec is not None and prec_mode is not None:
+            new_stop_price = float(
+                decimal_to_precision(
+                    order.stop_price,
+                    ROUND,
+                    int(price_prec) if prec_mode != TICK_SIZE else price_prec,
+                    prec_mode,
+                )
+            )
+
+        if (
+            new_quantity == order.quantity
+            and new_price == order.price
+            and new_stop_price == order.stop_price
+        ):
+            return order
+
+        logger.debug(
+            "Precision adjusted %s: qty %.8f->%.8f, price %s->%s",
+            order.symbol,
+            order.quantity,
+            new_quantity,
+            order.price,
+            new_price,
+        )
+
+        return Order(
+            order_id=order.order_id,
+            symbol=order.symbol,
+            side=order.side,
+            order_type=order.order_type,
+            quantity=new_quantity,
+            price=new_price,
+            stop_price=new_stop_price,
+            filled_quantity=order.filled_quantity,
+            status=order.status,
+            fee=order.fee,
+            fee_currency=order.fee_currency,
+            timestamp=order.timestamp,
+        )
+
     # ═══════════════════════════════════════════════════════════════
     # ORDER EXECUTION
     # ═══════════════════════════════════════════════════════════════
@@ -199,6 +357,9 @@ class CcxtExecEngine(ExecutionEngine):
         """
         # Pre-execution validation
         self._validate_order(order)
+
+        # Apply exchange precision to amount/price (Freqtrade pattern)
+        order = self._apply_precision(order)
 
         exchange = await self._ensure_exchange()
 

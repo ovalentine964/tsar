@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 
@@ -25,6 +26,7 @@ class ApiService {
   Future<void> get ready => _readyCompleter.future;
 
   bool get isConfigured => _configured;
+  String get baseUrl => _baseUrl;
 
   void configure({required String baseUrl, String? apiKey, Duration? timeout}) {
     _baseUrl = baseUrl.endsWith('/')

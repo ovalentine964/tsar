@@ -1113,6 +1113,128 @@ class CcxtGateway(ExchangeGateway):
                 f"(status={self._status.value})"
             )
 
+    # ═══════════════════════════════════════════════════════════════
+    # PRECISION & MARKET LIMITS (Freqtrade-hardened)
+    # ═══════════════════════════════════════════════════════════════
+
+    def get_precision_amount(self, symbol: str) -> float | None:
+        """Get amount precision for a symbol from loaded markets.
+
+        Returns the precision value from markets[symbol]['precision']['amount'].
+        Must be used in combination with precision_mode.
+        """
+        if self._exchange is None:
+            return None
+        return self._exchange.markets.get(symbol, {}).get("precision", {}).get("amount", None)
+
+    def get_precision_price(self, symbol: str) -> float | None:
+        """Get price precision for a symbol from loaded markets.
+
+        Returns the precision value from markets[symbol]['precision']['price'].
+        Must be used in combination with precision_mode.
+        """
+        if self._exchange is None:
+            return None
+        return self._exchange.markets.get(symbol, {}).get("precision", {}).get("price", None)
+
+    @property
+    def precision_mode(self) -> int | None:
+        """Exchange ccxt precisionMode."""
+        if self._exchange is None:
+            return None
+        return self._exchange.precisionMode
+
+    def amount_to_precision(self, symbol: str, amount: float) -> float:
+        """Truncate amount to exchange-accepted precision.
+
+        Uses ccxt's decimal_to_precision with TRUNCATE mode.
+        """
+        return _amount_to_precision(amount, self.get_precision_amount(symbol), self.precision_mode)
+
+    def price_to_precision(
+        self, symbol: str, price: float, *, rounding_mode: int = ROUND
+    ) -> float:
+        """Round price to exchange-accepted precision.
+
+        Args:
+            symbol: Trading pair.
+            price: Raw price.
+            rounding_mode: ROUND (default), ROUND_UP, or ROUND_DOWN.
+        """
+        return _price_to_precision(
+            price, self.get_precision_price(symbol), self.precision_mode, rounding_mode=rounding_mode
+        )
+
+    def get_market_limits(self, symbol: str) -> dict[str, Any]:
+        """Get exchange-enforced limits for a symbol.
+
+        Returns dict with:
+            - min_amount: Minimum order quantity
+            - max_amount: Maximum order quantity
+            - min_cost: Minimum order cost (qty * price)
+            - max_cost: Maximum order cost
+            - min_price: Minimum price
+            - max_price: Maximum price
+        """
+        if self._exchange is None:
+            return {}
+        market = self._exchange.markets.get(symbol, {})
+        limits = market.get("limits", {})
+        return {
+            "min_amount": limits.get("amount", {}).get("min"),
+            "max_amount": limits.get("amount", {}).get("max"),
+            "min_cost": limits.get("cost", {}).get("min"),
+            "max_cost": limits.get("cost", {}).get("max"),
+            "min_price": limits.get("price", {}).get("min"),
+            "max_price": limits.get("price", {}).get("max"),
+        }
+
+    def validate_order_limits(
+        self, symbol: str, side: str, amount: float, price: float | None = None
+    ) -> tuple[bool, str]:
+        """Validate order against exchange limits before placement.
+
+        Checks:
+        - Minimum/maximum amount
+        - Minimum/maximum cost (amount * price)
+        - Amount precision
+        - Price precision (if limit order)
+
+        Args:
+            symbol: Trading pair.
+            side: "buy" or "sell".
+            amount: Order quantity.
+            price: Limit price (None for market orders).
+
+        Returns:
+            Tuple of (is_valid, error_message). Empty string if valid.
+        """
+        limits = self.get_market_limits(symbol)
+        if not limits:
+            return True, ""  # Can't validate without market data
+
+        # Check amount limits
+        min_amount = limits.get("min_amount")
+        if min_amount is not None and amount < min_amount:
+            return False, f"Amount {amount} below minimum {min_amount} for {symbol}"
+
+        max_amount = limits.get("max_amount")
+        if max_amount is not None and amount > max_amount:
+            return False, f"Amount {amount} above maximum {max_amount} for {symbol}"
+
+        # Check cost limits (requires price)
+        if price is not None and price > 0:
+            cost = amount * price
+            min_cost = limits.get("min_cost")
+            if min_cost is not None and cost < min_cost:
+                return False, f"Order cost {cost:.2f} below minimum {min_cost} for {symbol}"
+
+            max_cost = limits.get("max_cost")
+            if max_cost is not None and cost > max_cost:
+                return False, f"Order cost {cost:.2f} above maximum {max_cost} for {symbol}"
+
+        return True, ""
+
     async def _retry_on_transient(self, coro_func: Any, *args: Any, **kwargs: Any) -> Any:
         """Execute a ccxt call with retry on transient errors.
 
