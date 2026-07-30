@@ -999,7 +999,28 @@ class ExecutionTools:
 
         Builds an Order object and delegates to the ExecutionEngine.
         Records timing for fill quality analysis.
+
+        Includes Freqtrade-hardened pre-flight checks:
+        - Exchange limit validation (min amount, min cost)
+        - Precision adjustment via gateway
         """
+        # ── Exchange Hardening: Pre-flight validation ──────────────
+        # Check exchange limits before building the Order
+        if hasattr(self._gateway, 'validate_order_limits'):
+            is_valid, err_msg = self._gateway.validate_order_limits(
+                symbol, side, quantity, price
+            )
+            if not is_valid:
+                raise ValueError(f"Order rejected by exchange limits: {err_msg}")
+
+        # Apply precision via gateway if available
+        if hasattr(self._gateway, 'amount_to_precision'):
+            quantity = self._gateway.amount_to_precision(symbol, quantity)
+        if price is not None and hasattr(self._gateway, 'price_to_precision'):
+            price = self._gateway.price_to_precision(symbol, price)
+        if stop_price is not None and hasattr(self._gateway, 'price_to_precision'):
+            stop_price = self._gateway.price_to_precision(symbol, stop_price)
+
         # Map string args to enums
         side_enum = OrderSide(side.lower())
         type_enum = OrderType(order_type.lower())
