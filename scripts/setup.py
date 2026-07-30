@@ -1,45 +1,64 @@
 #!/usr/bin/env python3
-"""TSAR setup wizard — creates data directory and verifies configuration."""
-import os
+"""
+TSAR Setup Wizard — One-command configuration.
+
+Usage:
+    python scripts/setup.py                    # Interactive wizard
+    python scripts/setup.py --non-interactive  # Read from env vars (CI/Docker)
+    python scripts/setup.py --validate-only    # Check config without changing
+    python scripts/setup.py --go-live          # Unlock live trading (requires gates)
+    python scripts/setup.py --force            # Overwrite existing .env
+"""
+from __future__ import annotations
+
+import argparse
 import sys
 from pathlib import Path
 
-def main():
-    print("TSAR Setup Wizard")
-    print("=" * 40)
-    
-    # Create data directory
-    data_dir = Path("data")
-    data_dir.mkdir(exist_ok=True)
-    print(f"✓ Created {data_dir}/")
-    
-    # Check .env
-    env_file = Path(".env")
-    if not env_file.exists():
-        example = Path(".env.example")
-        if example.exists():
-            print("⚠ No .env file found. Copy .env.example to .env and fill in your keys.")
-        else:
-            print("⚠ No .env or .env.example found.")
-    else:
-        print("✓ .env file exists")
-    
-    # Check config
-    config_dir = Path("config")
-    if config_dir.exists():
-        print("✓ config/ directory exists")
-    else:
-        print("✗ config/ directory missing!")
-    
-    # Check Python version
-    v = sys.version_info
-    if v >= (3, 12):
-        print(f"✓ Python {v.major}.{v.minor}.{v.micro}")
-    else:
-        print(f"✗ Python 3.12+ required, got {v.major}.{v.minor}.{v.micro}")
-        sys.exit(1)
-    
-    print("\nSetup complete! Run: python -m src")
+# Ensure scripts/ is importable
+sys.path.insert(0, str(Path(__file__).parent))
+
+from setup.wizard import SetupWizard
+from setup.validators import validate_only
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser(description="TSAR Setup Wizard")
+    parser.add_argument(
+        "--non-interactive", action="store_true",
+        help="Read credentials from environment variables (for CI/Docker)",
+    )
+    parser.add_argument(
+        "--validate-only", action="store_true",
+        help="Validate existing config without making changes",
+    )
+    parser.add_argument(
+        "--go-live", action="store_true",
+        help="Check live trading gates",
+    )
+    parser.add_argument(
+        "--force", action="store_true",
+        help="Overwrite existing .env",
+    )
+    args = parser.parse_args()
+
+    if args.validate_only:
+        issues = validate_only()
+        if not issues:
+            print("✅ Configuration looks good!")
+            sys.exit(0)
+        for issue in issues:
+            icon = "❌" if issue["severity"] == "ERROR" else "⚠️ "
+            print(f"  {icon} {issue['message']}")
+        sys.exit(1 if any(i["severity"] == "ERROR" for i in issues) else 0)
+
+    wizard = SetupWizard(
+        interactive=not args.non_interactive,
+        force=args.force,
+        go_live=args.go_live,
+    )
+    wizard.run()
+
 
 if __name__ == "__main__":
     main()
