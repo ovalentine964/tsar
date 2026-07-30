@@ -381,6 +381,18 @@ class RiskManagementTools:
         max_asset = max(by_asset.values()) if by_asset else 0
         concentration = max_asset / gross if gross > 0 else 0
 
+        return ExposureResult(
+            total_exposure_usd=round(gross, 2),
+            long_exposure_usd=round(long_usd, 2),
+            short_exposure_usd=round(short_usd, 2),
+            net_exposure_usd=round(net, 2),
+            gross_exposure_usd=round(gross, 2),
+            exposure_by_asset={k: round(v, 2) for k, v in by_asset.items()},
+            exposure_by_sector={k: round(v, 2) for k, v in by_sector.items()},
+            leverage=round(leverage, 2),
+            concentration_risk=round(concentration, 4),
+        )
+
     def check_exposure_limits(
         self,
         exposure: ExposureResult,
@@ -396,13 +408,11 @@ class RiskManagementTools:
         violations: list[str] = []
         warnings: list[str] = []
 
-        # Check total gross exposure
-        if exposure.total_exposure_usd > 0:
-            # Leverage check
-            if exposure.leverage > self._max_leverage:
-                violations.append(
-                    f"Leverage {exposure.leverage:.2f}x > max {self._max_leverage:.1f}x"
-                )
+        # Check leverage
+        if exposure.leverage > self._max_leverage:
+            violations.append(
+                f"Leverage {exposure.leverage:.2f}x > max {self._max_leverage:.1f}x"
+            )
 
         # Check per-asset concentration
         for asset, notional in exposure.exposure_by_asset.items():
@@ -432,18 +442,6 @@ class RiskManagementTools:
             "max_single_asset_pct": self._max_single_asset_pct,
             "max_sector_pct": self._max_sector_pct,
         }
-
-        return ExposureResult(
-            total_exposure_usd=round(gross, 2),
-            long_exposure_usd=round(long_usd, 2),
-            short_exposure_usd=round(short_usd, 2),
-            net_exposure_usd=round(net, 2),
-            gross_exposure_usd=round(gross, 2),
-            exposure_by_asset={k: round(v, 2) for k, v in by_asset.items()},
-            exposure_by_sector={k: round(v, 2) for k, v in by_sector.items()},
-            leverage=round(leverage, 2),
-            concentration_risk=round(concentration, 4),
-        )
 
     # ── Value at Risk ────────────────────────────────────────────────
 
