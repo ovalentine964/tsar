@@ -1,22 +1,29 @@
 #!/usr/bin/env bash
 # ============================================================
-# TSAR — Azure One-Command Deployment
+# TSAR — Azure Free-Tier Deployment Script
 # ============================================================
 # Prerequisites:
 #   - Azure CLI installed (az)
 #   - Logged in: az login
-#   - .env file configured (cp deploy/azure/.env.template .env)
+#   - .env file configured (cp .env.template .env)
 #
 # Usage:
 #   ./scripts/deploy-azure.sh              # Deploy to default region (eastus)
 #   ./scripts/deploy-azure.sh westeurope   # Deploy to specific region
 #
+# Azure Free Tier Specs:
+#   - 1 vCPU, 1 GB RAM total
+#   - TSAR app: 0.75 vCPU, 640 MB RAM
+#   - Redis:    0.25 vCPU, 256 MB RAM
+#   - Spot instances for cost savings (up to 70% cheaper)
+#
 # What it does:
-#   1. Creates resource group
-#   2. Creates Azure File Shares for data persistence
-#   3. Creates ACI container group (TSAR + Redis)
-#   4. Assigns public IP with DNS label
-#   5. Runs health check after deployment
+#   1. Validates prerequisites and .env configuration
+#   2. Creates resource group
+#   3. Creates Azure Storage Account + File Shares
+#   4. Deploys ACI container group (TSAR + Redis sidecar)
+#   5. Assigns public IP with DNS label
+#   6. Runs health check after deployment
 # ============================================================
 
 set -euo pipefail
@@ -26,6 +33,7 @@ RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
+CYAN='\033[0;36m'
 NC='\033[0m'
 
 log()   { echo -e "${BLUE}[TSAR]${NC} $*"; }
@@ -58,12 +66,30 @@ if [[ -f "$ENV_FILE" ]]; then
     set +a
 else
     warn ".env file not found at $ENV_FILE"
-    warn "Copy deploy/azure/.env.template → .env and fill in values"
-    warn "Continuing with defaults (secrets will be empty)..."
+    warn "Copy .env.template → .env and fill in values"
+    fail "Cannot deploy without .env configuration."
 fi
 
 # ── Validate required tools ──────────────────────────────────
 command -v az >/dev/null 2>&1 || fail "Azure CLI (az) not found. Install: https://docs.microsoft.com/en-us/cli/azure/install-azure-cli"
+command -v curl >/dev/null 2>&1 || fail "curl not found."
+command -v openssl >/dev/null 2>&1 || fail "openssl not found."
+
+# ── Validate required environment variables ──────────────────
+log "Validating configuration..."
+MISSING=()
+[[ -z "${TSAR_API_KEY:-}" ]] && MISSING+=("TSAR_API_KEY")
+[[ -z "${REDIS_PASSWORD:-}" ]] && MISSING+=("REDIS_PASSWORD")
+
+if [[ ${#MISSING[@]} -gt 0 ]]; then
+    fail "Missing required environment variables: ${MISSING[*]}\n  Set them in .env file."
+fi
+
+# Warn about optional but recommended variables
+[[ -z "${EXCHANGE_API_KEY:-}" ]] && warn "EXCHANGE_API_KEY not set — trading will not function"
+[[ -z "${TELEGRAM_BOT_TOKEN:-}" ]] && warn "TELEGRAM_BOT_TOKEN not set — no Telegram alerts"
+
+ok "Configuration validated"
 
 # ── Check Azure login ────────────────────────────────────────
 log "Checking Azure login..."
@@ -77,8 +103,8 @@ az group create \
     --name "$RESOURCE_GROUP" \
     --location "$LOCATION" \
     --tags project=tsar environment=production \
-    --output none
-ok "Resource group created: $RESOURCE_GROUP"
+    --output none 2>/dev/null
+ok "Resource group ready: $RESOURCE_GROUP"
 
 # ── Step 2: Create Storage Account ──────────────────────────
 log "Creating storage account: $STORAGE_ACCOUNT"
@@ -89,7 +115,7 @@ az storage account create \
     --sku Standard_LRS \
     --kind StorageV2 \
     --min-tls-version TLS1_2 \
-    --output none
+    --output none 2>/dev/null
 ok "Storage account created: $STORAGE_ACCOUNT"
 
 # Get storage key
@@ -99,31 +125,30 @@ STORAGE_KEY=$(az storage account keys list \
     --query "[0].value" -o tsv)
 
 # ── Step 3: Create File Shares ──────────────────────────────
-log "Creating file shares..."
+log "Creating file shares for data persistence..."
 az storage share create \
     --name "$FILE_SHARE_DATA" \
     --account-name "$STORAGE_ACCOUNT" \
     --account-key "$STORAGE_KEY" \
     --quota 5 \
-    --output none
+    --output none 2>/dev/null
 
 az storage share create \
     --name "$FILE_SHARE_LOGS" \
     --account-name "$STORAGE_ACCOUNT" \
     --account-key "$STORAGE_KEY" \
     --quota 5 \
-    --output none
+    --output none 2>/dev/null
 ok "File shares created: $FILE_SHARE_DATA, $FILE_SHARE_LOGS"
 
 # ── Step 4: Build Container Group YAML ──────────────────────
-log "Generating container group configuration..."
+log "Generating container group configuration (1 vCPU, 1 GB RAM)..."
 YAML_PATH="${PROJECT_ROOT}/deploy/azure/container-group.resolved.yaml"
 
 # Resolve image reference
 if [[ -n "$ACR_SERVER" ]]; then
     IMAGE_REF="${ACR_SERVER}/tsar:${IMAGE_TAG}"
 else
-    # Default to Docker Hub public image
     IMAGE_REF="tsar:${IMAGE_TAG}"
 fi
 
@@ -133,11 +158,6 @@ location: ${LOCATION}
 name: ${CONTAINER_GROUP}
 type: Microsoft.ContainerInstance/containerGroups
 properties:
-  priority: Spot
-  spotProfile:
-    evictionPolicy: Deallocate
-    billing:
-      price: -1
   osType: Linux
   restartPolicy: OnFailure
   ipAddress:
@@ -184,15 +204,21 @@ properties:
           - name: TSAR_CORS_ORIGINS
             value: "${TSAR_CORS_ORIGINS:-}"
           - name: REDIS_PASSWORD
-            secureValue: "${REDIS_PASSWORD:-tsar_redis_$(openssl rand -hex 8)}"
+            secureValue: "${REDIS_PASSWORD}"
           - name: EXCHANGE_API_KEY
             secureValue: "${EXCHANGE_API_KEY:-}"
           - name: EXCHANGE_SECRET
             secureValue: "${EXCHANGE_SECRET:-}"
+          - name: EXCHANGE_SANDBOX
+            value: "${EXCHANGE_SANDBOX:-true}"
           - name: NVIDIA_API_KEY
             secureValue: "${NVIDIA_API_KEY:-}"
           - name: TSAR_API_KEY
-            secureValue: "${TSAR_API_KEY:-}"
+            secureValue: "${TSAR_API_KEY}"
+          - name: TELEGRAM_BOT_TOKEN
+            secureValue: "${TELEGRAM_BOT_TOKEN:-}"
+          - name: TELEGRAM_CHAT_ID
+            value: "${TELEGRAM_CHAT_ID:-}"
         volumeMounts:
           - name: tsar-data
             mountPath: /app/data
@@ -228,13 +254,15 @@ properties:
           - --maxmemory-policy
           - allkeys-lru
           - --requirepass
-          - "${REDIS_PASSWORD:-tsar_redis_$(openssl rand -hex 8)}"
+          - "${REDIS_PASSWORD}"
+          - --loglevel
+          - warning
         livenessProbe:
           exec:
             command:
               - redis-cli
               - -a
-              - "${REDIS_PASSWORD:-}"
+              - "${REDIS_PASSWORD}"
               - ping
           initialDelaySeconds: 5
           periodSeconds: 10
@@ -246,6 +274,7 @@ properties:
   tags:
     project: tsar
     environment: production
+    managed-by: deploy-azure.sh
 YAML
 
 # ── Step 5: Deploy Container Group ──────────────────────────
@@ -281,7 +310,7 @@ fi
 
 # ── Step 7: Health Check ────────────────────────────────────
 log "Running health check (waiting for containers to start)..."
-MAX_RETRIES=12
+MAX_RETRIES=18
 RETRY_INTERVAL=10
 
 for i in $(seq 1 $MAX_RETRIES); do
@@ -295,15 +324,20 @@ for i in $(seq 1 $MAX_RETRIES); do
     if [[ "$CONTAINER_STATE" == "Running" ]]; then
         # Try HTTP health check
         if curl -sf --max-time 5 "http://${FQDN}:8000/health" >/dev/null 2>&1; then
-            ok "Health check passed! TSAR is running."
+            ok "✅ Health check passed! TSAR is running."
             break
         fi
+    elif [[ "$CONTAINER_STATE" == "Terminated" ]] || [[ "$CONTAINER_STATE" == "Waiting" ]]; then
+        warn "Container in $CONTAINER_STATE state — checking logs..."
+        az container logs -g "$RESOURCE_GROUP" -n "$CONTAINER_GROUP" -c tsar-app 2>/dev/null | tail -20
+        break
     fi
 
     if [[ $i -eq $MAX_RETRIES ]]; then
         warn "Health check did not pass within timeout."
         warn "Container may still be starting. Check logs:"
         warn "  az container logs -g $RESOURCE_GROUP -n $CONTAINER_GROUP -c tsar-app"
+        warn "  az container logs -g $RESOURCE_GROUP -n $CONTAINER_GROUP -c tsar-redis"
     fi
 
     sleep $RETRY_INTERVAL
@@ -311,24 +345,35 @@ done
 
 # ── Summary ─────────────────────────────────────────────────
 echo ""
-echo "============================================================"
-echo "  🚀 TSAR Azure Deployment Complete"
-echo "============================================================"
+echo -e "${CYAN}============================================================${NC}"
+echo -e "${CYAN}  🚀 TSAR Azure Deployment Complete${NC}"
+echo -e "${CYAN}============================================================${NC}"
 echo ""
 echo "  Resource Group:  $RESOURCE_GROUP"
 echo "  Container Group: $CONTAINER_GROUP"
 echo "  Location:        $LOCATION"
 echo "  Storage Account: $STORAGE_ACCOUNT"
-echo "  API Endpoint:    http://${FQDN}:8000"
-echo "  API Health:      http://${FQDN}:8000/health"
+echo "  API Endpoint:    http://${FQDN:-<pending>}:8000"
+echo "  API Health:      http://${FQDN:-<pending>}:8000/health"
 echo ""
-echo "  Useul commands:"
+echo "  Useful commands:"
+echo "    # View app logs"
 echo "    az container logs -g $RESOURCE_GROUP -n $CONTAINER_GROUP -c tsar-app"
-echo "    az container logs -g $RESOURCE_GROUP -n $CONTAINER_GROUP -c tsar-redis"
-echo "    az container exec -g $RESOURCE_GROUP -n $CONTAINER_GROUP -c tsar-app --exec-command /bin/bash"
-echo "    az container delete -g $RESOURCE_GROUP -n $CONTAINER_GROUP --yes"
 echo ""
-echo "============================================================"
+echo "    # View Redis logs"
+echo "    az container logs -g $RESOURCE_GROUP -n $CONTAINER_GROUP -c tsar-redis"
+echo ""
+echo "    # Shell into app container"
+echo "    az container exec -g $RESOURCE_GROUP -n $CONTAINER_GROUP -c tsar-app --exec-command /bin/bash"
+echo ""
+echo "    # Restart containers"
+echo "    az container restart -g $RESOURCE_GROUP -n $CONTAINER_GROUP"
+echo ""
+echo "    # Delete everything"
+echo "    az container delete -g $RESOURCE_GROUP -n $CONTAINER_GROUP --yes"
+echo "    az group delete -g $RESOURCE_GROUP --yes"
+echo ""
+echo -e "${CYAN}============================================================${NC}"
 
 # Clean up resolved YAML (contains secrets)
 rm -f "$YAML_PATH"

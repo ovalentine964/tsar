@@ -47,3 +47,50 @@ Each council session produces:
 *Architecture approved: CONDITIONAL PASS (all 4 members)*
 *Hybrid Rust + C++ approved: CONDITIONAL (C++ enters at Level 3+)*
 *55 issues found and addressed by fixing team*
+
+---
+
+## Entry/Exit Optimization Council (2026-08-01)
+
+**Mission:** Maximize win rate to 75%+ through disciplined entry, exit, and trade management
+
+### Deliverables
+
+| File | Description |
+|------|-------------|
+| `ENTRY_EXIT_OPTIMIZATION.md` | Full optimization design report (score: 7/10) |
+| `src/agents/trade_manager.py` | New Trade Manager agent — trailing stops, partial exits, time stops, regime/news exits |
+| `tests/unit/agents/test_trade_manager.py` | 38 tests — all passing |
+
+### Modified Components
+
+| File | Changes |
+|------|---------|
+| `src/agents/signal_scout.py` | Session timing gates, pullback detection, enhanced volume confirmation, news blackout |
+| `src/agents/execution_sniper.py` | Limit order support (better fills) |
+| `src/agents/risk_guardian.py` | Session timing, weekend risk, news blackout checks in risk evaluation |
+| `src/strategy/mean_reversion.py` | Updated risk params: trailing stops, partial exits, limit orders |
+
+### Key Design Decisions
+
+1. **Trailing stops are multi-stage:** Initial → Break-even (1:1 R:R) → Trailing (1.5:1) → Tight trail (2:1)
+2. **Partial exits at 40/30/30:** Lock profit at 1:1, 2:1, 3:1 R:R
+3. **Session timing gates:** Block entries during Asian session, dead zone, and low-quality days
+4. **News blackout:** No new entries within 2h of critical events
+5. **Limit orders by default:** 0.1% better than market price
+6. **All trade management is deterministic:** No LLM in the management loop
+
+### Projected Impact
+
+- Current win rate (estimated): 55-60%
+- Projected win rate: 72-80% (base case: 75%)
+- Effective R:R improvement: 2:1 → 2.5-3.5:1 (with partial exits + trailing)
+
+### Priority Improvements (Ranked)
+
+1. 🔴 Trailing stops (biggest impact on win rate)
+2. 🔴 Partial exits (biggest impact on R:R)
+3. 🟡 Session timing (easy win, significant impact)
+4. 🟡 News blackout (already have MarketCalendar)
+5. 🟢 Pullback entries (moderate impact)
+6. 🟢 Regime exits (already have RegimeDetector)

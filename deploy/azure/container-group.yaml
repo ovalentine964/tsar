@@ -1,13 +1,17 @@
 # ============================================================
 # TSAR — Azure Container Instances (ACI) Deployment
 # ============================================================
-# Free-tier optimized: 1 vCPU, 1 GB RAM, spot instances
-# Two containers: TSAR app + Redis sidecar
-# ============================================================
-# Usage:
+# Free-tier optimized: 1 vCPU total, 1 GB RAM total
+#   - TSAR app: 0.75 vCPU, 640 MB RAM
+#   - Redis:    0.25 vCPU, 256 MB RAM
+#
+# This is a TEMPLATE — values with ${...} are resolved by
+# scripts/deploy-azure.sh at deploy time.
+#
+# Manual deployment:
 #   az container create \
 #     --resource-group tsar-rg \
-#     --file container-group.yaml \
+#     --file deploy/azure/container-group.resolved.yaml \
 #     --location eastus
 # ============================================================
 
@@ -16,19 +20,9 @@ location: eastus
 name: tsar-container-group
 type: Microsoft.ContainerInstance/containerGroups
 
-# ── Spot Instance (Free-tier / cost savings) ─────────────────
 properties:
-  # Spot configuration — up to 70% cheaper, may be evicted
-  # For true free tier, remove spot and use F1s (1 vCPU, 1 GB) reservation
-  priority: Spot
-  spotProfile:
-    evictionPolicy: Deallocate    # Deallocate preserves disk state on eviction
-    billing:
-      price: -1                   # Max price = on-demand (cheapest available)
-
-  # ── OS & Restart Policy ──────────────────────────────────
   osType: Linux
-  restartPolicy: OnFailure       # Restart on crash, not on success exit
+  restartPolicy: OnFailure
 
   # ── IP & Networking ──────────────────────────────────────
   ipAddress:
@@ -38,34 +32,26 @@ properties:
         protocol: TCP
     dnsNameLabel: tsar-app        # → tsar-app.<region>.azurecontainer.io
 
-  # ── Image Registry Credentials (for private registries) ──
-  # Uncomment if using Azure Container Registry (ACR)
-  # imageRegistryCredentials:
-  #   - server: tsarregistry.azurecr.io
-  #     username: tsarregistry
-  #     password: <acr-password>
-
-  # ── Shared Volume for Data Persistence ───────────────────
+  # ── Shared Volumes (Azure File Shares) ───────────────────
   volumes:
     - name: tsar-data
       azureFile:
         shareName: tsar-data
-        storageAccountName: tsarstorage
-        # storageAccountKey set via --secrets or environment
+        storageAccountName: ${STORAGE_ACCOUNT}
+        storageAccountKey: ${STORAGE_KEY}
     - name: tsar-logs
       azureFile:
         shareName: tsar-logs
-        storageAccountName: tsarstorage
+        storageAccountName: ${STORAGE_ACCOUNT}
+        storageAccountKey: ${STORAGE_KEY}
 
   # ── Containers ───────────────────────────────────────────
   containers:
 
-    # ──────────────────────────────────────────────────────────
-    # Container 1: TSAR Application
-    # ──────────────────────────────────────────────────────────
+    # ─── TSAR Application ───────────────────────────────────
     - name: tsar-app
       properties:
-        image: tsarregistry.azurecr.io/tsar:latest
+        image: ${IMAGE_REF}
         resources:
           requests:
             cpu: 0.75
@@ -76,7 +62,7 @@ properties:
             protocol: TCP
 
         environmentVariables:
-          # ── App Config ──
+          # App config
           - name: TSAR_ENVIRONMENT
             value: production
           - name: TSAR_TRADING_MODE
@@ -85,30 +71,35 @@ properties:
             value: "8000"
           - name: PYTHONUNBUFFERED
             value: "1"
-          - name: PYTHONDONTWRITEBYTECODE
-            value: "1"
-
-          # ── Redis Connection ──
+          # Redis connection (sidecar on localhost)
           - name: REDIS_HOST
             value: localhost
           - name: REDIS_PORT
             value: "6379"
-
-          # ── Secrets (reference secure env vars) ──
-          - name: REDIS_PASSWORD
-            secureValue: ""       # Set via --secrets or secrets
-          - name: EXCHANGE_API_KEY
-            secureValue: ""
-          - name: EXCHANGE_SECRET
-            secureValue: ""
-          - name: NVIDIA_API_KEY
-            secureValue: ""
-          - name: TSAR_API_KEY
-            secureValue: ""
+          # Non-secret env
           - name: TSAR_CORS_ORIGINS
-            value: ""
+            value: "${TSAR_CORS_ORIGINS}"
+          - name: EXCHANGE_SANDBOX
+            value: "true"
+          - name: TELEGRAM_CHAT_ID
+            value: "${TELEGRAM_CHAT_ID}"
 
-        # Volumes
+        # Secrets (injected securely)
+        secureEnvironmentVariables:
+          - name: REDIS_PASSWORD
+            value: "${REDIS_PASSWORD}"
+          - name: EXCHANGE_API_KEY
+            value: "${EXCHANGE_API_KEY}"
+          - name: EXCHANGE_SECRET
+            value: "${EXCHANGE_SECRET}"
+          - name: NVIDIA_API_KEY
+            value: "${NVIDIA_API_KEY}"
+          - name: TSAR_API_KEY
+            value: "${TSAR_API_KEY}"
+          - name: TELEGRAM_BOT_TOKEN
+            value: "${TELEGRAM_BOT_TOKEN}"
+
+        # Volume mounts
         volumeMounts:
           - name: tsar-data
             mountPath: /app/data
@@ -120,22 +111,20 @@ properties:
           httpGet:
             path: /health
             port: 8000
-          initialDelaySeconds: 20
+          initialDelaySeconds: 30
           periodSeconds: 30
           failureThreshold: 3
 
-        # Readiness probe — remove from load balancer if not ready
+        # Readiness probe — remove from LB if not ready
         readinessProbe:
           httpGet:
             path: /health
             port: 8000
-          initialDelaySeconds: 10
+          initialDelaySeconds: 15
           periodSeconds: 10
           failureThreshold: 3
 
-    # ──────────────────────────────────────────────────────────
-    # Container 2: Redis
-    # ──────────────────────────────────────────────────────────
+    # ─── Redis Sidecar ──────────────────────────────────────
     - name: tsar-redis
       properties:
         image: redis:7-alpine
@@ -144,7 +133,6 @@ properties:
             cpu: 0.25
             memoryInGb: 0.4
 
-        # Redis command with persistence + memory limit + auth
         command:
           - redis-server
           - --appendonly
@@ -155,6 +143,8 @@ properties:
           - allkeys-lru
           - --requirepass
           - "${REDIS_PASSWORD}"
+          - --loglevel
+          - warning
 
         # Liveness — restart if Redis can't respond
         livenessProbe:
@@ -168,17 +158,11 @@ properties:
           periodSeconds: 10
           failureThreshold: 3
 
-        # Redis data persistence volume
+        # Redis data persistence
         volumeMounts:
           - name: tsar-data
             mountPath: /data
             subPath: redis
-
-  # ── Diagnostics (Azure Monitor) ──────────────────────────
-  diagnostics:
-    logAnalytics:
-      workspaceId: ""             # Set to your Log Analytics workspace ID
-      workspaceKey: ""            # Set to your Log Analytics workspace key
 
   # ── Tags ─────────────────────────────────────────────────
   tags:

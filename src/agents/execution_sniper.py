@@ -33,6 +33,7 @@ from src.interfaces.types import (
     OrderSide,
     OrderStatus,
     OrderType,
+    TimeInForce,
 )
 
 # ── Domain Tools (Tools-to-Agents Wiring) ──────────────────────────
@@ -377,7 +378,10 @@ class ExecutionSniper(BaseAgent):
         entry_price: float,
         trace_id: str,
     ) -> ExecutionResult | None:
-        """Place the entry order (market order).
+        """Place the entry order.
+
+        Uses limit orders when possible for better fills.
+        Falls back to market orders for high-conviction signals.
 
         Args:
             symbol: Trading pair.
@@ -389,16 +393,44 @@ class ExecutionSniper(BaseAgent):
         Returns:
             ExecutionResult if successful, None if failed.
         """
-        order = Order(
-            order_id="",
-            symbol=symbol,
-            side=side,
-            order_type=OrderType.MARKET,
-            quantity=quantity,
-            price=None,
-            status=OrderStatus.PENDING,
-            timestamp=datetime.now(UTC),
-        )
+        # Determine order type based on config
+        use_limit = self.config.get("execution", {}).get("use_limit_orders", True)
+        limit_offset = self.config.get("execution", {}).get("limit_order_offset_pct", 0.001)
+
+        if use_limit:
+            # Calculate limit price with slight discount/premium
+            if side == OrderSide.BUY:
+                limit_price = entry_price * (1.0 - limit_offset)  # Buy slightly below
+            else:
+                limit_price = entry_price * (1.0 + limit_offset)  # Sell slightly above
+
+            order = Order(
+                order_id="",
+                symbol=symbol,
+                side=side,
+                order_type=OrderType.LIMIT,
+                quantity=quantity,
+                price=limit_price,
+                time_in_force=TimeInForce.GTC,
+                status=OrderStatus.PENDING,
+                timestamp=datetime.now(UTC),
+            )
+
+            logger.info(
+                "  Using LIMIT order: price=%.2f (offset=%.3f%%)",
+                limit_price, limit_offset * 100,
+            )
+        else:
+            order = Order(
+                order_id="",
+                symbol=symbol,
+                side=side,
+                order_type=OrderType.MARKET,
+                quantity=quantity,
+                price=None,
+                status=OrderStatus.PENDING,
+                timestamp=datetime.now(UTC),
+            )
 
         try:
             result = await self._exec_engine.execute_order(order)

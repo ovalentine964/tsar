@@ -234,6 +234,49 @@ def _ensure_registered() -> None:
     except ImportError:
         pass
 
+    # ── Extended News Sources (News Gap Fix) ──────────────────────────
+    try:
+        from src.tools.news_sources.whale_alert import WhaleAlertClient
+        register_tool("whale_alert", WhaleAlertClient)
+    except ImportError:
+        pass
+
+    try:
+        from src.tools.news_sources.regulatory_feeds import RegulatoryFeedMonitor
+        register_tool("regulatory_feeds", RegulatoryFeedMonitor)
+    except ImportError:
+        pass
+
+    try:
+        from src.tools.news_sources.exploit_alerts import ExploitAlertMonitor
+        register_tool("exploit_alerts", ExploitAlertMonitor)
+    except ImportError:
+        pass
+
+    try:
+        from src.tools.news_sources.twitter_monitor import TwitterCryptoMonitor
+        register_tool("twitter_monitor", TwitterCryptoMonitor)
+    except ImportError:
+        pass
+
+    try:
+        from src.tools.news_sources.social_monitor import SocialChannelMonitor
+        register_tool("social_monitor", SocialChannelMonitor)
+    except ImportError:
+        pass
+
+    try:
+        from src.tools.news_sources.llm_verification import LLMNewsVerifier
+        register_tool("llm_news_verifier", LLMNewsVerifier)
+    except ImportError:
+        pass
+
+    try:
+        from src.tools.news_sources.accuracy_tracker import SourceAccuracyTracker
+        register_tool("source_accuracy_tracker", SourceAccuracyTracker)
+    except ImportError:
+        pass
+
 
 # Auto-register on first access
 _ensure_registered()

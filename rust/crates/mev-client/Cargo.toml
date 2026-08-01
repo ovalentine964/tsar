@@ -1,0 +1,27 @@
+[package]
+name = "tsar-mev-client"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "MEV protection client: Flashbots bundle submission, Jito bundles, and private mempool interaction"
+
+[dependencies]
+tsar-core = { workspace = true }
+tsar-evm-client = { workspace = true }
+tsar-solana-client = { workspace = true }
+tokio = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+tracing = { workspace = true }
+thiserror = { workspace = true }
+chrono = { workspace = true }
+reqwest = { workspace = true }
+hex = { workspace = true }
+# Ethereum for Flashbots
+ethers = { version = "2.0", features = ["abigen"] }
+# Solana for Jito
+solana-sdk = "2.0"
+solana-client = "2.0"
+# Signing for Flashbots auth
+k256 = "0.13"

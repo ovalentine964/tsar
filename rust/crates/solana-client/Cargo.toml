@@ -1,0 +1,25 @@
+[package]
+name = "tsar-solana-client"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "Solana blockchain client: Ed25519 transaction signing, Jupiter swap building, and account data reading"
+
+[dependencies]
+tsar-core = { workspace = true }
+tokio = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+tracing = { workspace = true }
+thiserror = { workspace = true }
+chrono = { workspace = true }
+reqwest = { workspace = true }
+hex = { workspace = true }
+# Solana SDK for transaction building and signing
+solana-sdk = "2.0"
+solana-client = "2.0"
+solana-account-decoder = "2.0"
+spl-token = "4.0"
+# Ed25519 signing
+ed25519-dalek = "2.1"

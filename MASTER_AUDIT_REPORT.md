@@ -40,6 +40,15 @@ TSAR has 63K lines of Python + 32 Rust files + 20 C++ files across 514 files. 13
 **Fix:** Unify on single shared EventBus instance, or bridge EventBus↔EventPublisher/Subscriber.
 **Council:** Architecture (7/10), Code Quality (7.2/10)
 
+### Signal Priority Order (Updated)
+1. NEWS FIRST — Is there breaking news? (hack, ban, regulation) → PASS/FAIL gate
+2. MACRO — FOMC/CPI/NFP happening? → PASS/FAIL gate
+3. FUNDAMENTAL — Project health (GitHub, TVL, tokenomics) → Score
+4. SENTIMENT — Fear/Greed, social, whale activity → Score
+5. TECHNICAL — RSI, S/R, volume, trend, regime → Score
+
+News is the gatekeeper. Technicals are the tiebreaker.
+
 ### C-02: Event Type Mismatch [Code Quality]
 **Problem:** Sniper publishes `tsar.trade.executed.v1` but subscribers listen for `tsar.trade.executed` (missing `.v1` suffix).
 **Impact:** Events silently dropped. No trade processing.

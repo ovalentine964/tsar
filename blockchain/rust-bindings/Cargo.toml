@@ -1,0 +1,38 @@
+[package]
+name = "tsar-blockchain-rules"
+version = "0.1.0"
+edition = "2021"
+description = "TSAR Blockchain Rules Enforcement — Rust bindings for on-chain risk management"
+license = "MIT"
+
+[dependencies]
+# Ethereum interaction
+ethers = { version = "2.0", features = ["abigen", "ws"] }
+
+# Async runtime
+tokio = { version = "1.36", features = ["full"] }
+
+# Serialization
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+
+# Error handling
+thiserror = "1.0"
+
+# Logging
+tracing = "0.1"
+
+# Hashing (for trade hashes)
+sha2 = "0.10"
+hex = "0.4"
+
+# PyO3 bridge (optional — for Python integration)
+pyo3 = { version = "0.21", features = ["extension-module"], optional = true }
+
+[features]
+default = ["python"]
+python = ["pyo3"]
+
+[lib]
+name = "tsar_blockchain_rules"
+crate-type = ["cdylib", "rlib"]

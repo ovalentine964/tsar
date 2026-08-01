@@ -38,6 +38,10 @@ mod mev_bridge;
 mod gas_bridge;
 mod dex_bridge;
 mod price_bridge;
+mod evm_bridge;
+mod solana_bridge;
+mod oracle_bridge;
+mod mev_client_bridge;
 
 /// The main Python module entry point.
 ///
@@ -70,6 +74,18 @@ fn trading_rs(m: &Bound<'_, PyModule>) -> PyResult<()> {
     // ── Price Feed ───────────────────────────────────────────────
     m.add_class::<price_bridge::PyPriceFeed>()?;
 
+    // ── EVM Client ───────────────────────────────────────────────
+    m.add_class::<evm_bridge::PyEvmClient>()?;
+
+    // ── Solana Client ────────────────────────────────────────────
+    m.add_class::<solana_bridge::PySolanaClient>()?;
+
+    // ── Oracle Client ────────────────────────────────────────────
+    m.add_class::<oracle_bridge::PyOracleClient>()?;
+
+    // ── MEV Protection Client ────────────────────────────────────
+    m.add_class::<mev_client_bridge::PyMevProtectionClient>()?;
+
     // ── Utility Functions ────────────────────────────────────────
     m.add_function(wrap_pyfunction!(version, m)?)?;
     m.add_function(wrap_pyfunction!(ping, m)?)?;
@@ -82,6 +98,10 @@ fn trading_rs(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(compute::garman_klass_vol_py, m)?)?;
     m.add_function(wrap_pyfunction!(compute::garch_forecast_py, m)?)?;
     m.add_function(wrap_pyfunction!(compute::batch_factors_py, m)?)?;
+
+    // ── EVM ABI Functions ────────────────────────────────────────
+    m.add_function(wrap_pyfunction!(evm_bridge::encode_uniswap_v3_swap_py, m)?)?;
+    m.add_function(wrap_pyfunction!(evm_bridge::encode_chainlink_round_data_py, m)?)?;
 
     tracing::info!("trading_rs module initialized");
     Ok(())

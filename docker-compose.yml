@@ -2,11 +2,18 @@
 # TSAR — Docker Compose (Production-Ready)
 # ============================================================
 # Services: Redis 7 + TSAR App (Python 3.12)
+#
 # Usage:
 #   cp .env.example .env   # Configure environment
-#   make docker-build       # Build images
-#   make docker-up          # Start services
-#   make docker-down        # Stop services
+#   docker compose build    # Build images
+#   docker compose up -d    # Start services
+#   docker compose down     # Stop services
+#   docker compose logs -f  # Follow logs
+#
+# Azure Free Tier: 1 vCPU, 1 GB RAM total
+#   Redis:  0.25 CPU, 256 MB RAM
+#   TSAR:   0.75 CPU, 640 MB RAM
+# ============================================================
 
 services:
   redis:
@@ -22,6 +29,7 @@ services:
       --maxmemory 256mb
       --maxmemory-policy allkeys-lru
       --requirepass ${REDIS_PASSWORD:-tsar_dev_password}
+      --loglevel warning
     healthcheck:
       test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD:-tsar_dev_password}", "ping"]
       interval: 10s
@@ -32,11 +40,11 @@ services:
     deploy:
       resources:
         limits:
-          cpus: "1.0"
-          memory: 512M
+          cpus: "0.5"
+          memory: 256M
         reservations:
-          cpus: "0.25"
-          memory: 128M
+          cpus: "0.1"
+          memory: 64M
     logging:
       driver: json-file
       options:
@@ -62,23 +70,24 @@ services:
       - tsar-data:/app/data
       - tsar-logs:/app/logs
       - ./config:/app/config:ro
+      - ./migrations:/app/migrations:ro
     depends_on:
       redis:
         condition: service_healthy
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      test: ["CMD", "curl", "-sf", "http://localhost:8000/health"]
       interval: 30s
       timeout: 10s
       retries: 3
-      start_period: 20s
+      start_period: 25s
     restart: unless-stopped
     deploy:
       resources:
         limits:
-          cpus: "2.0"
-          memory: 1G
+          cpus: "1.5"
+          memory: 768M
         reservations:
-          cpus: "0.5"
+          cpus: "0.25"
           memory: 256M
     logging:
       driver: json-file

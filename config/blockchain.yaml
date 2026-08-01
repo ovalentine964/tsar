@@ -1,0 +1,192 @@
+# ═══════════════════════════════════════════════════════════════════
+# TSAR Blockchain Configuration
+# ═══════════════════════════════════════════════════════════════════
+#
+# On-chain rule enforcement configuration for TSAR.
+#
+# This file configures:
+#   - Smart contract addresses (after deployment)
+#   - RPC endpoints for Polygon
+#   - Gas settings
+#   - Multi-sig wallet addresses
+#   - Monitoring and alerting
+#
+# ═══════════════════════════════════════════════════════════════════
+
+# ── Network ──────────────────────────────────────────────────────
+network:
+  name: mumbai                    # mumbai | mainnet
+  chain_id: 80001                 # 80001 (Mumbai) | 137 (Polygon mainnet)
+  explorer_url: https://mumbai.polygonscan.com
+
+# ── RPC Endpoints ────────────────────────────────────────────────
+rpc:
+  # Primary WebSocket endpoint (for event listening)
+  ws_url: wss://polygon-mumbai.g.alchemy.com/v2/${ALCHEMY_API_KEY}
+
+  # Fallback HTTP endpoint (for contract calls)
+  http_url: https://polygon-mumbai.g.alchemy.com/v2/${ALCHEMY_API_KEY}
+
+  # Public fallback (rate-limited, for emergencies only)
+  public_http: https://rpc-mumbai.maticvigil.com
+
+  # Connection settings
+  timeout_ms: 30000
+  max_retries: 3
+  retry_delay_ms: 1000
+
+# ── Contract Addresses ──────────────────────────────────────────
+# These are populated after running: ./scripts/deploy-contracts.sh
+contracts:
+  kill_switch:
+    address: "0x0000000000000000000000000000000000000000"  # Replace after deployment
+    description: "Auto-halt on daily loss breach"
+
+  mandate:
+    address: "0x0000000000000000000000000000000000000000"  # Replace after deployment
+    description: "Allowed symbols, leverage, position limits"
+
+  audit_trail:
+    address: "0x0000000000000000000000000000000000000000"  # Replace after deployment
+    description: "Immutable trade and rule enforcement logging"
+
+  governance:
+    address: "0x0000000000000000000000000000000000000000"  # Replace after deployment
+    description: "Multi-sig + timelock admin"
+
+# ── Gas Settings ─────────────────────────────────────────────────
+gas:
+  # Gas price strategy: fixed | eip1559 | legacy
+  strategy: fixed
+
+  # Fixed gas price (gwei) — used when strategy=fixed
+  price_gwei: 30
+
+  # EIP-1559 settings (used when strategy=eip1559)
+  max_fee_gwei: 50
+  max_priority_fee_gwei: 2
+
+  # Gas limits per operation
+  limits:
+    check_order: 100000         # Pre-trade rule check
+    log_trade: 150000           # Post-trade logging
+    update_pnl: 80000           # P&L update
+    update_equity: 80000        # Equity update
+    log_enforcement: 100000     # Enforcement action logging
+    governance_propose: 200000  # Governance proposal
+    governance_execute: 300000  # Governance execution
+
+  # Gas price monitoring
+  max_acceptable_gwei: 100      # Reject transactions above this
+  gas_price_alert_gwei: 80      # Alert when gas exceeds this
+
+# ── Multi-Sig Wallet ─────────────────────────────────────────────
+multisig:
+  # Gnosis Safe address (set after creating Safe)
+  safe_address: "0x0000000000000000000000000000000000000000"
+
+  # Signer addresses (5 signers for governance)
+  signers:
+    - name: "Valentine (Primary)"
+      address: "0x0000000000000000000000000000000000000000"
+      role: primary
+
+    - name: "Backup Signer 1"
+      address: "0x0000000000000000000000000000000000000000"
+      role: backup
+      location: "Hardware wallet — secure location A"
+
+    - name: "Backup Signer 2"
+      address: "0x0000000000000000000000000000000000000000"
+      role: backup
+      location: "Hardware wallet — secure location B"
+
+    - name: "Compliance Officer"
+      address: "0x0000000000000000000000000000000000000000"
+      role: compliance
+
+    - name: "Risk Manager"
+      address: "0x0000000000000000000000000000000000000000"
+      role: risk
+
+  # Thresholds
+  standard_threshold: 2          # 2-of-5 for standard operations
+  critical_threshold: 3          # 3-of-5 for critical operations
+
+  # Time-lock
+  timelock_hours: 48             # 48h time-lock on governance changes
+
+# ── Kill Switch Parameters ───────────────────────────────────────
+kill_switch:
+  daily_loss_threshold_bps: -200      # -2% daily loss triggers halt
+  drawdown_halt_threshold_bps: -500   # -5% drawdown → ORANGE
+  drawdown_flatten_threshold_bps: -1500  # -15% drawdown → RED (halt)
+  deactivation_timelock_hours: 48     # 48h to deactivate after multi-sig
+
+# ── Mandate Parameters ───────────────────────────────────────────
+mandate:
+  max_position_size_bps: 1500    # 15% of equity per position
+  max_daily_trades: 50           # Max 50 trades per day
+  max_leverage_bps: 300          # 3x max leverage
+  max_notional_per_trade: 5000000000000000000  # 5 ETH in wei
+  max_total_exposure_bps: 8000   # 80% max total exposure
+  allow_short_selling: false     # No short selling initially
+  allow_market_orders: true
+  allow_limit_orders: true
+  allow_stop_orders: true
+
+  # Paper trading requirements for live activation
+  paper_trading:
+    min_trades: 100              # Min 100 paper trades
+    min_days: 30                 # Min 30 days in paper mode
+    min_win_rate_bps: 5500       # Min 55% win rate
+
+  # Allowed symbols (hashes computed at runtime)
+  allowed_symbols:
+    - "BTC/USDT"
+    - "ETH/USDT"
+    - "SOL/USDT"
+    - "MATIC/USDT"
+    - "AVAX/USDT"
+
+# ── Monitoring & Alerting ────────────────────────────────────────
+monitoring:
+  # Event polling interval (seconds) — used when WebSocket unavailable
+  poll_interval_seconds: 15
+
+  # Alert channels
+  alerts:
+    enabled: true
+    channels:
+      - type: telegram
+        enabled: true
+        chat_id: "${TELEGRAM_ALERT_CHAT_ID}"
+
+      - type: webhook
+        enabled: false
+        url: "${ALERT_WEBHOOK_URL}"
+
+  # Events to monitor
+  events:
+    kill_switch_activated: true
+    kill_switch_deactivated: true
+    circuit_breaker_changed: true
+    order_blocked: true
+    enforcement_action: true
+    mandate_change: true
+    governance_proposal: true
+    emergency_pause: true
+
+# ── Logging ──────────────────────────────────────────────────────
+logging:
+  # Log all on-chain interactions
+  log_transactions: true
+  log_events: true
+  log_gas_usage: true
+
+  # Log file for blockchain interactions
+  log_file: logs/blockchain.log
+
+  # Retention
+  max_log_size_mb: 100
+  max_log_files: 10

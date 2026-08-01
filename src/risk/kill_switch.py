@@ -244,13 +244,13 @@ class KillSwitch:
             return True
 
     def _remove_file(self) -> None:
-        """Remove the kill switch file."""
+        """Write inactive state to file (so fail-safe only triggers on unreadable)."""
         try:
-            if self._file_path.exists():
-                self._file_path.unlink()
-                logger.info(f"Kill switch file removed: {self._file_path}")
+            payload = self._build_payload(False, "deactivated")
+            self._write_atomic(json.dumps(payload, indent=2), str(self._file_path))
+            logger.info(f"Kill switch file written as inactive: {self._file_path}")
         except Exception as e:
-            logger.error(f"Failed to remove kill switch file: {e}")
+            logger.error(f"Failed to write inactive kill switch file: {e}")
 
     # ------------------------------------------------------------------
     # Internal: Redis operations

@@ -1,0 +1,77 @@
+# Signal Quality Filter Configuration
+# Ensures ONLY high-probability trades execute. Target: ≥75% win rate.
+# Context: $10 starting capital. Every trade matters.
+
+signal_quality:
+  enabled: true
+
+  # ── Scoring Weights (must sum to 1.0) ──────────────────────
+  weights:
+    rsi_confirmation: 0.15       # RSI oversold/overbought + volume
+    sr_proximity: 0.20           # Distance to key support/resistance
+    volume_confirmation: 0.15    # Volume above average confirms price
+    trend_alignment: 0.15        # Multi-timeframe trend confluence
+    regime_filter: 0.15          # Market regime favorability
+    sentiment_alignment: 0.10    # Fear/Greed + news + funding
+    onchain_confirmation: 0.10   # Whale activity + exchange flows
+
+  # ── Score Thresholds ───────────────────────────────────────
+  thresholds:
+    no_trade: 0.60              # Below this = reject
+    small_position: 0.70        # 0.60-0.70 = 50% size
+    normal_position: 0.80       # 0.70-0.80 = 100% size
+    # Above 0.80 = 150% size (large position)
+
+  # ── Confirmation Requirements ──────────────────────────────
+  confirmation:
+    min_factors: 3              # Minimum 3/7 factors must confirm
+    min_factor_score: 0.3       # Factor must score > 0.3 to count
+    regime_must_be_favorable: true
+    volume_must_confirm: true
+
+  # ── Cold Start Protection ──────────────────────────────────
+  cold_start:
+    trades: 20                  # First 20 trades require extra confidence
+    min_score: 0.65             # Higher threshold during cold start
+
+  # ── $10 Account Protections ────────────────────────────────
+  account_protections:
+    max_concurrent_positions: 2  # Can't diversify with $10
+    max_spread_pct: 0.3         # Max 0.3% spread (fees kill small accounts)
+    min_rr_after_fees: 1.5      # R:R must be ≥1.5 after 0.1% taker fees
+    taker_fee_pct: 0.1          # Exchange taker fee (both sides)
+
+  # ── Trading Hour Restrictions ──────────────────────────────
+  trading_hours:
+    low_liquidity_utc: [0, 1, 2, 3, 4]  # Avoid thin markets
+    restrict_weekend_altcoins: true
+
+  # ── False Signal Detection ─────────────────────────────────
+  false_signals:
+    false_breakout_volume_threshold: 1.2  # Breakout needs 1.2× avg volume
+    stop_hunt_reversal_pct: 0.60          # 60% reversal = stop hunt
+    stop_hunt_recovery_candles: 3         # Must recover within 3 candles
+    low_liquidity_spread_pct: 0.5         # Spread > 0.5% = trap
+    low_liquidity_min_depth_usd: 10000    # Min $10K depth within 2%
+    news_spike_pct: 3.0                   # 3% move in short time
+    news_spike_minutes: 15                # "Short time" = 15 minutes
+
+  # ── Adaptive Filtering ─────────────────────────────────────
+  adaptive:
+    enabled: true
+    check_interval_trades: 10   # Evaluate every 10 trades
+    tighten_below_wr: 0.70      # Tighten if WR < 70%
+    loosen_above_wr: 0.80       # Loosen if WR > 80%
+    loss_streak_emergency: 3    # 3+ losses = emergency tighten
+    win_streak_maintain: 5      # 5+ wins = maintain (don't get greedy)
+    disable_signal_type_below_wr: 0.65  # Disable types < 65% WR
+    blacklist_symbol_below_wr: 0.60     # Blacklist symbols < 60% WR
+    blacklist_symbol_hours: 24          # Blacklist duration
+    absolute_min_score: 0.50    # Never go below this
+    absolute_min_factors: 2     # Never require fewer than 2
+
+  # ── Win Rate Tracking ──────────────────────────────────────
+  tracking:
+    rolling_window: 50          # Evaluate last 50 trades
+    min_trades_for_eval: 10     # Need 10 trades before evaluating
+    db_path: "data/signal_quality.db"

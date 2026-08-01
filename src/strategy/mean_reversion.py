@@ -421,11 +421,24 @@ class MeanReversionStrategy(BaseStrategy):
     def get_risk_params(self) -> dict[str, Any]:
         """Return risk parameters for this strategy."""
         return {
-            "stop_loss_pct": 0.01,       # 1%
-            "take_profit_pct": 0.02,     # 2%
-            "max_hold_hours": 4,         # Time stop
-            "min_score": 0.6,            # Min signal score
-            "max_position_pct": 0.15,    # Max 15% of portfolio
-            "risk_per_trade_pct": 0.02,  # 2% risk per trade
+            "stop_loss_pct": 0.015,       # 1.5% (ATR-adaptive)
+            "take_profit_pct": 0.03,      # 3% (2:1 R:R minimum)
+            "max_hold_hours": 4,          # Time stop
+            "min_score": 0.6,             # Min signal score
+            "max_position_pct": 0.15,     # Max 15% of portfolio
+            "risk_per_trade_pct": 0.02,   # 2% risk per trade
             "method": "half_kelly",
+            # Entry optimization
+            "use_limit_orders": True,
+            "limit_order_offset_pct": 0.001,
+            "require_pullback": True,
+            "require_volume_confirmation": True,
+            "volume_confirmation_candles": 2,
+            # Exit optimization
+            "trailing_stop_enabled": True,
+            "trailing_trigger_rr": 1.5,
+            "partial_exit_enabled": True,
+            "partial_exit_schedule": [0.4, 0.3, 0.3],
+            "partial_exit_rr_levels": [1.0, 2.0, 3.0],
+            "breakeven_trigger_rr": 1.0,
         }

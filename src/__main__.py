@@ -612,12 +612,13 @@ def run_dashboard(args: argparse.Namespace) -> None:
 
 
 def main() -> None:
-    # SECURITY (H-010): Validate secrets before any startup logic.
-    # This catches weak/missing secrets early and prevents running
-    # with insecure defaults.
-    _validate_secrets()
-
+    # Parse args first so --help works without secrets configured
     args = parse_args()
+
+    # SECURITY (H-010): Validate secrets before any startup logic.
+    # Skip validation for --help and --dashboard (read-only).
+    if not args.dashboard:
+        _validate_secrets()
 
     if args.dashboard:
         run_dashboard(args)

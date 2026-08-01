@@ -199,11 +199,11 @@ def portfolio_yellow() -> Portfolio:
 
 @pytest.fixture
 def portfolio_orange() -> Portfolio:
-    """Portfolio in ORANGE drawdown (3-5%)."""
+    """Portfolio in ORANGE drawdown (5-15%)."""
     return Portfolio(
-        equity=96000.0,
+        equity=94500.0,
         high_water_mark=100000.0,
-        cash=96000.0,
+        cash=94500.0,
         positions=(),
         daily_pnl=-1500.0,
         daily_pnl_pct=-0.015,

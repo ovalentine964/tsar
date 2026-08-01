@@ -1,0 +1,22 @@
+[package]
+name = "tsar-evm-client"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "EVM blockchain client: transaction signing, ABI encoding, gas estimation, and DeFi protocol integration"
+
+[dependencies]
+tsar-core = { workspace = true }
+tokio = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+tracing = { workspace = true }
+thiserror = { workspace = true }
+chrono = { workspace = true }
+reqwest = { workspace = true }
+hex = { workspace = true }
+# Ethereum primitives and ABI
+ethers = { version = "2.0", features = ["abigen", "ws"] }
+alloy-primitives = "0.7"
+alloy-sol-types = "0.7"

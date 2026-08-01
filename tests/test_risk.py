@@ -54,12 +54,14 @@ class TestKillSwitch:
         assert payload["active"] is True
         assert payload["reason"] == "test reason"
 
-    async def test_deactivate_clears_file(self, ks, tmp_kill_path):
-        """Deactivation removes the kill switch file."""
+    async def test_deactivate_writes_inactive(self, ks, tmp_kill_path):
+        """Deactivation writes inactive state to file."""
         await ks.activate("test")
         assert Path(tmp_kill_path).exists()
         await ks.deactivate()
-        assert not Path(tmp_kill_path).exists()
+        assert Path(tmp_kill_path).exists()
+        payload = json.loads(Path(tmp_kill_path).read_text())
+        assert payload["active"] is False
 
     async def test_is_active_after_activate(self, ks):
         """is_active returns True after activation."""
@@ -149,7 +151,7 @@ class TestDrawdownMonitor:
         assert state.position_size_multiplier == 0.5
 
     def test_orange_level(self, monitor, portfolio_orange):
-        """4% drawdown should be ORANGE."""
+        """5.5% drawdown should be ORANGE."""
         state = monitor.evaluate(portfolio_orange)
         assert state.circuit_breaker_level == DrawdownLevel.ORANGE.value
         assert state.trading_allowed is False
@@ -232,8 +234,8 @@ class TestRiskToolsSmoke:
     """Smoke tests for risk tool modules importability."""
 
     def test_import_guards(self):
-        from src.risk.guards import TradeGuard
-        assert TradeGuard is not None
+        from src.risk.guards import Guard
+        assert Guard is not None
 
     def test_import_governor(self):
         from src.risk.governor import RiskGovernor
@@ -248,8 +250,8 @@ class TestRiskToolsSmoke:
         assert Watchdog is not None
 
     def test_import_mandate(self):
-        from src.risk.mandate import TradingMandate
-        assert TradingMandate is not None
+        from src.risk.mandate import Mandate
+        assert Mandate is not None
 
     def test_import_mandate_gate(self):
         from src.risk.mandate_gate import MandateGate

@@ -19,6 +19,13 @@ tsar-mev-scanner = { workspace = true }
 tsar-gas-optimizer = { workspace = true }
 tsar-dex-aggregator = { workspace = true }
 tsar-price-feed = { workspace = true }
+tsar-evm-client = { workspace = true }
+tsar-solana-client = { workspace = true }
+tsar-oracle-client = { workspace = true }
+tsar-mev-client = { workspace = true }
+ethers = { workspace = true }
+solana-sdk = { workspace = true }
+chrono = { workspace = true }
 pyo3 = { workspace = true }
 tokio = { workspace = true }
 serde = { workspace = true }

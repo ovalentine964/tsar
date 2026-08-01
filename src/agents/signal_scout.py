@@ -128,6 +128,14 @@ class SignalScout(BaseAgent):
         "mtf_enabled": True,
         "mtf_timeframes": ["4h", "1h", "15m"],
         "mtf_confluence_threshold": 0.6,
+        # Entry optimization parameters
+        "session_timing_enabled": True,
+        "pullback_detection_enabled": True,
+        "pullback_bounce_pct": 0.003,  # 0.3% bounce from low/high
+        "volume_confirmation_candles": 2,  # Consecutive candles above avg
+        "news_blackout_enabled": True,
+        "limit_order_enabled": True,
+        "limit_order_offset_pct": 0.001,  # 0.1% better than current price
     }
 
     def __init__(
@@ -257,6 +265,28 @@ class SignalScout(BaseAgent):
         """
         logger.info("Scanning %s for signals...", symbol)
 
+        # ── Entry Optimization: Session Timing Gate ──────────────
+        if self._params.get("session_timing_enabled", True):
+            from src.agents.trade_manager import SessionTiming
+            session_allowed, session_reason = SessionTiming.is_entry_allowed()
+            if not session_allowed:
+                logger.info("  %s: Skipping — %s", symbol, session_reason)
+                return
+
+        # ── Entry Optimization: News Blackout Gate ───────────────
+        if self._params.get("news_blackout_enabled", True):
+            try:
+                from src.tools.market_calendar import MarketCalendar
+                calendar = MarketCalendar(config=self.config.get("market_calendar", {}))
+                snapshot = await calendar.get_calendar(days_ahead=1)
+                from src.agents.trade_manager import NewsProximity
+                blocked, reason, risk_mult = NewsProximity.check_news_blackout(snapshot)
+                if blocked:
+                    logger.info("  %s: Skipping — %s", symbol, reason)
+                    return
+            except Exception:
+                logger.debug("News blackout check failed for %s", symbol, exc_info=True)
+
         # Fetch OHLCV data (1h candles, 100 bars)
         ohlcv: list[OHLCV] = await self._gateway.get_ohlcv(
             symbol, Timeframe.H1, limit=100
@@ -369,6 +399,29 @@ class SignalScout(BaseAgent):
 
         if signal_side is None:
             logger.info("  %s: No signal (RSI=%.1f, no S/R proximity)", symbol, rsi)
+            return
+
+        # ── Entry Optimization: Pullback Confirmation ──────────────
+        if self._params.get("pullback_detection_enabled", True):
+            pullback_confirmed = self._check_pullback_confirmation(
+                ohlcv=ohlcv,
+                signal_side=signal_side,
+                current_price=current_price,
+                bounce_pct=self._params.get("pullback_bounce_pct", 0.003),
+            )
+            if not pullback_confirmed:
+                logger.info("  %s: No pullback confirmation — waiting for bounce", symbol)
+                return
+
+        # ── Entry Optimization: Enhanced Volume Confirmation ─────────
+        volume_score_adj = self._check_volume_confirmation(
+            volumes=volumes,
+            lookback=self._params["volume_lookback"],
+            multiplier=self._params["volume_multiplier"],
+            confirmation_candles=self._params.get("volume_confirmation_candles", 2),
+        )
+        if volume_score_adj < 0:
+            logger.info("  %s: Volume too low (adj=%.2f) — skipping", symbol, volume_score_adj)
             return
 
         # ── Multi-Timeframe Confluence (via tool) ─────────────
@@ -761,6 +814,129 @@ class SignalScout(BaseAgent):
             confluence = min(1.0, confluence * 1.15)  # 15% agreement bonus
 
         return round(confluence, 3)
+
+    # ── Entry Optimization: Pullback Detection ─────────────────────
+
+    def _check_pullback_confirmation(
+        self,
+        ohlcv: list[OHLCV],
+        signal_side: OrderSide,
+        current_price: float,
+        bounce_pct: float = 0.003,
+    ) -> bool:
+        """Check if price has shown pullback confirmation.
+
+        For BUY: Price must have bounced off recent low (close > low + bounce%)
+        For SELL: Price must have rejected from recent high (close < high - bounce%)
+
+        This avoids "catching a falling knife" — we wait for the bounce.
+
+        Args:
+            ohlcv: Recent OHLCV data.
+            signal_side: Signal direction.
+            current_price: Current price.
+            bounce_pct: Minimum bounce percentage (default 0.3%).
+
+        Returns:
+            True if pullback confirmation detected.
+        """
+        if len(ohlcv) < 3:
+            return True  # Not enough data, allow trade
+
+        # Check last 3 candles for bounce pattern
+        recent = ohlcv[-3:]
+
+        if signal_side == OrderSide.BUY:
+            # Look for bounce off low: current close > recent low * (1 + bounce_pct)
+            recent_low = min(bar.low for bar in recent)
+            bounce_threshold = recent_low * (1.0 + bounce_pct)
+            confirmed = current_price >= bounce_threshold
+
+            if confirmed:
+                logger.info(
+                    "  Pullback confirmed: low=%.2f, threshold=%.2f, price=%.2f",
+                    recent_low, bounce_threshold, current_price,
+                )
+            return confirmed
+
+        else:  # SELL
+            # Look for rejection from high: current close < recent high * (1 - bounce_pct)
+            recent_high = max(bar.high for bar in recent)
+            bounce_threshold = recent_high * (1.0 - bounce_pct)
+            confirmed = current_price <= bounce_threshold
+
+            if confirmed:
+                logger.info(
+                    "  Pullback confirmed: high=%.2f, threshold=%.2f, price=%.2f",
+                    recent_high, bounce_threshold, current_price,
+                )
+            return confirmed
+
+    def _check_volume_confirmation(
+        self,
+        volumes: list[float],
+        lookback: int = 20,
+        multiplier: float = 1.5,
+        confirmation_candles: int = 2,
+    ) -> float:
+        """Check volume confirmation with graduated scoring.
+
+        Volume Score Ladder:
+          - < 0.8x avg: REJECT (-1.0)
+          - 0.8-1.0x avg: 0.0 score (weak)
+          - 1.0-1.5x avg: 0.3 score (moderate)
+          - 1.5-2.0x avg: 0.6 score (good)
+          - 2.0-3.0x avg: 0.8 score (strong)
+          - > 3.0x avg: 1.0 score (institutional)
+
+        Also requires volume above average for N consecutive candles.
+
+        Args:
+            volumes: Recent volume data.
+            lookback: Period for average calculation.
+            multiplier: Minimum volume multiplier.
+            confirmation_candles: Consecutive candles above avg required.
+
+        Returns:
+            Volume score (0-1) or -1 if rejected.
+        """
+        if len(volumes) < lookback:
+            return 0.5  # Neutral if insufficient data
+
+        avg_vol = sum(volumes[-lookback:]) / lookback
+        if avg_vol <= 0:
+            return 0.0
+
+        # Check consecutive candles above average
+        recent_vols = volumes[-confirmation_candles:]
+        consecutive_above = all(v >= avg_vol for v in recent_vols)
+
+        if not consecutive_above:
+            logger.debug(
+                "Volume not confirmed: need %d consecutive above avg, "
+                "recent=%s, avg=%.2f",
+                confirmation_candles,
+                [f"{v:.2f}" for v in recent_vols],
+                avg_vol,
+            )
+            return -1.0  # Reject
+
+        # Graduated scoring
+        current_vol = volumes[-1]
+        vol_ratio = current_vol / avg_vol
+
+        if vol_ratio < 0.8:
+            return -1.0  # Reject — below average
+        elif vol_ratio < 1.0:
+            return 0.0  # Weak
+        elif vol_ratio < 1.5:
+            return 0.3  # Moderate
+        elif vol_ratio < 2.0:
+            return 0.6  # Good
+        elif vol_ratio < 3.0:
+            return 0.8  # Strong
+        else:
+            return 1.0  # Institutional
 
     def _compute_factor_adjustment(
         self,

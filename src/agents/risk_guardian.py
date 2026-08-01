@@ -85,6 +85,10 @@ class RiskGuardian(BaseAgent):
         "max_stop_loss_pct": 2.0,         # 2% max stop-loss from entry
         "cooldown_seconds": 1800,         # 30-minute symbol cooldown
         "min_signal_score": 0.6,          # Minimum signal score
+        # Entry optimization checks
+        "session_timing_check": True,     # Check session timing
+        "news_blackout_check": True,      # Check news blackout
+        "weekend_risk_check": True,       # Check weekend risk
     }
 
     def __init__(
@@ -231,6 +235,40 @@ class RiskGuardian(BaseAgent):
                     trace_id=trace_id,
                 )
                 return
+
+        # ── News Blackout Check (async, before sync checks) ────
+        if self._limits.get("news_blackout_check", True):
+            try:
+                from src.tools.market_calendar import MarketCalendar
+                from src.agents.trade_manager import NewsProximity
+                calendar = MarketCalendar(config=self.config.get("market_calendar", {}))
+                snapshot = await calendar.get_calendar(days_ahead=1)
+                blocked, reason, risk_mult = NewsProximity.check_news_blackout(snapshot)
+                if blocked:
+                    logger.warning(
+                        "🔒 NEWS BLACKOUT: %s %s — %s",
+                        signal.signal_id, signal.symbol, reason,
+                    )
+                    # Inject blocking result into signal metadata for sync check
+                    signal.metadata["news_blackout_blocked"] = True
+                    await self.publish_event(
+                        stream="risk_decisions",
+                        event_type="tsar.risk.vetoed.v1",
+                        data={
+                            "signal_id": signal.signal_id,
+                            "approved": False,
+                            "rejection_reasons": [f"NEWS_BLACKOUT: {reason}"],
+                            "veto_level": VetoLevel.SOFT.value,
+                            "symbol": signal.symbol,
+                            "side": signal.side.value,
+                        },
+                        priority=2,
+                        risk_level="SOFT",
+                        trace_id=trace_id,
+                    )
+                    return
+            except Exception:
+                logger.debug("News blackout check failed", exc_info=True)
 
         # Run all remaining risk checks
         decision = self._run_all_checks(signal)
@@ -499,6 +537,72 @@ class RiskGuardian(BaseAgent):
                     )
             except Exception:
                 logger.debug("Exposure check via tool failed", exc_info=True)
+
+        # ── Check 12: Session Timing Gate ────────────────────────
+        if self._limits.get("session_timing_check", True):
+            try:
+                from src.agents.trade_manager import SessionTiming
+                session_allowed, session_reason = SessionTiming.is_entry_allowed()
+                if not session_allowed:
+                    checks_failed.append(
+                        f"SESSION_TIMING: {session_reason}"
+                    )
+                    return RiskDecision(
+                        signal_id=signal.signal_id,
+                        approved=False,
+                        position_size=0.0,
+                        rejection_reasons=tuple(checks_failed),
+                        warnings=tuple(warnings),
+                        veto_level=VetoLevel.SOFT.value,
+                        timestamp=datetime.now(UTC),
+                    )
+                # Check session quality for risk adjustment
+                quality = SessionTiming.get_session_quality()
+                if quality < 0.6:
+                    warnings.append(
+                        f"SESSION_QUALITY_LOW: Quality={quality:.2f} — reduced sizing recommended"
+                    )
+            except ImportError:
+                logger.debug("SessionTiming not available")
+            except Exception:
+                logger.debug("Session timing check failed", exc_info=True)
+
+        # ── Check 13: Weekend Risk Gate ──────────────────────────
+        if self._limits.get("weekend_risk_check", True):
+            try:
+                from src.agents.trade_manager import SessionTiming
+                should_close, weekend_reason = SessionTiming.should_close_for_weekend()
+                if should_close:
+                    checks_failed.append(
+                        f"WEEKEND_RISK: {weekend_reason}"
+                    )
+                    return RiskDecision(
+                        signal_id=signal.signal_id,
+                        approved=False,
+                        position_size=0.0,
+                        rejection_reasons=tuple(checks_failed),
+                        warnings=tuple(warnings),
+                        veto_level=VetoLevel.SOFT.value,
+                        timestamp=datetime.now(UTC),
+                    )
+            except Exception:
+                logger.debug("Weekend risk check failed", exc_info=True)
+
+        # ── Check 14: News Blackout Gate ─────────────────────────
+        # NOTE: News blackout is checked in _evaluate_signal (async) before
+        # _run_all_checks is called. This is a placeholder for the check result.
+        news_blackout_result = signal.metadata.get("news_blackout_blocked", False)
+        if news_blackout_result:
+            checks_failed.append("NEWS_BLACKOUT: Blocked by news event proximity")
+            return RiskDecision(
+                signal_id=signal.signal_id,
+                approved=False,
+                position_size=0.0,
+                rejection_reasons=tuple(checks_failed),
+                warnings=tuple(warnings),
+                veto_level=VetoLevel.SOFT.value,
+                timestamp=datetime.now(UTC),
+            )
 
         # ── All Checks Passed ─────────────────────────────────────
         veto_level = VetoLevel.SOFT.value if warnings else VetoLevel.NONE.value
