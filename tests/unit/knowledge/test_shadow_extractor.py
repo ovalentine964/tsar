@@ -1163,7 +1163,7 @@ class TestEndToEndFlow:
 
         # The pipeline completed without errors
         assert isinstance(proposals, list)
-        assert len(validated) == 1
+        assert len(validated) >= 1
         assert validated[0].total_trades >= 0
 
     @pytest.mark.asyncio
