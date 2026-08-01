@@ -5,6 +5,10 @@ members = [
     "crates/ws-manager",
     "crates/tick-processor",
     "crates/order-executor",
+    "crates/mev-scanner",
+    "crates/gas-optimizer",
+    "crates/dex-aggregator",
+    "crates/price-feed",
     "crates/pyo3-bindings",
 ]
 
@@ -53,3 +57,7 @@ tsar-core = { path = "crates/core" }
 tsar-ws-manager = { path = "crates/ws-manager" }
 tsar-tick-processor = { path = "crates/tick-processor" }
 tsar-order-executor = { path = "crates/order-executor" }
+tsar-mev-scanner = { path = "crates/mev-scanner" }
+tsar-gas-optimizer = { path = "crates/gas-optimizer" }
+tsar-dex-aggregator = { path = "crates/dex-aggregator" }
+tsar-price-feed = { path = "crates/price-feed" }

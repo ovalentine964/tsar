@@ -12,6 +12,20 @@ app:
   trading_mode: "paper"          # paper | live
   log_level: "INFO"
 
+# --- Paper Trading ---
+paper:
+  initial_balance: 10.0           # Valentine's $10 starting balance
+  fee_rate: 0.001                 # 0.1% Binance spot fee
+  slippage_bps: 2.0               # Simulated slippage (basis points)
+  quote_currency: "USDT"          # Quote currency for balance tracking
+
+# --- Paper → Live Gate ---
+paper_gate:
+  min_paper_trades: 50            # Minimum paper trades before live
+  min_paper_days: 7               # Minimum days in paper mode
+  min_win_rate: 0.55              # Minimum win rate (55%) to go live
+  enforce: true                   # Enforce gate (false = skip checks)
+
 # --- Database ---
 database:
   path: "data/tsar.db"
@@ -106,6 +120,24 @@ defi:
     arbitrum: "https://sepolia-rollup.arbitrum.io/rpc"
     base: "https://sepolia.base.org"
     solana: "https://api.devnet.solana.com"
+
+# --- MEV Protection ---
+mev:
+  enabled: true
+  flashbots_enabled: true           # Use Flashbots Protect on Ethereum
+  jito_enabled: true                # Use Jito bundles on Solana
+  sandwich_detection: true          # Monitor for sandwich attacks
+  simulation_required: true         # Simulate before submission
+  max_priority_fee_gwei: 3          # Max priority fee for EIP-1559
+
+# --- Oracle ---
+oracle:
+  enabled: true
+  chainlink_enabled: true           # Chainlink price feeds
+  pyth_enabled: true                # Pyth Network feeds
+  twap_window_seconds: 3600         # TWAP computation window (1h)
+  deviation_threshold_pct: 2.0      # Alert when CEX/DEX price diverges >2%
+  update_interval_s: 30             # Price refresh interval
 
 # --- Watchdog ---
 watchdog:

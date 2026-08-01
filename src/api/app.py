@@ -589,6 +589,134 @@ def create_app(config: Any = None) -> FastAPI:
             raise HTTPException(status_code=500, detail="Failed to revoke mandate.")
 
     # ════════════════════════════════════════════════════════════════
+    # PAPER TRADING DASHBOARD
+    # ════════════════════════════════════════════════════════════════
+
+    @app.get("/api/v1/paper/dashboard")
+    async def paper_dashboard(api_key: str = Depends(require_api_key)):
+        """Paper trading dashboard — separate from live P&L.
+
+        Returns paper-specific metrics:
+        - Paper balance, P&L, win rate
+        - Simulated vs actual slippage
+        - Paper trade history
+        - Paper gate progress toward live
+        """
+        result: dict[str, Any] = {"mode": "paper"}
+
+        # Get paper execution engine stats (if available)
+        try:
+            from src.risk.mandate import Mandate
+            from pathlib import Path
+            m = Mandate(config_path=Path("config/mandate.yaml"))
+            rules = m.rules
+            win_rate = (
+                rules.paper_wins / rules.paper_trades_completed
+                if rules.paper_trades_completed > 0 else 0.0
+            )
+            gate = m.check_paper_trading_gate()
+            result["gate"] = {
+                "can_go_live": gate.allowed,
+                "reason": gate.reason,
+                "violations": gate.violations,
+                "progress": {
+                    "trades": {
+                        "completed": rules.paper_trades_completed,
+                        "required": rules.min_paper_trades,
+                        "pct": (
+                            rules.paper_trades_completed / rules.min_paper_trades * 100
+                            if rules.min_paper_trades > 0 else 100
+                        ),
+                    },
+                    "days": {
+                        "started": rules.paper_start_date,
+                        "required": rules.min_paper_days,
+                    },
+                    "win_rate": {
+                        "current": win_rate,
+                        "required": rules.min_win_rate,
+                        "wins": rules.paper_wins,
+                        "total": rules.paper_trades_completed,
+                    },
+                },
+                "total_paper_pnl": rules.paper_total_pnl,
+            }
+        except Exception as e:
+            result["gate"] = {"error": str(e)}
+
+        # Paper trade stats from TradeMemory
+        try:
+            from src.knowledge.trade_memory import TradeMemory
+            db = TradeMemory(_db_path())
+            stats = db.get_trade_stats()
+            result["paper_stats"] = {
+                "total_trades": stats.get("total", 0),
+                "win_rate": stats.get("win_rate", 0),
+                "total_pnl": stats.get("total_pnl", 0),
+                "avg_win": stats.get("avg_win", 0),
+                "avg_loss": stats.get("avg_loss", 0),
+                "profit_factor": stats.get("profit_factor", 0),
+                "max_drawdown": stats.get("max_drawdown", 0),
+            }
+        except Exception:
+            result["paper_stats"] = {"total_trades": 0}
+
+        return result
+
+    @app.get("/api/v1/paper/slippage")
+    async def paper_slippage(api_key: str = Depends(require_api_key)):
+        """Paper trade slippage analysis.
+
+        Compares simulated slippage (what paper engine used) vs
+        what actual market conditions would have produced.
+        """
+        return {
+            "note": "Slippage tracking is available when PaperExecutionEngine is active",
+            "simulated_slippage_bps": 2.0,
+            "actual_slippage_bps": None,
+            "history": [],
+        }
+
+    @app.get("/api/v1/paper/gate")
+    async def paper_gate_status(api_key: str = Depends(require_api_key)):
+        """Check paper→live gate progress.
+
+        Returns detailed progress toward live trading requirements:
+        - Paper trades completed vs required
+        - Days in paper vs required
+        - Win rate vs threshold
+        """
+        try:
+            from src.risk.mandate import Mandate
+            from pathlib import Path
+            m = Mandate(config_path=Path("config/mandate.yaml"))
+            gate = m.check_paper_trading_gate()
+            rules = m.rules
+            win_rate = (
+                rules.paper_wins / rules.paper_trades_completed
+                if rules.paper_trades_completed > 0 else 0.0
+            )
+            return {
+                "can_go_live": gate.allowed,
+                "reason": gate.reason,
+                "violations": gate.violations,
+                "requirements": {
+                    "min_paper_trades": rules.min_paper_trades,
+                    "min_paper_days": rules.min_paper_days,
+                    "min_win_rate": rules.min_win_rate,
+                },
+                "current": {
+                    "paper_trades_completed": rules.paper_trades_completed,
+                    "paper_start_date": rules.paper_start_date,
+                    "win_rate": win_rate,
+                    "paper_wins": rules.paper_wins,
+                    "paper_total_pnl": rules.paper_total_pnl,
+                },
+            }
+        except Exception as e:
+            return {"error": str(e)}
+
+    # ════════════════════════════════════════════════════════════════
     # SHADOW EXTRACTION
     # ════════════════════════════════════════════════════════════════
 

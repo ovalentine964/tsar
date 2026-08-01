@@ -58,6 +58,16 @@ def list_tools() -> list[str]:
     return list(_TOOL_REGISTRY.keys())
 
 
+def get_registered_tools() -> dict[str, type]:
+    """Get all registered tools (alias for get_tool_registry)."""
+    _ensure_registered()
+    return dict(_TOOL_REGISTRY)
+
+
+# Convenience alias
+registered_tools = _TOOL_REGISTRY
+
+
 # Lazy imports to avoid circular dependencies
 def _ensure_registered() -> None:
     """Ensure all tool modules are imported and registered."""
@@ -230,6 +240,8 @@ _ensure_registered()
 
 __all__ = [
     "get_tool_registry",
+    "get_registered_tools",
     "list_tools",
     "register_tool",
+    "registered_tools",
 ]

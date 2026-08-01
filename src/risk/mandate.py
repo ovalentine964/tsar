@@ -90,14 +90,20 @@ class MandateRules(BaseModel):
         description="Permitted order sides. Restrict to ['buy'] to disable shorting.",
     )
     min_paper_trades: int = Field(
-        default=0,
+        default=50,
         ge=0,
         description="Minimum number of paper trades required before live trading. 0 = no minimum.",
     )
     min_paper_days: int = Field(
-        default=0,
+        default=7,
         ge=0,
         description="Minimum number of days in paper mode before live trading. 0 = no minimum.",
+    )
+    min_win_rate: float = Field(
+        default=0.55,
+        ge=0.0,
+        le=1.0,
+        description="Minimum win rate (0.0-1.0) required before live trading. 0 = no minimum.",
     )
     paper_trades_completed: int = Field(
         default=0,
@@ -107,6 +113,15 @@ class MandateRules(BaseModel):
     paper_start_date: str = Field(
         default="",
         description="ISO date when paper trading started (tracked automatically).",
+    )
+    paper_wins: int = Field(
+        default=0,
+        ge=0,
+        description="Number of winning paper trades (tracked automatically).",
+    )
+    paper_total_pnl: float = Field(
+        default=0.0,
+        description="Total paper P&L (tracked automatically).",
     )
 
     @field_validator("allowed_symbols")
@@ -584,8 +599,10 @@ class Mandate:
     def check_paper_trading_gate(self) -> MandateDecision:
         """Check if minimum paper trading requirements are met.
 
-        Validates that the system has completed enough paper trades
-        and been in paper mode long enough before allowing live.
+        Validates:
+        1. Minimum paper trades completed
+        2. Minimum days in paper mode
+        3. Minimum win rate threshold
 
         Returns:
             MandateDecision indicating if paper trading gate passes.
@@ -614,6 +631,16 @@ class Mandate:
             except (ValueError, TypeError):
                 violations.append("paper_start_date_invalid")
 
+        # Check win rate threshold
+        if rules.min_win_rate > 0 and rules.paper_trades_completed > 0:
+            win_rate = rules.paper_wins / rules.paper_trades_completed
+            if win_rate < rules.min_win_rate:
+                violations.append(
+                    f"win_rate_insufficient: {win_rate:.1%} "
+                    f"< {rules.min_win_rate:.1%} required "
+                    f"({rules.paper_wins}W / {rules.paper_trades_completed}T)"
+                )
+
         if violations:
             return MandateDecision(
                 allowed=False,
@@ -627,9 +654,18 @@ class Mandate:
             violations=[],
         )
 
-    def record_paper_trade(self) -> None:
-        """Increment the paper trade counter."""
+    def record_paper_trade(self, pnl: float = 0.0) -> None:
+        """Record a completed paper trade.
+
+        Increments counters and tracks win rate.
+
+        Args:
+            pnl: Realized P&L of the trade (positive = win).
+        """
         self._state.rules.paper_trades_completed += 1
+        if pnl > 0:
+            self._state.rules.paper_wins += 1
+        self._state.rules.paper_total_pnl += pnl
         if not self._state.rules.paper_start_date:
             self._state.rules.paper_start_date = datetime.now(UTC).isoformat()
         self._save_to_yaml()

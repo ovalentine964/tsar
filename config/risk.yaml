@@ -158,6 +158,72 @@ micro_capital:
     anti_revenge: false
     anti_fomo: false
 
+# --- Flash Crash Detector ---
+flash_crash:
+  price_drop_pct: 0.05              # 5% drop triggers crash
+  price_drop_window_seconds: 60     # Within 60 seconds
+  warning_threshold_pct: 0.03       # 3% drop triggers warning
+  recovery_stability_seconds: 120   # Price stable for 2 min = recovered
+  recovery_max_volatility_pct: 0.01 # <1% volatility during recovery window
+  pattern_window_size: 10           # Track last N price points for pattern
+  velocity_smoothing_window: 5      # Rolling window for velocity smoothing
+  post_crash_cooldown_seconds: 300  # 5 min cooldown after recovery
+
+# --- Stop Hunt Detector ---
+stop_hunt:
+  recovery_candles: 5               # If price recovers within 5 candles → hunt
+  hunt_spike_pct: 0.005             # 0.5% spike beyond stop level
+  min_price_recovery_pct: 0.003     # Must recover 0.3% to count
+  hunt_window_hours: 24.0           # Track hunts over 24h window
+  high_frequency_threshold: 3       # 3+ hunts = high frequency
+  severe_frequency_threshold: 5     # 5+ hunts = severe
+  stop_buffer_pct: 0.002            # 0.2% buffer below hunt levels
+  hunt_level_lookback: 50           # Look back N candles for hunt levels
+  symbol_cooldown_seconds: 600      # 10 min cooldown after confirmed hunt
+
+# --- Whipsaw Filter ---
+whipsaw:
+  min_direction_changes: 4          # 4+ direction changes = whipsaw
+  detection_window_seconds: 300     # Within 5 minutes
+  min_price_move_pct: 0.001         # 0.1% min move to count as direction change
+  cooldown_seconds: 180             # 3 min pause after whipsaw
+  choppy_cooldown_seconds: 60       # 1 min reduced trading in choppy
+  choppy_score_multiplier: 0.7      # 70% signal score in choppy
+  whipsaw_score_multiplier: 0.0     # Block all entries in whipsaw
+  frequency_window_hours: 24.0
+  high_frequency_threshold: 5        # 5+ whipsaws in 24h = high frequency
+
+# --- Liquidity Monitor ---
+liquidity:
+  min_depth_usd: 100000.0           # Min $100k within 2% of mid
+  depth_warning_usd: 200000.0       # Warning below $200k
+  depth_pct_from_mid: 0.02          # Measure depth within 2% of mid-price
+  max_spread_bps: 50.0              # 50 bps max spread (0.5%)
+  warning_spread_bps: 30.0          # 30 bps warning
+  spread_lookback: 100              # Historical spread samples for baseline
+  thin_liquidity_size_mult: 0.5     # 50% size in thin liquidity
+  degraded_size_mult: 0.25          # 25% size in degraded
+  critical_size_mult: 0.0           # Block in critical
+  depth_drop_threshold_pct: 0.5     # 50% drop in depth = anomaly
+  spread_spike_multiplier: 3.0      # 3x normal spread = anomaly
+  anomaly_window_seconds: 60
+
+# --- Correlation Break Detector ---
+correlation:
+  high_threshold: 0.7               # Above this = normal
+  moderate_threshold: 0.4           # Below this = warning
+  low_threshold: 0.2                # Below this = regime break
+  negative_threshold: 0.0           # Below this = negative correlation
+  lookback_periods: 50              # Rolling window for correlation calc
+  min_periods: 20                   # Minimum data points for valid calc
+  correlation_drop_alert: 0.3       # Alert if drops by 0.3+ in short time
+  alert_window_seconds: 3600        # Track drops over 1 hour
+  decorrelated_exposure_mult: 0.5   # 50% exposure when decorrelated
+  negative_exposure_mult: 0.25      # 25% exposure when negative
+  low_corr_exposure_mult: 0.75      # 75% exposure when low
+  default_pairs:
+    - ["BTC/USDT", "ETH/USDT"]
+
 # --- Kill Switch ---
 kill_switch:
   file_path: "/tmp/tsar_kill_switch"

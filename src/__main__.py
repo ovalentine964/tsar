@@ -127,7 +127,32 @@ async def run_full_system(args: argparse.Namespace) -> None:
     setup_logging(level=getattr(config, "logging", config).level if hasattr(config, "logging") else "INFO",
                   json_output=getattr(getattr(config, "logging", None), "json_output", False) if hasattr(config, "logging") else False)
 
-    trading_mode = "live" if args.live else "paper"
+    # Resolve trading mode: CLI flags override config, config defaults to "paper"
+    config_mode = config_dict.get("app", {}).get("trading_mode", "paper") if isinstance(config_dict, dict) else "paper"
+    if args.live:
+        trading_mode = "live"
+    elif args.paper:
+        trading_mode = "paper"
+    else:
+        trading_mode = config_mode
+
+    # Paper trading gate: block --live if mandate requirements not met
+    if trading_mode == "live":
+        try:
+            from pathlib import Path
+            from src.risk.mandate import Mandate
+            mandate_gate = Mandate(config_path=Path("config/mandate.yaml"))
+            gate_decision = mandate_gate.check_paper_trading_gate()
+            if not gate_decision.allowed:
+                logger.error("\n🚫 PAPER TRADING GATE — Cannot go live:")
+                for v in gate_decision.violations:
+                    logger.error(f"   • {v}")
+                logger.error("\n   Complete paper trading requirements first.")
+                logger.error("   Falling back to paper mode.\n")
+                trading_mode = "paper"
+        except Exception as e:
+            logger.warning(f"Paper gate check failed: {e}")
+
     logger.info(f"\n🏰 TSAR v0.2.0 — {trading_mode.upper()} MODE")
     logger.info(f"   Config: {args.config}")
     logger.info(f"   API: http://{args.host}:{args.port}")
@@ -206,14 +231,33 @@ async def run_full_system(args: argparse.Namespace) -> None:
     logger.info("✅ Risk engine ready (kill switch wired to cancel_orders + flatten_positions)")
 
     # ── Initialize Engines via Registry ──────────────────────────
+    # Exchange gateway — always needed for real market data
     try:
         exchange_gateway = registry.create("exchange_gateway")
     except Exception:
         exchange_gateway = None
-    try:
-        execution_engine = registry.create("execution_engine")
-    except Exception:
-        execution_engine = None
+
+    # Execution engine — mode-aware: paper vs live
+    paper_config = config_dict.get("paper", {}) if isinstance(config_dict, dict) else {}
+    if trading_mode == "paper":
+        from src.backends.python.paper_execution_engine import PaperExecutionEngine
+        paper_initial = paper_config.get("initial_balance", 10.0)
+        paper_fee = paper_config.get("fee_rate", 0.001) * 10_000  # Convert to bps
+        execution_engine = PaperExecutionEngine(
+            gateway=exchange_gateway,
+            initial_balance=paper_initial,
+            fee_rate_bps=paper_fee,
+        )
+        logger.info(
+            f"📝 Paper execution engine: balance=${paper_initial:.2f}, "
+            f"fee={paper_config.get('fee_rate', 0.001)*100:.2f}%"
+        )
+    else:
+        try:
+            execution_engine = registry.create("execution_engine")
+        except Exception:
+            execution_engine = None
+
     try:
         pricing_engine = registry.create("pricing_engine")
     except Exception:
@@ -226,7 +270,16 @@ async def run_full_system(args: argparse.Namespace) -> None:
         llm_provider = registry.create("llm_provider")
     except Exception:
         llm_provider = None
-    logger.info("✅ Engines initialized (Exchange, Execution, Pricing, Risk, LLM)")
+
+    mode_label = "PAPER (simulated)" if trading_mode == "paper" else "LIVE (real orders)"
+    logger.info(f"✅ Engines initialized — mode: {mode_label}")
+
+    # Connect paper engine (no-op for CcxtExecEngine which connects lazily)
+    if trading_mode == "paper" and execution_engine is not None:
+        try:
+            await execution_engine.connect()
+        except Exception as e:
+            logger.warning(f"Paper engine connect failed: {e}")
 
     # ── Initialize Factor Library ────────────────────────────────
     try:
@@ -238,6 +291,15 @@ async def run_full_system(args: argparse.Namespace) -> None:
     try:
         from pathlib import Path
         mandate = Mandate(config_path=Path("config/mandate.yaml"))
+
+        # Auto-track paper trading start date
+        if trading_mode == "paper":
+            if not mandate.rules.paper_start_date:
+                from datetime import UTC, datetime
+                mandate._state.rules.paper_start_date = datetime.now(UTC).isoformat()
+                mandate._save_to_yaml()
+                logger.info("📝 Paper trading start date recorded")
+
         if trading_mode == "live" and mandate.status.value == "DRAFT":
             logger.info("⚠️  WARNING: Mandate is DRAFT — live trades will be blocked")
             logger.info("   Edit config/mandate.yaml and set status: ACTIVE to enable live trading")

@@ -15,6 +15,10 @@ tsar-core = { workspace = true }
 tsar-ws-manager = { workspace = true }
 tsar-tick-processor = { workspace = true }
 tsar-order-executor = { workspace = true }
+tsar-mev-scanner = { workspace = true }
+tsar-gas-optimizer = { workspace = true }
+tsar-dex-aggregator = { workspace = true }
+tsar-price-feed = { workspace = true }
 pyo3 = { workspace = true }
 tokio = { workspace = true }
 serde = { workspace = true }

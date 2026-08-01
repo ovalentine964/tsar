@@ -337,15 +337,53 @@ class BackendRegistry:
         from src.backends.python.ollama_provider import OllamaProvider
         from src.backends.python.openai_provider import OpenAIProvider
         from src.backends.python.pandas_ta_engine import PandasTAEngine
+        from src.backends.python.paper_execution_engine import PaperExecutionEngine
         from src.backends.python.python_risk_engine import PythonRiskEngine
 
         self.register("exchange_gateway", CcxtGateway.__name__, CcxtGateway)
         self.register("execution_engine", CcxtExecEngine.__name__, CcxtExecEngine)
+        self.register("execution_engine", PaperExecutionEngine.__name__, PaperExecutionEngine)
         self.register("pricing_engine", PandasTAEngine.__name__, PandasTAEngine)
         self.register("risk_engine", PythonRiskEngine.__name__, PythonRiskEngine)
         self.register("llm_provider", OllamaProvider.__name__, OllamaProvider)
         self.register("llm_provider_openai", OpenAIProvider.__name__, OpenAIProvider)
         self.register("llm_provider_deepseek", DeepSeekProvider.__name__, DeepSeekProvider)
+
+    def create_for_mode(
+        self,
+        interface_name: str,
+        trading_mode: str,
+        config: dict[str, Any] | None = None,
+    ) -> Any:
+        """Create a backend instance based on trading mode.
+
+        For execution_engine:
+        - "paper" → PaperExecutionEngine (simulated fills, real market data)
+        - "live"  → CcxtExecEngine (real exchange orders)
+
+        For all other interfaces, delegates to normal create().
+
+        Args:
+            interface_name: Interface identifier.
+            trading_mode: "paper" or "live".
+            config: Override configuration.
+
+        Returns:
+            Backend instance appropriate for the trading mode.
+        """
+        if interface_name == "execution_engine":
+            if trading_mode == "paper":
+                from src.backends.python.paper_execution_engine import PaperExecutionEngine
+                merged_config = {**self._configs.get(interface_name, {}), **(config or {})}
+                logger.info("Creating PaperExecutionEngine for paper mode")
+                return PaperExecutionEngine(config=merged_config)
+            else:
+                from src.backends.python.ccxt_exec_engine import CcxtExecEngine
+                merged_config = {**self._configs.get(interface_name, {}), **(config or {})}
+                logger.info("Creating CcxtExecEngine for live mode")
+                return CcxtExecEngine(config=merged_config)
+
+        return self.create(interface_name, config=config)
 
     def load_from_config(self, config_path: str) -> None:
         """Load backend registrations from a YAML config file.

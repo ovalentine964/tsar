@@ -1,82 +1,26 @@
-# ============================================================
-# TSAR — Mandate Configuration (HUMAN AUTHORIZATION BOUNDARY)
-# ============================================================
-#
-# The mandate defines what the system is ALLOWED to trade.
-# It is a HUMAN COMMITMENT — a signed contract.
-#
-# WITHOUT A COMMITTED MANDATE, ALL LIVE TRADES ARE BLOCKED.
-# Paper mode is exempt from mandate checks.
-#
-# Lifecycle:
-#   1. Edit this file with your trading rules
-#   2. Commit via API/CLI with your user ID
-#   3. System enforces these rules on every trade
-#   4. Update rules anytime (auto re-commits)
-#   5. Revoke to halt all live trading
-#
-# All values below are TEMPLATES — you MUST fill them in
-# before live trading is possible.
-# ============================================================
-
-# --- Mandate Rules ---
 rules:
-  # Trading pairs the system is authorized to trade.
-  # Format: "BASE/QUOTE" (uppercase). Empty list = nothing allowed.
-  # Examples: ["BTC/USDT", "ETH/USDT", "SOL/USDT"]
   allowed_symbols: []
-
-  # Maximum position size as fraction of total equity.
-  # 0.15 = 15% of capital per position. Range: 0.0-1.0.
   max_position_size_pct: 0.0
-
-  # Maximum number of trades per day.
-  # Prevents overtrading. Set to match your strategy's expected frequency.
   max_daily_trades: 0
-
-  # Maximum leverage multiplier.
-  # 1.0 = no leverage (spot only). 3.0 = up to 3x leverage.
   max_leverage: 1.0
-
-  # Permitted order types.
-  # Options: market, limit, stop_market, stop_limit
   allowed_order_types:
-    - market
-    - limit
-
-  # Maximum notional value per trade (in quote currency, e.g. USDT).
-  # 0 = no limit. Set to cap individual trade size.
-  # Example: 10000.0 = max $10,000 per trade.
+  - market
+  - limit
   max_notional_per_trade: 0.0
-
-  # Permitted order sides.
-  # ["buy", "sell"] = long and short allowed.
-  # ["buy"] = long only (no shorting).
   allowed_sides:
-    - buy
-    - sell
-
-  # Paper trading gate (M-001)
-  # Minimum paper trades required before live trading.
-  # Set to e.g. 100 to require 100 paper trades before going live.
-  min_paper_trades: 0
-
-  # Minimum days in paper mode before live trading.
-  # Set to e.g. 30 to require 30 days of paper trading.
-  min_paper_days: 0
-
-  # Auto-tracked: number of paper trades completed.
+  - buy
+  - sell
+  min_paper_trades: 50
+  min_paper_days: 7
+  min_win_rate: 0.55
   paper_trades_completed: 0
-
-  # Auto-tracked: ISO date when paper trading started.
-  paper_start_date: ""
-
-# --- Mandate Lifecycle Metadata ---
-# (Managed automatically — do not edit manually)
+  paper_start_date: ''
+  paper_wins: 0
+  paper_total_pnl: 0.0
 status: draft
 committed_at: null
 committed_by: null
 revoked_at: null
 revoked_by: null
 version: 1
-notes: "Default template — fill in rules and commit before live trading."
+notes: "Default template \u2014 fill in rules and commit before live trading."

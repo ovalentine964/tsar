@@ -34,6 +34,10 @@ mod order_bridge;
 mod runtime;
 mod tick_bridge;
 mod ws_bridge;
+mod mev_bridge;
+mod gas_bridge;
+mod dex_bridge;
+mod price_bridge;
 
 /// The main Python module entry point.
 ///
@@ -53,6 +57,18 @@ fn trading_rs(m: &Bound<'_, PyModule>) -> PyResult<()> {
 
     // ── Order Executor ───────────────────────────────────────────
     m.add_class::<order_bridge::PyOrderExecutor>()?;
+
+    // ── MEV Scanner ─────────────────────────────────────────────
+    m.add_class::<mev_bridge::PyMEVScanner>()?;
+
+    // ── Gas Optimizer ────────────────────────────────────────────
+    m.add_class::<gas_bridge::PyGasOptimizer>()?;
+
+    // ── DEX Aggregator ───────────────────────────────────────────
+    m.add_class::<dex_bridge::PyDexAggregator>()?;
+
+    // ── Price Feed ───────────────────────────────────────────────
+    m.add_class::<price_bridge::PyPriceFeed>()?;
 
     // ── Utility Functions ────────────────────────────────────────
     m.add_function(wrap_pyfunction!(version, m)?)?;
