@@ -1,25 +1,26 @@
 # TSAR — Trading Super Agent for Returns
 
-> **Autonomous capital compounding under strict risk constraints.**
+> **Self-improving autonomous trading system that compounds knowledge through use.**
 
-[![Architecture](https://img.shields.io/badge/Architecture-v3.0.0-green?style=for-badge)]()
-[![Phases](https://img.shields.io/badge/Phases_1A--4-COMPLETE-green?style=for-badge)]()
-[![Mobile](https://img.shields.io/badge/Mobile-Flutter-blue?style=for-badge)]()
-[![NVIDIA](https://img.shields.io/badge/NVIDIA-Skills_Integrated-76B900?style=for-badge)]()
-[![License](https://img.shields.io/badge/License-MIT-blue?style=for-badge)]()
-[![Status](https://img.shields.io/badge/Status-v0.1.0-green?style=for-badge)]()
+[![CI](https://img.shields.io/github/actions/workflow/status/ovalentine964/tsar/ci.yml?branch=main&label=CI&logo=github)](https://github.com/ovalentine964/tsar/actions)
+[![Python](https://img.shields.io/badge/python-3.12+-blue?logo=python&logoColor=white)](https://www.python.org/downloads/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
+[![Version](https://img.shields.io/badge/version-0.2.0-orange)](CHANGELOG.md)
+[![Status](https://img.shields.io/badge/status-alpha-yellow)](#current-status)
+
+---
 
 ## What Is TSAR?
 
-TSAR is a **self-improving market intelligence system** — not a trading bot, not a multi-agent system. It is a **super agent**: a single, deep, domain-specific intelligence wrapped in a harness that compounds knowledge through use.
+TSAR is **not a trading bot**. It's a **self-improving market intelligence** — a single, deep, domain-specific super agent that compounds knowledge with every trade.
 
 **One job:** Autonomous capital compounding under strict risk constraints.
 
-**The difference:** A trading bot is static code. A multi-agent system resets between tasks. TSAR compounds. Every trade generates proprietary data. Every reflection improves the system. Every adaptation makes the next trade better.
+**The difference:** A trading bot is static code. A multi-agent system resets between tasks. TSAR **compounds**. Every trade generates proprietary data. Every reflection improves the system. Every adaptation makes the next trade better.
 
 > *"You can copy a bot's code. You cannot copy a super agent's knowledge."*
 
-## The Flywheel
+### The Flywheel
 
 ```
 TRADE → OBSERVE → REFLECT → EXTRACT → ADAPT → BETTER TRADE
@@ -27,109 +28,134 @@ TRADE → OBSERVE → REFLECT → EXTRACT → ADAPT → BETTER TRADE
   └────────────────────────────────────────────────┘
 ```
 
-## Status
+---
+
+## Architecture Overview
+
+TSAR uses a **layered architecture** with abstract interfaces, making the backend an implementation detail. Python for orchestration, Rust for performance, C++ for specialist workloads.
 
 ```
- ✅ Phase 1A — FTS5 full-text search across all knowledge stores
- ✅ Phase 1B — Shadow Account (paper trading mirror with lesson extraction)
- ✅ Phase 2   — Backtest Engine (walk-forward, Monte Carlo, factor benchmarking)
- ✅ Phase 3   — Mandate Gate (human authorization boundary for live trading)
- ✅ Phase 4   — Factor Library (IC/IR scoring, category taxonomy, strategy factors)
- ✅ Integration Wiring — All components connected via CloudEvents + FastAPI
- ✅ Mobile App — Flutter app with full API integration (28+ endpoints)
- ✅ Engineering — Production hardening, deployment (v0.1.0)
- ✅ v0.1.0 — 72 issues fixed, 5 NVIDIA skills, 17 council reviews
- ⬜ Live Trading — Paper validation → live with mandate
+┌──────────────────────────────────────────────────────────────────┐
+│                     TSAR SUPER AGENT                             │
+│                                                                  │
+│   ┌──────────┐  ┌──────────┐  ┌──────────┐  ┌──────────────┐   │
+│   │ Signal   │  │ Risk     │  │ Execution│  │ Trade        │   │
+│   │ Scout    │→ │ Guardian │→ │ Sniper   │  │ Philosopher  │   │
+│   └────┬─────┘  └────┬─────┘  └────┬─────┘  └──────────────┘   │
+│        │              │              │                            │
+│   ┌────┴─────┐  ┌─────┴─────┐  ┌────┴──────┐                    │
+│   │ Flywheel │  │ Sentiment │  │ Regime    │                    │
+│   │ Orch.    │  │ Agent     │  │ Detector  │                    │
+│   └────┬─────┘  └─────┬─────┘  └────┬──────┘                    │
+│        │              │              │                            │
+│   ┌────┴──────────────┴──────────────┴───────────────────────┐   │
+│   │          INTERFACE LAYER (the contract)                   │   │
+│   │  ExchangeGateway · PricingEngine · ExecutionEngine        │   │
+│   │  RiskEngine · LLMProvider · BackendRegistry               │   │
+│   └────┬──────────────┬──────────────┬───────────────────────┘   │
+│        │              │              │                            │
+│   ┌────┴─────┐  ┌─────┴────┐  ┌─────┴──────┐                    │
+│   │ 6 Knowl. │  │ EventBus │  │ DeFi +     │                    │
+│   │ Stores   │  │ (Redis)  │  │ Telegram   │                    │
+│   └──────────┘  └──────────┘  └────────────┘                    │
+│                                                                  │
+│   ┌──────────────────────────────────────────────────────────┐   │
+│   │          BACKEND REGISTRY (config-driven)                │   │
+│   │   Python (Day 1)  │  Rust (Level 2)  │  C++ (Level 3+)  │   │
+│   └──────────────────────────────────────────────────────────┘   │
+└──────────────────────────────────────────────────────────────────┘
 ```
 
-## Architecture (v3.0.0)
-
-Future-ready from day one. Python + Rust + C++ via abstract interfaces.
-
-```
-┌─────────────────────────────────────────────────────────────────┐
-│                    TSAR SUPER AGENT                             │
-│                                                                 │
-│  ┌──────────┐  ┌──────────┐  ┌──────────┐  ┌──────────┐       │
-│  │ Signal   │  │ Risk     │  │ Execution│  │ Trade    │       │
-│  │ Scout    │→ │ Guardian │→ │ Sniper   │  │ Philosopher│      │
-│  └────┬─────┘  └────┬─────┘  └────┬─────┘  └──────────┘       │
-│       │              │              │                           │
-│  ┌────┴─────┐  ┌─────┴─────┐  ┌────┴──────┐                   │
-│  │ Flywheel │  │ Sentiment │  │ Regime    │                   │
-│  │ Orch.    │  │ Agent     │  │ Detector  │                   │
-│  └────┬─────┘  └─────┬─────┘  └────┬──────┘                   │
-│       │              │              │                           │
-│  ┌────┴──────────────┴──────────────┴──────────────────────┐   │
-│  │              INTERFACE LAYER (the contract)              │   │
-│  │  ExchangeGateway · PricingEngine · ExecutionEngine      │   │
-│  │  RiskEngine · LLMProvider · BackendRegistry             │   │
-│  └────┬──────────────┬──────────────┬──────────────────────┘   │
-│       │              │              │                           │
-│  ┌────┴─────┐  ┌─────┴────┐  ┌─────┴──────┐                   │
-│  │ 6 Knowledge│  │ CloudEvents│ │ NVIDIA    │                   │
-│  │ Stores    │  │ Messaging │  │ Skills    │                   │
-│  └──────────┘  └──────────┘  └────────────┘                   │
-│                                                                 │
-│  ┌──────────────────────────────────────────────────────────┐  │
-│  │           BACKEND REGISTRY (config-driven)               │  │
-│  │  ┌─────────┐  ┌─────────┐  ┌─────────┐                  │  │
-│  │  │ Python  │  │  Rust   │  │  C++    │                  │  │
-│  │  │ (Day 1) │  │ (Lv. 2) │  │ (Lv. 3+)│                  │  │
-│  │  └─────────┘  └─────────┘  └─────────┘                  │  │
-│  └──────────────────────────────────────────────────────────┘  │
-│                                                                 │
-│  TRADE → OBSERVE → REFLECT → EXTRACT → ADAPT → BETTER TRADE   │
-└─────────────────────────────────────────────────────────────────┘
-```
-
-### The Interface Layer
-
-5 abstract base classes. The interface is the contract. The backend is an implementation detail.
-
-| Interface | Python (Day 1) | Rust (Level 2) | C++ (Level 3+) |
-|-----------|---------------|----------------|----------------|
-| ExchangeGateway | ccxt REST | WebSocket | FIX protocol |
-| PricingEngine | pandas-ta | Tick processor | QuantLib |
-| ExecutionEngine | ccxt REST + Paper | Order executor | FIX engine |
-| RiskEngine | Python deterministic | Rust deterministic | GPU Monte Carlo |
-| LLMProvider | Ollama + DeepSeek + NVIDIA NIM | — | — |
-
-**Agent code calls the interface. YAML config selects the backend. No refactoring ever.**
-
-## Components
-
-### Core Systems
-
-| Component | Description |
-|-----------|-------------|
-| **FTS5 Search** | Full-text search across trade memory, lessons, patterns, and genomes |
-| **Shadow Account** | Paper trading mirror that extracts lessons from hypothetical trades |
-| **Backtest Engine** | Walk-forward validation, Monte Carlo simulation, factor benchmarking |
-| **Mandate Gate** | Human authorization boundary — no live trading without a committed mandate |
-| **Factor Library** | IC/IR scoring, category taxonomy, alpha factor discovery and ranking |
-| **ChromaDB Store** | Vector similarity search for semantic pattern matching |
-| **Knowledge Graph** | Cross-store graph traversal with recursive CTEs |
-| **RAG Blueprint** | NVIDIA-enhanced retrieval with semantic chunking and reranking |
-
-### 12 Agents
+### Agent Pipeline
 
 | Agent | Role |
 |-------|------|
-| Orchestrator | Coordinates all agents, main loop |
-| **Flywheel Orchestrator** | Auto-triggers the self-improvement loop |
-| Signal Scout | Finds statistical edges |
-| Risk Guardian | VETO power, deterministic risk checks |
-| Execution Sniper | Places and monitors orders |
-| Regime Detector | Classifies market regime (HMM-based) |
-| Trade Philosopher | Post-trade reflection and lessons |
-| Strategy Geneticist | Evolves strategy genomes |
-| Market Cartographer | Cross-asset correlation mapping |
-| Execution Tracker | Fill quality and slippage analysis |
-| Macro Agent | Economic context and sentiment |
-| **Sentiment Agent** | Aggregates sentiment from CryptoPanic + Fear & Greed |
+| **SignalScout** | Finds statistical edges across markets |
+| **RiskGuardian** | VETO power — deterministic risk checks before every trade |
+| **ExecutionSniper** | Places, monitors, and manages orders |
+| **TradePhilosopher** | Post-trade reflection and lesson extraction |
+| **FlywheelOrchestrator** | Auto-triggers the self-improvement loop |
+| **RegimeDetector** | HMM-based market regime classification |
+| **SentimentAgent** | Aggregates CryptoPanic + Fear & Greed sentiment |
+| **StrategyGeneticist** | Evolves strategy genomes through mutation |
+| **MarketCartographer** | Cross-asset correlation mapping |
+| **MacroAgent** | Economic context and event awareness |
 
-### 6 Knowledge Stores
+### Risk System
+
+- **Kill Switch** — dual-write (file + Redis) with watchdog monitoring
+- **Mandate Gate** — human authorization boundary for live trading
+- **Anti-behavioral guards** — revenge, greed, FOMO, overconfidence protection
+- **Economic blackout** — auto-block trading around FOMC, CPI, NFP events
+- **Fee-aware sizing** — Kelly criterion accounts for exchange fees
+
+### DeFi Integration
+
+On-chain execution across EVM chains (ETH, Polygon, Arbitrum, Base) and Solana:
+
+| Component | Purpose |
+|-----------|---------|
+| **DexExecutor** | 1inch (EVM) + Jupiter (Solana) swap execution |
+| **IntentExecutor** | CoW Protocol, UniswapX, 1inch Fusion intent-based trades |
+| **BridgeClient** | Cross-chain bridging via Wormhole, LayerZero, Axelar |
+| **L2Optimizer** | Gas optimization, chain comparison, batch transactions |
+| **SettlementEngine** | Smart contract escrow with multi-sig support |
+| **WalletManager** | Encrypted wallet storage with Fernet encryption |
+
+### Telegram Bot
+
+Interactive trading partner — not just notifications:
+
+- **Conversational setup** — configure credentials without touching a terminal
+- **Trade proposals** — inline keyboard approve/reject/modify before execution
+- **Post-trade reports** — detailed analysis with lessons and flywheel updates
+- **Market discussion** — `/discuss`, `/why`, `/performance`, `/regime` commands
+
+---
+
+## Quick Start
+
+### Prerequisites
+
+- Python 3.12+
+- Docker & Docker Compose (recommended)
+- Binance testnet API keys ([testnet.binance.vision](https://testnet.binance.vision))
+- NVIDIA API key ([build.nvidia.com](https://build.nvidia.com) — free tier)
+
+### Install & Run
+
+```bash
+# 1. Clone
+git clone https://github.com/ovalentine964/tsar.git && cd tsar
+
+# 2. Configure
+cp .env.example .env
+nano .env    # Fill in your API keys
+
+# 3. Start (Docker)
+./quickstart.sh
+
+# OR — local install
+make setup
+make run-dry
+```
+
+### Access
+
+| Method | How |
+|--------|-----|
+| 📱 **Web Dashboard** | `http://localhost:8000/app` |
+| 📲 **Mobile APK** | [GitHub Releases](../../releases) |
+| 💬 **Telegram** | Send `/status` to your bot |
+| 📖 **API Docs** | `http://localhost:8000/docs` |
+
+See **[INSTALL.md](INSTALL.md)** for detailed setup instructions.
+
+---
+
+## Components
+
+### Knowledge Stores (6)
 
 | Store | Purpose |
 |-------|---------|
@@ -138,217 +164,151 @@ Future-ready from day one. Python + Rust + C++ via abstract interfaces.
 | Regime State | Real-time market regime probabilities |
 | Pattern Library | Discovered patterns with statistical validation |
 | Lesson Archive | Distilled wisdom from failures and successes |
-| **ChromaDB** | Vector embeddings for semantic similarity search |
+| ChromaDB | Vector embeddings for semantic similarity search |
 
-## NVIDIA Skills Integration (v0.1.0)
+### Interface Layer
 
-TSAR integrates 5 NVIDIA GPU-accelerated skills for enhanced trading intelligence:
+5 abstract base classes. The interface is the contract. The backend is an implementation detail.
 
-| Skill | Purpose | Fallback |
-|-------|---------|----------|
-| **cuFOLIO** | GPU-accelerated portfolio optimization (Mean-CVaR, efficient frontier) | scipy |
-| **cuOpt** | Multi-objective strategy parameter optimization | scipy.optimize |
-| **RAG Blueprint** | Enhanced retrieval with semantic chunking + reranking | FTS5 + ChromaDB |
-| **Nemo Evaluator** | LLM output quality scoring (factual accuracy, risk awareness) | Internal evaluator |
-| **Nemotron Policy** | AI-generated adaptive risk policies | Static risk.yaml rules |
+| Interface | Python (Day 1) | Rust (Level 2) | C++ (Level 3+) |
+|-----------|----------------|----------------|-----------------|
+| ExchangeGateway | ccxt REST | WebSocket | FIX protocol |
+| PricingEngine | pandas-ta | Tick processor | QuantLib |
+| ExecutionEngine | ccxt REST + Paper | Order executor | FIX engine |
+| RiskEngine | Python deterministic | Rust deterministic | GPU Monte Carlo |
+| LLMProvider | Ollama + DeepSeek + NVIDIA NIM | — | — |
 
-All skills degrade gracefully when GPU hardware is unavailable. See [`config/nvidia_skills.yaml`](config/nvidia_skills.yaml) for configuration.
-
-## Security (v0.1.0)
-
-- **JWT Authentication** — API endpoints protected with token-based auth
-- **CORS Fix** — Strict origin validation via `TSAR_CORS_ORIGINS`
-- **Telegram Auth** — Chat ID verification for bot commands
-- **Watchdog** — External process health monitor for kill switch reliability
-- **Kill Switch** — Dual-write (file + Redis) with stale-process detection
-
-## Risk Management
-
-- **Micro-capital mode** — Adjusted parameters for accounts under $50
-- **Fee-aware sizing** — Kelly calculation accounts for exchange fees
-- **Phased recovery** — Graduated re-entry after circuit breaker trips
-- **Anti-behavioral guards** — Revenge, greed, FOMO, overconfidence protection
-- **Economic blackout** — Auto-block trading around FOMC, CPI, NFP events
-
-## Mobile App
-
-A Flutter mobile app for monitoring and controlling TSAR from anywhere.
-
-| Feature | Description |
-|---------|-------------|
-| Dashboard | Real-time P&L, win rate, equity curve, market regime, flywheel health |
-| Trades | History with symbol/status filters, infinite scroll, detail sheets |
-| Risk & Portfolio | Risk gauges, circuit breaker, open positions, alerts |
-| Factors | Library browser with category filter, IC/IR rankings |
-| Kill Switch | Floating action button with biometric confirmation |
-| Knowledge Search | FTS5 search across all knowledge stores |
-
-**Theme:** Dark terminal aesthetic — green (#00C853) for profit, red (#FF1744) for loss, JetBrains Mono for financial data.
-
-```bash
-cd mobile/
-flutter pub get
-flutter run
-```
-
-See [mobile/README.md](mobile/README.md) for full setup and API integration details.
-
-### Download
-
-Pre-built APK available on [GitHub Releases](../../releases).
-
-## Quick Start (5 Minutes)
-
-```bash
-# 1. Clone
-git clone https://github.com/ovalentine964/tsar.git && cd tsar
-
-# 2. Configure (fill in your API keys)
-cp .env.example .env && nano .env
-
-# 3. Start
-./quickstart.sh
-
-# 4. Open on your phone
-# http://YOUR_SERVER:8000/app
-```
-
-**See [INSTALL.md](INSTALL.md) for detailed setup guide.**
-
-## Access on Your Phone
-
-| Method | How |
-|--------|-----|
-| 📱 **Web Dashboard** | Open `http://YOUR_SERVER:8000/app` in phone browser |
-| 📲 **Flutter APK** | Download from [GitHub Releases](../../releases) |
-| 💬 **Telegram** | Send `/status` to your bot |
+---
 
 ## Tech Stack
 
-| Layer | Technology | Purpose |
-|-------|-----------|---------|
-| Brain | Python 3.12 | Agent orchestration, LLM, strategy, risk |
-| Muscle | Rust 1.79 | WebSocket, tick processing, order execution |
-| Specialist | C++ (Level 3+) | QuantLib derivatives, FIX protocol, CUDA |
-| Bridge | PyO3 + C FFI | Python ↔ Rust ↔ C++ interop |
-| Database | SQLite + FTS5 | Trade memory, lessons, patterns |
-| Cache | Redis | Regime state, real-time cache |
-| Vectors | ChromaDB | Pattern similarity search |
-| Exchange | ccxt | 100+ exchanges |
-| LLM | Ollama + DeepSeek + NVIDIA NIM | Multi-provider routing |
-| ML | XGBoost / LightGBM | Signal scoring |
-| API | FastAPI | REST + WebSocket (port 8000) |
-| Mobile | Flutter + Dart | Cross-platform mobile app |
-| Telegram | python-telegram-bot | Commands + alerts |
-| Monitoring | Prometheus + Grafana | Metrics + dashboards |
-| Messaging | CloudEvents v1.0 | Standard event protocol |
-| Container | Docker Compose | Full stack orchestration |
-| CI/CD | GitHub Actions | lint → test → build → deploy |
+| Layer | Technology |
+|-------|-----------|
+| Brain | Python 3.12 — agents, LLM, strategy, risk |
+| Muscle | Rust 1.79 — WebSocket, tick processing, order execution |
+| Specialist | C++ — QuantLib derivatives, FIX protocol, CUDA |
+| Database | SQLite + FTS5 — trade memory, lessons, patterns |
+| Cache | Redis — regime state, real-time cache |
+| Vectors | ChromaDB — pattern similarity search |
+| Exchange | ccxt — 100+ exchanges |
+| LLM | Ollama + DeepSeek + NVIDIA NIM |
+| API | FastAPI — REST + WebSocket |
+| Mobile | Flutter — cross-platform app |
+| Telegram | python-telegram-bot — interactive bot |
+| Messaging | CloudEvents v1.0 — event protocol |
+| Monitoring | Prometheus + Grafana |
+| Container | Docker Compose |
+
+---
 
 ## Project Structure
 
 ```
 tsar/
-├── src/                          # Python source
-│   ├── interfaces/              # Abstract base classes (THE CONTRACT)
-│   ├── backends/                # Implementations (Python/Rust/C++)
-│   │   └── python/              # ccxt, paper engine, cuFOLIO, providers
-│   ├── agents/                  # 12 agents (incl. flywheel, sentiment)
-│   ├── knowledge/               # 6 stores + FTS5 + ChromaDB + knowledge graph
-│   ├── risk/                    # Risk engine + guards + mandate + watchdog
-│   ├── strategy/                # Strategies + backtest + cuOpt + ML scorer
-│   ├── llm/                     # LLM routing + evaluation + token counting
-│   ├── comms/                   # CloudEvents messaging
-│   ├── metrics/                 # Prometheus export + improvement measurement
-│   ├── resources/               # Resource enforcement
-│   ├── api/                     # FastAPI endpoints + static dashboard
-│   └── bot/                     # Telegram commands
-├── config/                       # Configuration
-│   ├── tsar.yaml                # Main config (working defaults)
-│   ├── mandate.yaml             # Trading mandate (human authorization)
-│   ├── risk.yaml                # Risk parameters (canonical)
-│   ├── models.yaml              # LLM model routing (incl. NVIDIA NIM)
-│   ├── nvidia_skills.yaml       # NVIDIA skills configuration
-│   └── strategies/              # Strategy genomes
-├── mobile/                       # Flutter mobile app
-├── rust/                         # Rust performance layer
-├── cpp/                          # C++ specialist layer (Level 3+)
-├── tests/                        # Test suite
-├── migrations/                   # Database migrations
-├── grafana/                      # Grafana dashboards + provisioning
-├── monitoring/                   # Prometheus config
-├── scripts/                      # Utility scripts
-├── docs/                         # Documentation
-│   ├── architecture/            # Architecture specs
-│   ├── council/                 # Original council reviews
-│   ├── nvidia/                  # NVIDIA integration docs
-│   └── research/                # 14 research reports
-├── council_reviews/              # 17 council reviews + 12 fix team reports
-│   └── fix_teams/               # Fix team summaries
-├── analysis/                     # Analysis & fix specs
+├── src/                    # Python source
+│   ├── agents/            # 10 agents (orchestrator, signal, risk, execution...)
+│   ├── backends/          # Implementations
+│   │   ├── python/        # ccxt, paper engine, LLM providers
+│   │   └── defi/          # DEX execution, bridging, wallets, settlement
+│   ├── bot/               # Telegram interactive bot
+│   ├── comms/             # CloudEvents event bus
+│   ├── interfaces/        # Abstract base classes (THE CONTRACT)
+│   ├── knowledge/         # 6 stores + FTS5 + ChromaDB + knowledge graph
+│   ├── risk/              # Risk engine, guards, mandate, watchdog, kill switch
+│   ├── strategy/          # Strategies, backtest, factor library, ML scorer
+│   ├── llm/               # LLM routing, evaluation, token counting
+│   ├── metrics/           # Prometheus export, improvement measurement
+│   └── api/               # FastAPI REST + static dashboard
+├── config/                 # YAML configuration
+├── rust/                   # Rust performance layer (4 crates)
+├── cpp/                    # C++ specialist layer
+├── mobile/                 # Flutter mobile app
+├── tests/                  # Test suite (unit + integration)
+├── migrations/             # SQLite migrations
+├── deploy/                 # Azure deployment configs
+├── docs/                   # Architecture, council, research docs
+├── grafana/                # Pre-built dashboards
+├── monitoring/             # Prometheus config
 ├── docker-compose.yml
-├── pyproject.toml
+├── Dockerfile
 ├── Makefile
-└── README.md
+└── pyproject.toml
 ```
 
-## Quick Start
-
-```bash
-# Clone and setup
-git clone <repo-url> && cd tsar
-make setup          # Install deps, create DB, verify
-
-# Run (paper mode)
-python3 -m src --paper
-
-# Run tests
-make test
-
-# Docker
-docker-compose up -d
-```
+---
 
 ## Configuration
 
 | File | Purpose |
 |------|---------|
-| `config/tsar.yaml` | Main config — exchange, risk, LLM, strategy defaults |
+| `.env` | Secrets and environment variables |
+| `config/tsar.yaml` | Main app config (exchange, risk, LLM, strategy) |
+| `config/risk.yaml` | Canonical risk parameters |
 | `config/mandate.yaml` | Trading mandate — human authorization boundary |
-| `config/risk.yaml` | Risk parameters — limits, guards, kill switch (canonical) |
-| `config/models.yaml` | LLM model routing and fallbacks (incl. NVIDIA NIM) |
+| `config/models.yaml` | LLM model routing and fallbacks |
 | `config/nvidia_skills.yaml` | NVIDIA GPU skill configuration |
 | `config/backends.yaml` | Backend selection per interface |
-
-## Documentation
-
-- [TSAR Architecture v3.0.0](docs/architecture/TSAR_ARCHITECTURE.md) — Single source of truth
-- [Council Reviews](council_reviews/) — 17 council reviews, 72 issues fixed
-- [Fix Team Reports](council_reviews/fix_teams/) — 12 fix team summaries
-- [NVIDIA Integration](docs/nvidia/) — NVIDIA skills setup and evaluation
-- [Research Analysis](analysis/RESEARCH_ANALYSIS.md) — 14 reports analyzed
-- [Fix Reports](analysis/fixes/) — Fix specs (A through G)
-- [Mobile App](mobile/README.md) — Flutter app setup and API docs
-- [Changelog](CHANGELOG.md) — Build history
-
-## Markets
-
-- **Crypto:** Binance (BTC, ETH, SOL) — Live via ccxt + WebSocket
-
-### Coming Soon
-
-| Market | Integration | Status |
-|--------|------------|--------|
-| Futures | Binance Futures | 🚧 Planned |
-| Options | Deribit | 🚧 Planned |
-
-## License
-
-MIT — see [LICENSE](LICENSE)
+| `config/default.yaml` | Application defaults (Redis, logging, API) |
 
 ---
 
-*Built by Valentine Owuor. Powered by AI. Designed for retail traders.*
-*Architecture reviewed by 17 councils against Jensen Huang's super agent vision.*
-*72 issues fixed. 5 NVIDIA skills integrated. System ready for paper trading.*
-*Future-ready: Python + Rust + C++ from day one. No swapping later.*
+## Trading Modes
+
+| Mode | Risk | Use |
+|------|------|-----|
+| `paper` | $0 | Test strategies safely — simulated orders against live data |
+| `live` | Real money | Only after 30+ profitable paper trades and active mandate |
+
+---
+
+## Documentation
+
+| Document | Description |
+|----------|-------------|
+| [Architecture](docs/ARCHITECTURE.md) | System architecture deep dive |
+| [Deployment](docs/DEPLOYMENT.md) | Azure, Docker, and local deployment |
+| [Installation](INSTALL.md) | Step-by-step setup guide |
+| [Changelog](CHANGELOG.md) | Version history |
+| [Mobile App](mobile/README.md) | Flutter app setup |
+| [Council Reviews](docs/council/) | Architecture and quality reviews |
+| [Research](docs/research/) | AI trading research reports |
+
+---
+
+## Current Status
+
+```
+ ✅ v0.1.0 — Core system, 12 agents, 6 knowledge stores, NVIDIA skills
+ ✅ v0.2.0 — Full superagent wiring, DeFi integration, anti-loss system, Telegram bot
+ ⬜ v0.3.0 — Paper trading validation, live mandate activation
+```
+
+---
+
+## Contributing
+
+1. Fork the repository
+2. Create a feature branch (`git checkout -b feature/amazing-thing`)
+3. Run tests (`make test`)
+4. Run linter (`make lint`)
+5. Commit with conventional messages (`feat:`, `fix:`, `docs:`)
+6. Open a pull request
+
+### Development Setup
+
+```bash
+make setup          # Install deps, create DB, verify
+make test           # Run tests with coverage
+make lint           # Run ruff linter
+make format         # Auto-format code
+```
+
+---
+
+## License
+
+[MIT](LICENSE) — Copyright © 2026 Valentine Owuor
+
+---
+
+*Built by Valentine Owuor. Architecture reviewed by 17 councils. Designed for retail traders.*

@@ -2,12 +2,15 @@
 Bot Commands — Interactive Telegram command handlers.
 
 Commands:
-  /start       — Start trading
+  /start       — Welcome + auto-setup if credentials missing
+  /setup       — Re-run credential setup wizard
   /stop        — Emergency stop (kill switch)
   /status      — System status
+  /config      — Show current configuration (masked credentials)
+  /trade       — Start/stop trading
+  /risk        — Show current risk settings
   /pnl         — P&L summary
   /positions   — Open positions
-  /risk        — Risk state
   /regime      — Current market regime
   /flywheel    — Flywheel health
   /performance — Detailed performance analysis
@@ -16,6 +19,7 @@ Commands:
   /why         — Why was a trade taken
   /ask         — Ask TSAR anything (handled in bot.py)
   /help        — Show available commands
+  /cancel      — Cancel current operation
 
 Each command queries real TSAR subsystems:
   - TradeMemory for trade data and stats
@@ -33,6 +37,7 @@ from __future__ import annotations
 import json
 import logging
 import os
+import secrets as _secrets
 from datetime import UTC, datetime
 from typing import Any
 
@@ -40,12 +45,15 @@ logger = logging.getLogger(__name__)
 
 
 COMMANDS = {
-    "/start": "Start trading",
+    "/start": "Welcome + auto-setup",
+    "/setup": "Re-run credential wizard",
     "/stop": "Emergency stop (kill switch)",
     "/status": "System status",
+    "/config": "View configuration (masked)",
+    "/trade": "Start/stop trading",
+    "/risk": "Show risk settings",
     "/pnl": "P&L summary",
     "/positions": "Open positions",
-    "/risk": "Risk state",
     "/regime": "Current market regime",
     "/flywheel": "Flywheel health score",
     "/performance": "Detailed performance analysis",
@@ -53,13 +61,12 @@ COMMANDS = {
     "/discuss": "Discuss a specific trade",
     "/why": "Why was a trade taken",
     "/ask": "Ask TSAR anything",
+    "/cancel": "Cancel current operation",
     "/help": "Show available commands",
 }
 
 # Confirmation tokens for dangerous commands (in-memory, per-session)
 _pending_confirmations: dict[str, str] = {}
-
-import secrets as _secrets
 
 
 def _get_db_path() -> str:
@@ -84,9 +91,11 @@ async def handle_command(command: str, args: list[str]) -> str:
         "/status": _handle_status,
         "/stop": _handle_stop,
         "/start": _handle_start,
+        "/config": _handle_config,
+        "/trade": _handle_trade,
+        "/risk": _handle_risk,
         "/pnl": _handle_pnl,
         "/positions": _handle_positions,
-        "/risk": _handle_risk,
         "/regime": _handle_regime,
         "/flywheel": _handle_flywheel,
         "/performance": _handle_performance,
@@ -106,6 +115,55 @@ async def handle_command(command: str, args: list[str]) -> str:
 
 
 # ═══════════════════════════════════════════════════════════════════════
+# SETUP & CONFIG COMMANDS
+# ═══════════════════════════════════════════════════════════════════════
+
+
+async def _handle_config(_args: list[str]) -> str:
+    """Show current configuration with masked credentials.
+
+    Displays all configured credentials (masked), trading mode,
+    and system version.
+    """
+    from src.bot.credentials import get_credential_status, has_credentials
+
+    status = get_credential_status()
+
+    lines = [
+        "⚙️ <b>TSAR Configuration</b>",
+        "━━━━━━━━━━━━━━━━",
+        "",
+    ]
+
+    if not has_credentials():
+        lines.append("⚠️ No credentials configured yet.")
+        lines.append("Type /setup to configure.")
+        return "\n".join(lines)
+
+    lines.append("<b>Credentials:</b>")
+    for key, info in status.items():
+        check = "✅" if info["configured"] else "❌"
+        masked = info["masked"] if info["configured"] else "not set"
+        lines.append(f"  {check} {info['label']}: <code>{masked}</code>")
+
+    lines.append("")
+
+    # Trading mode
+    mode = os.environ.get("TSAR_TRADING_MODE", "paper")
+    mode_emoji = "📝" if mode == "paper" else "💰"
+    lines.append(f"{mode_emoji} Trading mode: <b>{mode}</b>")
+
+    # DB path
+    db_path = _get_db_path()
+    lines.append(f"💾 Database: <code>{db_path}</code>")
+
+    # Version
+    lines.append("🏰 TSAR v0.1.0")
+
+    return "\n".join(lines)
+
+
+# ═══════════════════════════════════════════════════════════════════════
 # MONITORING COMMANDS
 # ═══════════════════════════════════════════════════════════════════════
 
@@ -114,6 +172,7 @@ async def _handle_status(_args: list[str]) -> str:
     """Build system status from real subsystems."""
     from src.risk.kill_switch import KillSwitch
     from src.knowledge.trade_memory import TradeMemory
+    from src.bot.credentials import has_credentials, get_credential_status
 
     db_path = _get_db_path()
     ks = KillSwitch()
@@ -125,11 +184,16 @@ async def _handle_status(_args: list[str]) -> str:
     stats = trade_mem.get_trade_stats()
 
     ks_status = "🛑 HALTED" if ks_active else "🟢 ACTIVE"
-    mode = "paper"  # TODO: read from config
+    mode = os.environ.get("TSAR_TRADING_MODE", "paper")
+
+    # Credential status
+    creds_ok = has_credentials()
+    creds_emoji = "✅" if creds_ok else "⚠️"
 
     lines = [
         f"🏰 <b>TSAR v0.1.0 — {ks_status}</b>",
         "",
+        f"{creds_emoji} Credentials: {'configured' if creds_ok else 'NOT CONFIGURED — /setup'}",
         f"📊 Mode: {mode}",
         f"📈 Total trades: {trade_count}",
         f"📂 Open positions: {len(open_positions)}",
@@ -148,6 +212,11 @@ async def _handle_status(_args: list[str]) -> str:
     max_dd = stats.get("max_drawdown", 0)
     if max_dd > 0:
         lines.append(f"📉 Max drawdown: {max_dd:.2f}%")
+
+    # Exchange connection status
+    creds = get_credential_status()
+    exchange_configured = creds.get("EXCHANGE_API_KEY", {}).get("configured", False)
+    lines.append(f"🔌 Exchange: {'connected' if exchange_configured else 'not configured'}")
 
     return "\n".join(lines)
 
@@ -203,6 +272,65 @@ async def _handle_start(args: list[str]) -> str:
         "To confirm, reply with:\n"
         "<code>/start confirm</code>\n\n"
         "This confirmation expires after the next /start request."
+    )
+
+
+async def _handle_trade(args: list[str]) -> str:
+    """Start or stop trading.
+
+    /trade         — Show trading status
+    /trade start   — Start trading (same as /start confirm)
+    /trade stop    — Stop trading (same as /stop)
+    """
+    from src.risk.kill_switch import KillSwitch
+
+    ks = KillSwitch()
+    ks_active = await ks.is_active()
+
+    if not args:
+        # Show current trading status
+        status = "🛑 HALTED" if ks_active else "🟢 ACTIVE"
+        mode = os.environ.get("TSAR_TRADING_MODE", "paper")
+        lines = [
+            f"📊 <b>Trading Status: {status}</b>",
+            "",
+            f"Mode: {mode}",
+            "",
+            "Commands:",
+            "• /trade start — Resume trading",
+            "• /trade stop — Halt trading",
+        ]
+        return "\n".join(lines)
+
+    action = args[0].lower()
+
+    if action == "start":
+        if not ks_active:
+            return "✅ Trading is already active."
+        ks = KillSwitch()
+        await ks.deactivate()
+        return (
+            "✅ <b>Trading started</b>\n\n"
+            "TSAR is now scanning for signals.\n"
+            "Use /trade stop or /stop to halt."
+        )
+
+    elif action == "stop":
+        if ks_active:
+            return "🛑 Trading is already halted."
+        ks = KillSwitch()
+        await ks.activate("telegram_command")
+        return (
+            "🛑 <b>Trading stopped</b>\n\n"
+            "All trading has been halted.\n"
+            "Use /trade start to resume."
+        )
+
+    return (
+        "❓ Unknown action. Usage:\n"
+        "• /trade — Show status\n"
+        "• /trade start — Start trading\n"
+        "• /trade stop — Stop trading"
     )
 
 
@@ -287,6 +415,11 @@ async def _handle_risk(_args: list[str]) -> str:
 
     ks_text = "🛑 ACTIVE" if ks_active else "✅ Inactive"
 
+    # Risk parameters from config
+    risk_per_trade = os.environ.get("TSAR_RISK_PER_TRADE", "2.0")
+    max_positions = os.environ.get("TSAR_MAX_POSITIONS", "5")
+    max_leverage = os.environ.get("TSAR_MAX_LEVERAGE", "3")
+
     lines = [
         "🛡️ <b>Risk State</b>",
         "━━━━━━━━━━━━━━━━",
@@ -294,6 +427,11 @@ async def _handle_risk(_args: list[str]) -> str:
         f"🚦 Level: {level}",
         f"🔌 Kill switch: {ks_text}",
         f"📂 Open positions: {len(open_positions)}",
+        "",
+        "<b>Risk Parameters:</b>",
+        f"• Risk per trade: {risk_per_trade}%",
+        f"• Max positions: {max_positions}",
+        f"• Max leverage: {max_leverage}x",
     ]
     return "\n".join(lines)
 

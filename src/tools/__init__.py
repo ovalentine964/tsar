@@ -210,6 +210,20 @@ def _ensure_registered() -> None:
     except ImportError:
         pass
 
+    # Cross-chain tools (bridge + intent execution)
+    try:
+        from src.tools.cross_chain import CrossChainTools
+        register_tool("cross_chain", CrossChainTools)
+    except ImportError:
+        pass
+
+    # DeFi yield optimization tools
+    try:
+        from src.tools.defi_yield import DeFiYieldTools
+        register_tool("defi_yield", DeFiYieldTools)
+    except ImportError:
+        pass
+
 
 # Auto-register on first access
 _ensure_registered()

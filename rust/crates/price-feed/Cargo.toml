@@ -1,0 +1,16 @@
+[package]
+name = "tsar-price-feed"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "Oracle price aggregation from multiple on-chain and off-chain sources"
+
+[dependencies]
+tsar-core = { workspace = true }
+tokio = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+tracing = { workspace = true }
+chrono = { workspace = true }
+reqwest = { workspace = true }

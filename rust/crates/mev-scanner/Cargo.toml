@@ -1,0 +1,24 @@
+[package]
+name = "tsar-mev-scanner"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "Sub-millisecond mempool scanning and sandwich attack detection for DeFi MEV protection"
+
+[dependencies]
+tsar-core = { workspace = true }
+tokio = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+tracing = { workspace = true }
+chrono = { workspace = true }
+reqwest = { workspace = true }
+hex = { workspace = true }
+# Ethereum ABI decoding
+alloy-primitives = "0.7"
+alloy-sol-types = "0.7"
+# Bloom filter for fast address lookup
+bloomfilter = "1.0"
+# Dashmap for concurrent mempool state
+dashmap = "6.0"

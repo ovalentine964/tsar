@@ -3,6 +3,7 @@
 Transforms the Telegram bot from a notification system into a full
 interactive trading partner with:
 
+  SETUP      — Conversational credential wizard (no terminal needed)
   BEFORE TRADE — Discussion with rationale, approve/reject/modify
   AFTER TRADE  — Detailed reports with lessons and flywheel updates
   INTERACTIVE  — /discuss, /why, /performance, /regime, /strategy,
@@ -12,6 +13,8 @@ Architecture:
   - Inline keyboard buttons for approve/reject/modify on trade proposals
   - Callback query handling for button presses
   - Trade proposal state machine (PENDING → APPROVED/REJECTED/MODIFIED)
+  - Conversational state machine for setup wizard
+  - Fernet-encrypted credential storage (never echoed back)
   - Rich HTML formatting with emoji and structured layout
   - Wired to all TSAR agents: SignalScout, RiskGuardian, TradePhilosopher,
     FlywheelOrchestrator, RegimeDetector, StrategyGeneticist
@@ -127,15 +130,22 @@ class TradeProposal:
 # ═══════════════════════════════════════════════════════════════════════
 
 
-class TsarBot:
+class TelegramBot:
     """Interactive Telegram trading partner.
 
     Transforms TSAR from a notification bot into a conversational
     trading interface where the user can:
+    - Set up credentials via conversational wizard (no terminal)
     - Discuss trades before execution
     - Approve/reject/modify trade proposals via inline buttons
     - Query system state, performance, and reasoning
     - Ask questions about markets and strategy
+
+    Security:
+    - User messages containing credentials are deleted after reading
+    - Credentials never echoed back (masked: abc...xyz)
+    - Fernet encryption before writing to disk
+    - Chat ID whitelist for authorization
     """
 
     def __init__(self, token: str, chat_id: str, tsar_system: Any = None) -> None:
@@ -163,6 +173,10 @@ class TsarBot:
 
         # Pending discussion context (for /discuss and /ask)
         self._discussion_context: dict[str, Any] = {}
+
+        # Conversational state machine for setup wizard
+        from src.bot.conversation import ConversationManager
+        self._conversations = ConversationManager()
 
     # ── Messaging ────────────────────────────────────────────
 
@@ -203,6 +217,17 @@ class TsarBot:
             logger.exception("Failed to send message")
             return None
 
+    async def delete_message(self, message_id: int) -> None:
+        """Delete a message (used to remove credential-containing messages)."""
+        try:
+            async with aiohttp.ClientSession() as session:
+                await session.post(
+                    f"{self.base_url}/deleteMessage",
+                    json={"chat_id": self.chat_id, "message_id": message_id},
+                )
+        except Exception:
+            logger.debug("Failed to delete message %d", message_id)
+
     async def edit_message(
         self,
         message_id: int,
@@ -235,6 +260,150 @@ class TsarBot:
                 )
         except Exception:
             logger.exception("Failed to answer callback")
+
+    # ── Setup Wizard ─────────────────────────────────────────
+
+    async def start_setup_wizard(self, user_id: str, chat_id: str) -> None:
+        """Launch the conversational setup wizard.
+
+        Walks the user through credential configuration step by step.
+        Each credential is encrypted immediately upon receipt.
+        """
+        from src.bot.conversation import (
+            ConversationState,
+            SETUP_WELCOME,
+            SETUP_STEPS,
+        )
+
+        session = self._conversations.get_session(user_id, chat_id)
+        session.step_index = 0
+        session.data = {}
+
+        # Send welcome
+        await self.send_message(SETUP_WELCOME)
+
+        # Small delay for conversational feel
+        await asyncio.sleep(1)
+
+        # Send first step prompt
+        step = SETUP_STEPS[0]
+        session.set_state(step["state"])
+        prompt = step["prompt"]
+        # Inject auto-detected chat_id for step 4
+        if "{chat_id}" in prompt:
+            prompt = prompt.format(chat_id=chat_id)
+        await self.send_message(prompt)
+
+    async def _handle_setup_input(
+        self, user_id: str, text: str, msg: dict[str, Any]
+    ) -> None:
+        """Handle user input during setup wizard.
+
+        Processes each step, encrypts credentials, deletes sensitive
+        messages, and advances to the next step.
+        """
+        from src.bot.conversation import (
+            ConversationState,
+            SETUP_STEPS,
+            SETUP_COMPLETE_MSG,
+            SETUP_CANCELLED_MSG,
+        )
+        from src.bot.credentials import (
+            encrypt_credentials,
+            update_single_credential,
+            test_binance_connection,
+            decrypt_credentials,
+            mask_credential,
+        )
+
+        session = self._conversations.get_session(user_id)
+        message_id = msg.get("message_id")
+
+        # Handle /cancel
+        if text.strip().lower() == "/cancel":
+            session.reset()
+            await self.send_message(SETUP_CANCELLED_MSG)
+            return
+
+        # Find current step
+        current_step = None
+        for step in SETUP_STEPS:
+            if step["state"] == session.state:
+                current_step = step
+                break
+
+        if not current_step:
+            session.reset()
+            await self.send_message("⚠️ Something went wrong. Type /setup to restart.")
+            return
+
+        # SECURITY: Delete the message containing the credential
+        if message_id:
+            await self.delete_message(message_id)
+
+        # Process the credential value
+        value = text.strip()
+        key = current_step["key"]
+
+        # Special handling for Chat ID step (auto-detect)
+        if current_step.get("auto_detect") and value.lower() in ("yes", "y", "ok", "sure"):
+            value = session.chat_id
+
+        # Validate input isn't empty
+        if not value:
+            await self.send_message(
+                f"⚠️ {current_step['label']} cannot be empty. Try again or /cancel."
+            )
+            return
+
+        # Encrypt and store the credential
+        update_single_credential(key, value)
+        logger.info("Credential %s configured for user %s", key, user_id)
+
+        # Show success with masked value
+        masked = mask_credential(value)
+        await self.send_message(
+            f"{current_step['success']}\n"
+            f"<code>{current_step['label']}: {masked}</code>"
+        )
+
+        # Test connection after API secret if applicable
+        if current_step.get("test_after"):
+            await self.send_message("🔄 Testing Binance connection...")
+            creds = decrypt_credentials()
+            api_key = creds.get("EXCHANGE_API_KEY", "")
+            secret = creds.get("EXCHANGE_SECRET", "")
+            if api_key and secret:
+                result = await test_binance_connection(api_key, secret)
+                if result["ok"]:
+                    await self.send_message(f"✅ {result['message']}")
+                else:
+                    await self.send_message(
+                        f"⚠️ Connection test failed: {result['message']}\n"
+                        "You can continue setup — credentials are saved.\n"
+                        "Use /setup later to re-enter if needed."
+                    )
+            await asyncio.sleep(0.5)
+
+        # Advance to next step
+        session.step_index += 1
+        if session.step_index >= len(SETUP_STEPS):
+            # Setup complete!
+            session.set_state(ConversationState.SETUP_COMPLETE)
+            connection_status = "✅ Connected" if result.get("ok", False) else "⚠️ Not verified"
+            await self.send_message(
+                SETUP_COMPLETE_MSG.format(connection_status=connection_status)
+            )
+            session.reset()
+        else:
+            # Next step
+            next_step = SETUP_STEPS[session.step_index]
+            session.set_state(next_step["state"])
+            prompt = next_step["prompt"]
+            if "{chat_id}" in prompt:
+                prompt = prompt.format(chat_id=session.chat_id)
+            await asyncio.sleep(0.5)
+            await self.send_message(prompt)
 
     # ── Trade Proposal Lifecycle ─────────────────────────────
 
@@ -522,10 +691,10 @@ class TsarBot:
         await self.send_message(
             f"📝 <b>Modify Trade: {proposal.symbol} {proposal.side.upper()}</b>\n\n"
             "Send your modification request. Examples:\n"
-            "• \"Move stop to 66500\"\n"
-            "• \"Reduce size to 1%\"\n"
-            "• \"Change target to 69000\"\n"
-            "• \"Cancel\" to abort\n\n"
+            '• "Move stop to 66500"\n'
+            '• "Reduce size to 1%"\n'
+            '• "Change target to 69000"\n'
+            '• "Cancel" to abort\n\n'
             "<i>Waiting for your input...</i>"
         )
 
@@ -671,7 +840,7 @@ class TsarBot:
 
             pattern_tags = reflection.get("pattern_tags", [])
             if pattern_tags:
-                lines.append(f"• Pattern: \"{', '.join(pattern_tags)}\"")
+                lines.append(f'• Pattern: "{", ".join(pattern_tags)}"')
 
             what_right = reflection.get("what_went_right")
             if what_right:
@@ -700,7 +869,7 @@ class TsarBot:
                 change = flywheel["pattern_confidence_change"]
                 lines.append(f"• Pattern confidence: {change.get('from', 0):.2f} → {change.get('to', 0):.2f}")
             if flywheel.get("lesson_stored"):
-                lines.append(f"• Lesson stored: \"{flywheel['lesson_stored'][:80]}\"")
+                lines.append(f'• Lesson stored: "{flywheel["lesson_stored"][:80]}"')
 
         return "\n".join(lines)
 
@@ -856,6 +1025,7 @@ class TsarBot:
         Routes:
         - Text messages starting with / → command handler
         - Callback queries → inline button handler
+        - Setup wizard input → conversation handler
         - Other text → discussion context handler
         """
         # Start proposal expiry checker
@@ -885,12 +1055,19 @@ class TsarBot:
                         # Handle text messages
                         msg = update.get("message", {})
                         text = msg.get("text", "")
+                        user_id = str(msg.from_user.id) if hasattr(msg, "from_user") and msg.from_user else str(msg.get("from", {}).get("id", ""))
 
                         if not self._is_authorized(msg):
                             logger.warning(
                                 "Unauthorized message from chat_id=%s",
                                 msg.get("chat", {}).get("id"),
                             )
+                            continue
+
+                        # Check if user is in setup wizard
+                        session_obj = self._conversations.get_session(user_id)
+                        if session_obj.is_in_setup():
+                            await self._handle_setup_input(user_id, text, msg)
                             continue
 
                         if text.startswith("/"):
@@ -956,12 +1133,15 @@ class TsarBot:
         """Route Telegram commands to handlers.
 
         Commands:
-        /start     — Start trading
+        /start     — Welcome + setup wizard (if needed)
+        /setup     — Re-run setup wizard
         /stop      — Emergency stop (kill switch)
         /status    — System status
+        /config    — Show current configuration (masked)
+        /trade     — Start/stop trading
+        /risk      — Show risk settings
         /pnl       — P&L summary
         /positions — Open positions
-        /risk      — Risk state
         /regime    — Current market regime
         /flywheel  — Flywheel health
         /performance — Detailed performance analysis
@@ -970,6 +1150,7 @@ class TsarBot:
         /why       — Why was a trade taken
         /ask       — Ask TSAR anything
         /help      — Show available commands
+        /cancel    — Cancel current operation
         """
         from src.bot.commands import handle_command
 
@@ -977,24 +1158,67 @@ class TsarBot:
         cmd = parts[0].lower()
         args = parts[1:] if len(parts) > 1 else []
 
+        # Get user_id for conversational commands
+        user_id = ""
+        if msg:
+            user_id = str(msg.get("from", {}).get("id", ""))
+
         try:
+            # ── /start: Welcome + auto-setup if needed ──
+            if cmd == "/start":
+                from src.bot.credentials import has_credentials
+                if not has_credentials():
+                    await self.start_setup_wizard(user_id, self.chat_id)
+                    return
+                else:
+                    await self.send_message(
+                        "👋 <b>Welcome back to TSAR!</b>\n\n"
+                        "All credentials are configured. Ready to trade.\n\n"
+                        "Type /help to see available commands.\n"
+                        "Type /trade to start trading."
+                    )
+                    return
+
+            # ── /setup: Re-run setup wizard ──
+            if cmd == "/setup":
+                await self.start_setup_wizard(user_id, self.chat_id)
+                return
+
+            # ── /cancel: Cancel any ongoing operation ──
+            if cmd == "/cancel":
+                session_obj = self._conversations.get_session(user_id)
+                if session_obj.is_in_setup():
+                    session_obj.reset()
+                    await self.send_message(
+                        "❌ Setup cancelled.\n"
+                        "Type /setup anytime to restart."
+                    )
+                elif self._discussion_context.get("awaiting_input"):
+                    self._discussion_context = {}
+                    await self.send_message("❌ Operation cancelled.")
+                else:
+                    await self.send_message("Nothing to cancel.")
+                return
+
+            # ── /ask: Prompt for question ──
             if cmd == "/ask" and not args:
-                # Prompt for question
                 self._discussion_context = {"type": "ask", "awaiting_input": True}
                 await self.send_message(
                     "❓ <b>Ask TSAR anything</b>\n\n"
                     "Send your question about markets, strategy, or trading.\n"
                     "Examples:\n"
-                    "• \"Why are we in bull regime?\"\n"
-                    "• \"What's the best setup for BTC right now?\"\n"
-                    "• \"How is the flywheel performing?\""
+                    '• "Why are we in bull regime?"\n'
+                    '• "What\'s the best setup for BTC right now?"\n'
+                    '• "How is the flywheel performing?"'
                 )
                 return
 
+            # ── /help ──
             if cmd == "/help":
                 await self._send_help()
                 return
 
+            # ── All other commands → command handler ──
             response = await handle_command(cmd, args)
             await self.send_message(response)
 
@@ -1055,8 +1279,13 @@ class TsarBot:
     async def _send_help(self) -> None:
         """Send the help message with all available commands."""
         help_text = (
-            "🏰 <b>TSAR Interactive Trading Partner</b>\n"
+            "🏰 <b>TSAR — Trading Super Agent</b>\n"
             "━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
+
+            "<b>⚙️ Setup & Config:</b>\n"
+            "/start — Welcome + auto-setup\n"
+            "/setup — Re-run credential wizard\n"
+            "/config — View configuration (masked)\n\n"
 
             "<b>📊 Monitoring:</b>\n"
             "/status — System health and state\n"
@@ -1071,13 +1300,14 @@ class TsarBot:
             "/performance — Detailed performance\n\n"
 
             "<b>💬 Interactive:</b>\n"
+            "/trade — Start/stop trading\n"
             "/discuss [trade_id] — Discuss a trade\n"
             "/why [trade_id] — Why was this trade taken?\n"
             "/ask — Ask TSAR anything\n\n"
 
-            "<b>⚙️ Control:</b>\n"
-            "/start — Resume trading\n"
-            "/stop — Emergency stop\n"
+            "<b>🔧 Control:</b>\n"
+            "/stop — Emergency stop (kill switch)\n"
+            "/cancel — Cancel current operation\n"
             "/help — This message\n\n"
 
             "<b>🔘 Inline Buttons:</b>\n"
@@ -1148,3 +1378,7 @@ class TsarBot:
             f"New regime: {regime}\n"
             f"Confidence: {confidence:.0%}\n"
         )
+
+
+# Backward compatibility alias
+TsarBot = TelegramBot

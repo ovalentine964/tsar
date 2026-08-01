@@ -1,0 +1,187 @@
+# ============================================================
+# TSAR — Azure Container Instances (ACI) Deployment
+# ============================================================
+# Free-tier optimized: 1 vCPU, 1 GB RAM, spot instances
+# Two containers: TSAR app + Redis sidecar
+# ============================================================
+# Usage:
+#   az container create \
+#     --resource-group tsar-rg \
+#     --file container-group.yaml \
+#     --location eastus
+# ============================================================
+
+apiVersion: "2021-10-01"
+location: eastus
+name: tsar-container-group
+type: Microsoft.ContainerInstance/containerGroups
+
+# ── Spot Instance (Free-tier / cost savings) ─────────────────
+properties:
+  # Spot configuration — up to 70% cheaper, may be evicted
+  # For true free tier, remove spot and use F1s (1 vCPU, 1 GB) reservation
+  priority: Spot
+  spotProfile:
+    evictionPolicy: Deallocate    # Deallocate preserves disk state on eviction
+    billing:
+      price: -1                   # Max price = on-demand (cheapest available)
+
+  # ── OS & Restart Policy ──────────────────────────────────
+  osType: Linux
+  restartPolicy: OnFailure       # Restart on crash, not on success exit
+
+  # ── IP & Networking ──────────────────────────────────────
+  ipAddress:
+    type: Public
+    ports:
+      - port: 8000
+        protocol: TCP
+    dnsNameLabel: tsar-app        # → tsar-app.<region>.azurecontainer.io
+
+  # ── Image Registry Credentials (for private registries) ──
+  # Uncomment if using Azure Container Registry (ACR)
+  # imageRegistryCredentials:
+  #   - server: tsarregistry.azurecr.io
+  #     username: tsarregistry
+  #     password: <acr-password>
+
+  # ── Shared Volume for Data Persistence ───────────────────
+  volumes:
+    - name: tsar-data
+      azureFile:
+        shareName: tsar-data
+        storageAccountName: tsarstorage
+        # storageAccountKey set via --secrets or environment
+    - name: tsar-logs
+      azureFile:
+        shareName: tsar-logs
+        storageAccountName: tsarstorage
+
+  # ── Containers ───────────────────────────────────────────
+  containers:
+
+    # ──────────────────────────────────────────────────────────
+    # Container 1: TSAR Application
+    # ──────────────────────────────────────────────────────────
+    - name: tsar-app
+      properties:
+        image: tsarregistry.azurecr.io/tsar:latest
+        resources:
+          requests:
+            cpu: 0.75
+            memoryInGb: 0.6
+
+        ports:
+          - port: 8000
+            protocol: TCP
+
+        environmentVariables:
+          # ── App Config ──
+          - name: TSAR_ENVIRONMENT
+            value: production
+          - name: TSAR_TRADING_MODE
+            value: paper
+          - name: TSAR_API_PORT
+            value: "8000"
+          - name: PYTHONUNBUFFERED
+            value: "1"
+          - name: PYTHONDONTWRITEBYTECODE
+            value: "1"
+
+          # ── Redis Connection ──
+          - name: REDIS_HOST
+            value: localhost
+          - name: REDIS_PORT
+            value: "6379"
+
+          # ── Secrets (reference secure env vars) ──
+          - name: REDIS_PASSWORD
+            secureValue: ""       # Set via --secrets or secrets
+          - name: EXCHANGE_API_KEY
+            secureValue: ""
+          - name: EXCHANGE_SECRET
+            secureValue: ""
+          - name: NVIDIA_API_KEY
+            secureValue: ""
+          - name: TSAR_API_KEY
+            secureValue: ""
+          - name: TSAR_CORS_ORIGINS
+            value: ""
+
+        # Volumes
+        volumeMounts:
+          - name: tsar-data
+            mountPath: /app/data
+          - name: tsar-logs
+            mountPath: /app/logs
+
+        # Liveness probe — restart if unhealthy
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8000
+          initialDelaySeconds: 20
+          periodSeconds: 30
+          failureThreshold: 3
+
+        # Readiness probe — remove from load balancer if not ready
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 8000
+          initialDelaySeconds: 10
+          periodSeconds: 10
+          failureThreshold: 3
+
+    # ──────────────────────────────────────────────────────────
+    # Container 2: Redis
+    # ──────────────────────────────────────────────────────────
+    - name: tsar-redis
+      properties:
+        image: redis:7-alpine
+        resources:
+          requests:
+            cpu: 0.25
+            memoryInGb: 0.4
+
+        # Redis command with persistence + memory limit + auth
+        command:
+          - redis-server
+          - --appendonly
+          - "yes"
+          - --maxmemory
+          - 256mb
+          - --maxmemory-policy
+          - allkeys-lru
+          - --requirepass
+          - "${REDIS_PASSWORD}"
+
+        # Liveness — restart if Redis can't respond
+        livenessProbe:
+          exec:
+            command:
+              - redis-cli
+              - -a
+              - "${REDIS_PASSWORD}"
+              - ping
+          initialDelaySeconds: 5
+          periodSeconds: 10
+          failureThreshold: 3
+
+        # Redis data persistence volume
+        volumeMounts:
+          - name: tsar-data
+            mountPath: /data
+            subPath: redis
+
+  # ── Diagnostics (Azure Monitor) ──────────────────────────
+  diagnostics:
+    logAnalytics:
+      workspaceId: ""             # Set to your Log Analytics workspace ID
+      workspaceKey: ""            # Set to your Log Analytics workspace key
+
+  # ── Tags ─────────────────────────────────────────────────
+  tags:
+    project: tsar
+    environment: production
+    managed-by: azure-container-instances

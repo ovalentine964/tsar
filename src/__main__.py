@@ -128,7 +128,7 @@ async def run_full_system(args: argparse.Namespace) -> None:
                   json_output=getattr(getattr(config, "logging", None), "json_output", False) if hasattr(config, "logging") else False)
 
     trading_mode = "live" if args.live else "paper"
-    logger.info(f"\n🏰 TSAR v0.5.0 — {trading_mode.upper()} MODE")
+    logger.info(f"\n🏰 TSAR v0.2.0 — {trading_mode.upper()} MODE")
     logger.info(f"   Config: {args.config}")
     logger.info(f"   API: http://{args.host}:{args.port}")
     db_path = getattr(getattr(config, "database", None), "db_path", "data/tsar.db") if hasattr(config, "database") else "data/tsar.db"
@@ -249,14 +249,17 @@ async def run_full_system(args: argparse.Namespace) -> None:
     event_bus = get_shared_bus()
     logger.info("✅ Event bus initialized (shared singleton)")
 
-    # ── Create All 10 Agents ─────────────────────────────────────
+    # ── Create All 13 Agents ─────────────────────────────────────
     from src.agents.execution_sniper import ExecutionSniper
     from src.agents.execution_tracker import ExecutionTracker
+    from src.agents.flywheel_orchestrator import FlywheelOrchestrator
+    from src.agents.information_agent import InformationAgent
     from src.agents.macro_agent import MacroAgent
     from src.agents.market_cartographer import MarketCartographer
     from src.agents.orchestrator import Orchestrator
     from src.agents.regime_detector import RegimeDetector
     from src.agents.risk_guardian import RiskGuardian
+    from src.agents.sentiment_agent import SentimentAgent
     from src.agents.signal_scout import SignalScout
     from src.agents.strategy_geneticist import StrategyGeneticist
     from src.agents.trade_philosopher import TradePhilosopher
@@ -268,9 +271,12 @@ async def run_full_system(args: argparse.Namespace) -> None:
         "risk_guardian": RiskGuardian(agent_config, trading_mode),
         "execution_sniper": ExecutionSniper(agent_config, trading_mode),
         "execution_tracker": ExecutionTracker(agent_config, trading_mode),
+        "flywheel_orchestrator": FlywheelOrchestrator(agent_config, trading_mode),
+        "information_agent": InformationAgent(agent_config, trading_mode),
         "market_cartographer": MarketCartographer(agent_config, trading_mode),
         "regime_detector": RegimeDetector(agent_config, trading_mode),
         "macro_agent": MacroAgent(agent_config, trading_mode),
+        "sentiment_agent": SentimentAgent(agent_config, trading_mode),
         "trade_philosopher": TradePhilosopher(agent_config, trading_mode),
         "strategy_geneticist": StrategyGeneticist(agent_config, trading_mode),
     }
@@ -325,6 +331,26 @@ async def run_full_system(args: argparse.Namespace) -> None:
 
     heartbeat_task = asyncio.create_task(_heartbeat_writer())
 
+    # ── Start Telegram Bot ───────────────────────────────────────
+    telegram_task = None
+    try:
+        from src.bot.bot import TelegramBot
+        telegram_config = config_dict.get("telegram", {}) if isinstance(config_dict, dict) else {}
+        bot_token = telegram_config.get("bot_token", os.environ.get("TELEGRAM_BOT_TOKEN", ""))
+        chat_id = telegram_config.get("chat_id", os.environ.get("TELEGRAM_CHAT_ID", ""))
+        if bot_token and bot_token not in ("${TELEGRAM_BOT_TOKEN}", ""):
+            telegram_bot = TelegramBot(
+                token=bot_token,
+                chat_id=chat_id,
+                tsar_system=agents["orchestrator"],
+            )
+            telegram_task = asyncio.create_task(telegram_bot.poll_loop())
+            logger.info("✅ Telegram bot started")
+        else:
+            logger.info("⚠️  Telegram bot not started (no token configured)")
+    except Exception as e:
+        logger.warning("⚠️  Telegram bot failed to start: %s", e)
+
     # ── Start Orchestrator ───────────────────────────────────────
     logger.info("\n🔄 Orchestrator starting...")
     logger.info("   Press Ctrl+C to stop\n")
@@ -352,6 +378,10 @@ async def run_full_system(args: argparse.Namespace) -> None:
         for _name, agent in reversed(list(agents.items())):
             with contextlib.suppress(Exception):
                 await agent.stop()
+        if telegram_task:
+            telegram_task.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await telegram_task
         api_task.cancel()
         with contextlib.suppress(asyncio.CancelledError):
             await api_task

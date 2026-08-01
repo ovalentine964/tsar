@@ -4,8 +4,8 @@ build-backend = "hatchling.build"
 
 [project]
 name = "tsar"
-version = "0.1.0"
-description = "Trading Super Agent Regime — self-improving autonomous trading system"
+version = "0.2.0"
+description = "TSAR — self-improving autonomous trading system that compounds knowledge through use"
 requires-python = ">=3.12"
 license = { text = "MIT" }
 dependencies = [
@@ -68,6 +68,9 @@ defi = [
 
 [project.scripts]
 tsar = "src.__main__:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src"]
 
 [tool.ruff]
 target-version = "py312"

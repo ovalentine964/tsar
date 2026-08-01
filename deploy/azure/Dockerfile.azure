@@ -1,0 +1,115 @@
+# ============================================================
+# TSAR — Azure-Optimized Dockerfile
+# ============================================================
+# Multi-stage build optimized for Azure Container Instances:
+#   - Smaller final image (~150MB vs ~500MB)
+#   - Health check endpoint included
+#   - Graceful shutdown with SIGTERM handling
+#   - Non-root user for security
+#   - Azure-specific environment defaults
+# ============================================================
+# Build:
+#   docker build -f deploy/azure/Dockerfile.azure -t tsar:azure .
+# ============================================================
+
+# ── Stage 1: Rust Builder (optional) ────────────────────────
+ARG TSAR_RUST_BUILD=0
+FROM rust:1.79-slim AS rust-builder
+ARG TSAR_RUST_BUILD
+WORKDIR /build/rust
+COPY rust/ ./
+RUN if [ "$TSAR_RUST_BUILD" = "1" ]; then \
+        echo "🦀 Building Rust crates..." && \
+        cargo build --release && \
+        echo "✅ Rust build succeeded"; \
+    else \
+        echo "⏭️  Rust build skipped"; \
+    fi
+
+# ── Stage 2: Python Builder ─────────────────────────────────
+FROM python:3.12-slim AS builder
+
+WORKDIR /build
+
+# System deps for building native packages
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    gcc \
+    g++ \
+    libffi-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install Python dependencies (cached layer)
+COPY pyproject.toml .
+RUN pip install --no-cache-dir --prefix=/install .
+
+# Copy Rust binaries if built
+COPY --from=rust-builder /build/rust/target/release/ /build/rust-binaries/ 2>/dev/null || true
+
+# ── Stage 3: Azure Production (minimal) ─────────────────────
+FROM python:3.12-slim AS azure-production
+
+LABEL maintainer="TSAR Team"
+LABEL description="TSAR — Trading Super Agent (Azure Optimized)"
+LABEL version="0.5.0-azure"
+
+# Runtime deps only — no build tools
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    curl \
+    tini \
+    ca-certificates \
+    && rm -rf /var/lib/apt/lists/* \
+    && apt-get clean
+
+# Copy installed Python packages from builder
+COPY --from=builder /install /usr/local
+
+# Create non-root user
+RUN groupadd --gid 1000 tsar && \
+    useradd --uid 1000 --gid tsar --shell /bin/bash --create-home tsar
+
+WORKDIR /app
+
+# Copy application code
+COPY src/ ./src/
+COPY config/ ./config/
+
+# Create data and log directories
+RUN mkdir -p /app/data /app/logs && \
+    chown -R tsar:tsar /app
+
+# Switch to non-root user
+USER tsar
+
+# Expose API port
+EXPOSE 8000
+
+# ── Azure-optimized environment ──────────────────────────────
+ENV PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
+    TSAR_ENVIRONMENT=production \
+    TSAR_TRADING_MODE=paper \
+    TSAR_API_PORT=8000 \
+    # Azure-specific: reduce memory footprint
+    MALLOC_ARENA_MAX=2 \
+    # Python memory optimization
+    PYTHONMALLOC=malloc
+
+# ── Health check (Azure-native compatible) ───────────────────
+# Azure ACI also supports HTTP probes in YAML, but having it
+# in the Dockerfile provides a fallback and works with docker run.
+HEALTHCHECK --interval=30s --timeout=10s --start-period=20s --retries=3 \
+    CMD curl -f http://localhost:8000/health || exit 1
+
+# ── Graceful Shutdown ────────────────────────────────────────
+# SIGTERM handling:
+#   - tini as PID 1 forwards signals to child process
+#   - Python receives SIGTERM → triggers shutdown handlers
+#   - STOPSIGNAL tells Docker/ACI to send SIGTERM first
+#   - 30s grace period before SIGKILL (ACI default)
+STOPSIGNAL SIGTERM
+
+# Use tini as PID 1 for proper signal handling and zombie reaping
+ENTRYPOINT ["tini", "--"]
+
+# Default command
+CMD ["python", "-m", "src"]

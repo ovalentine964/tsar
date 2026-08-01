@@ -1,0 +1,16 @@
+[package]
+name = "tsar-gas-optimizer"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "Real-time gas tracking and L2 cost comparison for optimal transaction routing"
+
+[dependencies]
+tsar-core = { workspace = true }
+tokio = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+tracing = { workspace = true }
+chrono = { workspace = true }
+reqwest = { workspace = true }

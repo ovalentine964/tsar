@@ -133,6 +133,7 @@ class Orchestrator(BaseAgent):
             "execution_tracker",
             "strategy_geneticist",
             "flywheel_orchestrator",
+            "information_agent",
             "market_cartographer",
             "macro_agent",
             "regime_detector",
@@ -202,16 +203,18 @@ class Orchestrator(BaseAgent):
           4. execution_tracker
           5. strategy_geneticist
           6. flywheel_orchestrator
-          7. market_cartographer
-          8. macro_agent
-          9. regime_detector
-         10. sentiment_agent
-         11. trade_philosopher
-         12. orchestrator (self — not managed via registry)
+          7. information_agent
+          8. market_cartographer
+          9. macro_agent
+         10. regime_detector
+         11. sentiment_agent
+         12. trade_philosopher
+         13. orchestrator (self — not managed via registry)
         """
         from src.agents.execution_sniper import ExecutionSniper
         from src.agents.execution_tracker import ExecutionTracker
         from src.agents.flywheel_orchestrator import FlywheelOrchestrator
+        from src.agents.information_agent import InformationAgent
         from src.agents.macro_agent import MacroAgent
         from src.agents.market_cartographer import MarketCartographer
         from src.agents.regime_detector import RegimeDetector
@@ -228,6 +231,7 @@ class Orchestrator(BaseAgent):
             "execution_tracker": ExecutionTracker,
             "strategy_geneticist": StrategyGeneticist,
             "flywheel_orchestrator": FlywheelOrchestrator,
+            "information_agent": InformationAgent,
             "market_cartographer": MarketCartographer,
             "macro_agent": MacroAgent,
             "regime_detector": RegimeDetector,

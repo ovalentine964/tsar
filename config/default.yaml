@@ -2,12 +2,12 @@
 # TSAR — Default Application Configuration
 # ============================================================
 # Main config for app, database, Redis, and logging.
-# See TSAR_ARCHITECTURE.md §11
+# See docs/ARCHITECTURE.md for system overview.
 
 # --- Application ---
 app:
   name: "TSAR"
-  version: "3.0.0"
+  version: "0.2.0"
   environment: "development"     # development | staging | production
   trading_mode: "paper"          # paper | live
   log_level: "INFO"
@@ -15,7 +15,7 @@ app:
 # --- Database ---
 database:
   path: "data/tsar.db"
-  echo: false                    # SQLAlchemy SQL logging
+  echo: false                    # SQL query logging
   pool_size: 5
   max_overflow: 10
   backup:
@@ -60,7 +60,7 @@ logging:
       - "structlog.processors.format_exc_info"
       - "structlog.processors.JSONRenderer"
 
-# --- API Server (Day30+) ---
+# --- API Server ---
 api:
   host: "0.0.0.0"
   port: 8000
@@ -92,23 +92,14 @@ exchanges:
     - "BTC/USDT"
     # - "ETH/USDT"    # Level 2+
 
-# --- Monitoring (Day30+) ---
-monitoring:
-  prometheus:
-    enabled: false
-    port: 9090
-  grafana:
-    enabled: false
-    port: 3000
-
 # --- DeFi (On-Chain) ---
 defi:
   testnet: true                     # true = Sepolia/devnet, false = mainnet
-  wallet_path: "data/wallets.enc"   # Encrypted wallet storage file
-  master_key_env: "TSAR_WALLET_MASTER_KEY"  # Env var for encryption key
+  wallet_path: "data/wallets.enc"   # Encrypted wallet storage
+  master_key_env: "TSAR_WALLET_MASTER_KEY"
   slippage_tolerance: 1.0           # Default slippage tolerance (%)
-  confirmation_timeout_s: 120       # TX receipt wait timeout (seconds)
-  oneinch_api_key: ""               # 1inch API key (optional, higher rate limits)
+  confirmation_timeout_s: 120       # TX receipt wait timeout
+  oneinch_api_key: ""               # 1inch API key (optional)
   rpc_endpoints:
     ethereum: "https://rpc.sepolia.org"
     polygon: "https://rpc-amoy.polygon.technology"
@@ -123,3 +114,12 @@ watchdog:
   tier2_heartbeat_s: 5
   tier3_check_interval_s: 10
   stale_threshold_s: 15
+
+# --- Monitoring ---
+monitoring:
+  prometheus:
+    enabled: false
+    port: 9090
+  grafana:
+    enabled: false
+    port: 3000
