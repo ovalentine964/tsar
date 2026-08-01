@@ -236,6 +236,135 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
               const SizedBox(height: 12),
 
+              // DeFi Configuration
+              TsarCard(
+                title: 'DeFi CONFIGURATION',
+                child: Column(
+                  children: [
+                    ListTile(
+                      leading: const Icon(Icons.currency_exchange, color: TsarTheme.accent),
+                      title: const Text('DeFi Positions',
+                          style: TextStyle(color: Colors.white70)),
+                      subtitle: const Text('View and manage DeFi yield positions',
+                          style: TextStyle(color: Colors.white30, fontSize: 12)),
+                      trailing: const Icon(Icons.chevron_right, color: Colors.white24),
+                      contentPadding: EdgeInsets.zero,
+                      onTap: () {
+                        // Navigate to DeFi screen - accessible from bottom nav
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text('DeFi is available from the bottom navigation'),
+                            backgroundColor: TsarTheme.info,
+                          ),
+                        );
+                      },
+                    ),
+                    const Divider(),
+                    SwitchListTile(
+                      title: const Text('Auto-compound yields',
+                          style: TextStyle(color: Colors.white70)),
+                      subtitle: const Text('Automatically reinvest earned yields',
+                          style: TextStyle(color: Colors.white30, fontSize: 12)),
+                      value: false,
+                      activeColor: TsarTheme.accent,
+                      onChanged: (v) {
+                        // Placeholder for DeFi auto-compound setting
+                      },
+                      contentPadding: EdgeInsets.zero,
+                    ),
+                  ],
+                ),
+              ),
+
+              const SizedBox(height: 12),
+
+              // Blockchain Configuration
+              TsarCard(
+                title: 'BLOCKCHAIN & RULES',
+                child: Column(
+                  children: [
+                    ListTile(
+                      leading: const Icon(Icons.rule, color: TsarTheme.accent),
+                      title: const Text('On-Chain Rules',
+                          style: TextStyle(color: Colors.white70)),
+                      subtitle: const Text('Manage blockchain-enforced trading rules',
+                          style: TextStyle(color: Colors.white30, fontSize: 12)),
+                      trailing: const Icon(Icons.chevron_right, color: Colors.white24),
+                      contentPadding: EdgeInsets.zero,
+                      onTap: () {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text('Blockchain rules available from bottom navigation'),
+                            backgroundColor: TsarTheme.info,
+                          ),
+                        );
+                      },
+                    ),
+                    const Divider(),
+                    ListTile(
+                      leading: const Icon(Icons.shield, color: TsarTheme.warning),
+                      title: const Text('Scenario Prevention',
+                          style: TextStyle(color: Colors.white70)),
+                      subtitle: const Text('Configure scenario-based risk prevention',
+                          style: TextStyle(color: Colors.white30, fontSize: 12)),
+                      trailing: const Icon(Icons.chevron_right, color: Colors.white24),
+                      contentPadding: EdgeInsets.zero,
+                      onTap: () {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text('Scenarios available from bottom navigation'),
+                            backgroundColor: TsarTheme.info,
+                          ),
+                        );
+                      },
+                    ),
+                  ],
+                ),
+              ),
+
+              const SizedBox(height: 12),
+
+              // News Sources
+              TsarCard(
+                title: 'NEWS SOURCES',
+                child: Column(
+                  children: [
+                    ListTile(
+                      leading: const Icon(Icons.article, color: TsarTheme.accent),
+                      title: const Text('News Feed',
+                          style: TextStyle(color: Colors.white70)),
+                      subtitle: const Text('Real-time news with sentiment analysis',
+                          style: TextStyle(color: Colors.white30, fontSize: 12)),
+                      trailing: const Icon(Icons.chevron_right, color: Colors.white24),
+                      contentPadding: EdgeInsets.zero,
+                      onTap: () {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text('News available from bottom navigation'),
+                            backgroundColor: TsarTheme.info,
+                          ),
+                        );
+                      },
+                    ),
+                    const Divider(),
+                    SwitchListTile(
+                      title: const Text('Push notifications for alerts',
+                          style: TextStyle(color: Colors.white70)),
+                      subtitle: const Text('Get notified for high-impact news',
+                          style: TextStyle(color: Colors.white30, fontSize: 12)),
+                      value: true,
+                      activeColor: TsarTheme.accent,
+                      onChanged: (v) {
+                        // Placeholder for news notification setting
+                      },
+                      contentPadding: EdgeInsets.zero,
+                    ),
+                  ],
+                ),
+              ),
+
+              const SizedBox(height: 12),
+
               // Strategies
               TsarCard(
                 title: 'STRATEGIES',

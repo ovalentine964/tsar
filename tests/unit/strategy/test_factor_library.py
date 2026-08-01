@@ -23,7 +23,7 @@ from src.strategy.factor_bench import FactorBenchmarker, FactorBenchmarkResult
 from src.strategy.factor_library import FactorLibrary, FactorMeta
 from src.strategy.factors import FACTOR_REGISTRY
 
-TOTAL_BUILTIN_FACTORS = 28  # 9 momentum + 4 mean_reversion + 4 volatility + 4 volume + 4 trend + 3 pattern
+TOTAL_BUILTIN_FACTORS = 30  # 9 momentum + 4 mean_reversion + 4 volatility + 4 volume + 4 trend + 3 pattern + 2 risk_factor
 
 
 # ═══════════════════════════════════════════════════════════════════════

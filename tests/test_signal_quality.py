@@ -527,6 +527,7 @@ class TestPositionTier:
     def sqf(self, default_config) -> SignalQualityFilter:
         with patch.object(SignalQualityFilter, '__init__', lambda self, *a, **kw: None):
             sqf = SignalQualityFilter.__new__(SignalQualityFilter)
+            sqf.run_cycle = AsyncMock()
             sqf._no_trade_threshold = 0.60
             sqf._small_threshold = 0.70
             sqf._normal_threshold = 0.80

@@ -225,4 +225,56 @@ class ApiService {
 
   Future<Map<String, dynamic>> getFlywheelHealth() =>
       _get('/api/v1/flywheel');
+
+  // ─── News ────────────────────────────────────────────────────────
+
+  Future<Map<String, dynamic>> getNews({String? symbol, int? limit}) {
+    final params = <String, String>{};
+    if (symbol != null) params['symbol'] = symbol;
+    if (limit != null) params['limit'] = limit.toString();
+    return _get('/api/v1/news', queryParams: params);
+  }
+
+  Future<Map<String, dynamic>> getNewsAlerts() => _get('/api/v1/news/alerts');
+
+  // ─── Signal Quality ─────────────────────────────────────────────
+
+  Future<Map<String, dynamic>> getSignalQuality({String? symbol}) {
+    final params = <String, String>{};
+    if (symbol != null) params['symbol'] = symbol;
+    return _get('/api/v1/signals/quality', queryParams: params);
+  }
+
+  Future<Map<String, dynamic>> evaluateSignal(String symbol) =>
+      _post('/api/v1/signals/evaluate', body: {'symbol': symbol});
+
+  // ─── DeFi ───────────────────────────────────────────────────────
+
+  Future<Map<String, dynamic>> getDeFiPositions({String? chain}) {
+    final params = <String, String>{};
+    if (chain != null) params['chain'] = chain;
+    return _get('/api/v1/defi/positions', queryParams: params);
+  }
+
+  Future<Map<String, dynamic>> getDeFiYield() => _get('/api/v1/defi/yield');
+
+  // ─── Blockchain / On-Chain ──────────────────────────────────────
+
+  Future<Map<String, dynamic>> getScenarios() => _get('/api/v1/scenarios');
+
+  Future<Map<String, dynamic>> getOnChainRules() => _get('/api/v1/blockchain/rules');
+
+  Future<Map<String, dynamic>> getAuditTrail({int? limit}) {
+    final params = <String, String>{};
+    if (limit != null) params['limit'] = limit.toString();
+    return _get('/api/v1/blockchain/audit', queryParams: params);
+  }
+
+  // ─── Education ──────────────────────────────────────────────────
+
+  Future<Map<String, dynamic>> getTradeEducation({String? category}) {
+    final params = <String, String>{};
+    if (category != null) params['category'] = category;
+    return _get('/api/v1/education', queryParams: params);
+  }
 }

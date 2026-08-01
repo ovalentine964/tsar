@@ -4,7 +4,11 @@ import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 import '../theme.dart';
 import '../models/trade.dart';
+import '../models/signal_quality.dart';
+import '../models/news.dart';
 import '../providers/trade_provider.dart';
+import '../providers/signal_quality_provider.dart';
+import '../providers/news_provider.dart';
 import '../widgets/cards.dart';
 
 class TradesScreen extends StatefulWidget {
@@ -20,6 +24,8 @@ class _TradesScreenState extends State<TradesScreen> {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       context.read<TradeProvider>().refresh();
+      context.read<SignalQualityProvider>().refresh();
+      context.read<NewsProvider>().refresh();
     });
   }
 
@@ -395,6 +401,98 @@ class _TradeDetailSheet extends StatelessWidget {
           const SizedBox(height: 8),
           Text(trade.notes!, style: TextStyle(color: Colors.white70)),
         ],
+
+        // Signal quality context
+        const Divider(height: 32),
+        Text('SIGNAL CONTEXT',
+            style: TextStyle(
+              fontFamily: GoogleFonts.jetBrainsMono().fontFamily,
+              fontSize: 11,
+              color: Colors.white38,
+              letterSpacing: 1.2,
+            )),
+        const SizedBox(height: 8),
+        Consumer<SignalQualityProvider>(
+          builder: (context, signalProvider, _) {
+            final signal = signalProvider.signals
+                .where((s) => s.symbol == trade.symbol)
+                .toList();
+            if (signal.isEmpty) {
+              return Text(
+                'No signal data for ${trade.symbol}',
+                style: const TextStyle(color: Colors.white24, fontSize: 12),
+              );
+            }
+            final s = signal.first;
+            return Row(
+              children: [
+                Text(s.statusEmoji, style: const TextStyle(fontSize: 16)),
+                const SizedBox(width: 8),
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Grade: ${s.grade} (${(s.overallScore * 100).toStringAsFixed(0)}%)',
+                      style: TsarTheme.numberStyle.copyWith(
+                        fontSize: 13,
+                        color: s.gradeColor,
+                      ),
+                    ),
+                    Text(
+                      'Confidence: ${(s.confidence * 100).toStringAsFixed(0)}%',
+                      style: const TextStyle(color: Colors.white54, fontSize: 11),
+                    ),
+                  ],
+                ),
+              ],
+            );
+          },
+        ),
+
+        // News context
+        const SizedBox(height: 16),
+        Text('NEWS CONTEXT',
+            style: TextStyle(
+              fontFamily: GoogleFonts.jetBrainsMono().fontFamily,
+              fontSize: 11,
+              color: Colors.white38,
+              letterSpacing: 1.2,
+            )),
+        const SizedBox(height: 8),
+        Consumer<NewsProvider>(
+          builder: (context, newsProvider, _) {
+            final relatedNews = newsProvider.allItems
+                .where((n) => n.symbols.contains(trade.symbol))
+                .toList();
+            if (relatedNews.isEmpty) {
+              return Text(
+                'No recent news for ${trade.symbol}',
+                style: const TextStyle(color: Colors.white24, fontSize: 12),
+              );
+            }
+            return Column(
+              children: relatedNews.take(3).map((news) {
+                return Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 4),
+                  child: Row(
+                    children: [
+                      Icon(news.sentimentIcon, size: 14, color: news.sentimentColor),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          news.title,
+                          style: const TextStyle(color: Colors.white70, fontSize: 12),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                    ],
+                  ),
+                );
+              }).toList(),
+            );
+          },
+        ),
       ],
     );
   }

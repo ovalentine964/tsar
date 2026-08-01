@@ -4,8 +4,10 @@ import 'package:provider/provider.dart';
 import 'package:fl_chart/fl_chart.dart';
 import '../theme.dart';
 import '../models/risk.dart';
+import '../models/scenario.dart';
 import '../providers/risk_provider.dart';
 import '../providers/portfolio_provider.dart';
+import '../providers/blockchain_provider.dart';
 import '../widgets/cards.dart';
 import '../widgets/charts.dart';
 
@@ -23,6 +25,7 @@ class _RiskScreenState extends State<RiskScreen> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       context.read<RiskProvider>().refresh();
       context.read<PortfolioProvider>().refresh();
+      context.read<BlockchainProvider>().refresh();
     });
   }
 
@@ -37,6 +40,7 @@ class _RiskScreenState extends State<RiskScreen> {
             onPressed: () {
               context.read<RiskProvider>().refresh();
               context.read<PortfolioProvider>().refresh();
+              context.read<BlockchainProvider>().refresh();
             },
           ),
         ],
@@ -46,6 +50,7 @@ class _RiskScreenState extends State<RiskScreen> {
           await Future.wait([
             context.read<RiskProvider>().refresh(),
             context.read<PortfolioProvider>().refresh(),
+            context.read<BlockchainProvider>().refresh(),
           ]);
         },
         color: TsarTheme.accent,
@@ -63,6 +68,10 @@ class _RiskScreenState extends State<RiskScreen> {
             _buildPositionsList(),
             const SizedBox(height: 12),
             _buildAlertsList(),
+            const SizedBox(height: 12),
+            _buildScenarioPreventionStatus(),
+            const SizedBox(height: 12),
+            _buildOnChainRulesSummary(),
             const SizedBox(height: 80),
           ],
         ),
@@ -347,6 +356,134 @@ class _RiskScreenState extends State<RiskScreen> {
                         alert.message,
                         style: TextStyle(color: Colors.white70, fontSize: 13),
                       ),
+                    ),
+                  ],
+                ),
+              );
+            }).toList(),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildScenarioPreventionStatus() {
+    return Consumer<BlockchainProvider>(
+      builder: (context, blockchain, _) {
+        final scenarios = blockchain.scenarios;
+        if (scenarios.isEmpty) return const SizedBox.shrink();
+
+        final triggered = blockchain.triggeredScenarios;
+        final active = blockchain.activeScenarios;
+
+        return TsarCard(
+          title: '🛡️ SCENARIO PREVENTION',
+          trailing: triggered.isNotEmpty
+              ? Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                  decoration: BoxDecoration(
+                    color: TsarTheme.loss.withOpacity(0.15),
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                  child: Text(
+                    '${triggered.length} TRIGGERED',
+                    style: TextStyle(
+                      fontFamily: GoogleFonts.jetBrainsMono().fontFamily,
+                      fontSize: 10,
+                      color: TsarTheme.loss,
+                    ),
+                  ),
+                )
+              : Text(
+                  '${active.length} monitoring',
+                  style: TextStyle(
+                    fontFamily: GoogleFonts.jetBrainsMono().fontFamily,
+                    fontSize: 11,
+                    color: TsarTheme.profit,
+                  ),
+                ),
+          child: Column(
+            children: scenarios.take(4).map((s) {
+              return Padding(
+                padding: const EdgeInsets.symmetric(vertical: 4),
+                child: Row(
+                  children: [
+                    Text(s.riskEmoji, style: const TextStyle(fontSize: 14)),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        s.name,
+                        style: const TextStyle(color: Colors.white70, fontSize: 13),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: s.statusColor.withOpacity(0.15),
+                        borderRadius: BorderRadius.circular(4),
+                      ),
+                      child: Text(
+                        s.statusLabel,
+                        style: TextStyle(
+                          fontFamily: GoogleFonts.jetBrainsMono().fontFamily,
+                          fontSize: 9,
+                          color: s.statusColor,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              );
+            }).toList(),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildOnChainRulesSummary() {
+    return Consumer<BlockchainProvider>(
+      builder: (context, blockchain, _) {
+        if (blockchain.rules.isEmpty) return const SizedBox.shrink();
+
+        final activeRules = blockchain.activeRuleCount;
+
+        return TsarCard(
+          title: '⛓️ ON-CHAIN RULES',
+          trailing: Text(
+            '$activeRules/${blockchain.rules.length} active',
+            style: TsarTheme.numberStyle.copyWith(
+              fontSize: 11,
+              color: activeRules > 0 ? TsarTheme.profit : Colors.white38,
+            ),
+          ),
+          child: Column(
+            children: blockchain.rules.take(3).map((rule) {
+              return Padding(
+                padding: const EdgeInsets.symmetric(vertical: 4),
+                child: Row(
+                  children: [
+                    Icon(
+                      rule.typeIcon,
+                      size: 14,
+                      color: rule.isActive ? TsarTheme.accent : Colors.white24,
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        rule.name,
+                        style: TextStyle(
+                          color: rule.isActive ? Colors.white70 : Colors.white38,
+                          fontSize: 13,
+                        ),
+                      ),
+                    ),
+                    Icon(
+                      rule.isActive ? Icons.check_circle : Icons.circle_outlined,
+                      size: 14,
+                      color: rule.isActive ? TsarTheme.profit : Colors.white24,
                     ),
                   ],
                 ),

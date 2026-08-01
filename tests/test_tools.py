@@ -252,8 +252,8 @@ class TestKnowledgeImports:
         assert TradeMemory is not None
 
     def test_import_fts_search(self):
-        from src.knowledge.fts_search import FTSSearch
-        assert FTSSearch is not None
+        from src.knowledge.fts_search import MemoryRecall
+        assert MemoryRecall is not None
 
     def test_import_pattern_library(self):
         from src.knowledge.pattern_library import PatternLibrary
@@ -272,8 +272,8 @@ class TestKnowledgeImports:
         assert StrategyGenomes is not None
 
     def test_import_db_pool(self):
-        from src.knowledge.db_pool import DatabasePool
-        assert DatabasePool is not None
+        from src.knowledge.db_pool import SQLitePool
+        assert SQLitePool is not None
 
 
 # ═══════════════════════════════════════════════════════════════════════
@@ -287,8 +287,8 @@ class TestCommsImports:
         assert EventBus is not None
 
     def test_import_events(self):
-        from src.comms.events import Event
-        assert Event is not None
+        from src.comms.events import CloudEvent
+        assert CloudEvent is not None
 
 
 # ═══════════════════════════════════════════════════════════════════════

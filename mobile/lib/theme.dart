@@ -93,6 +93,20 @@ class TsarTheme {
     );
   }
 
+  // Status indicator colors
+  static const Color statusGreen = Color(0xFF00E676);
+  static const Color statusYellow = Color(0xFFFFD600);
+  static const Color statusOrange = Color(0xFFFF9100);
+  static const Color statusRed = Color(0xFFFF1744);
+
+  // Status emoji helper
+  static String statusEmoji(double score) {
+    if (score >= 0.8) return '🟢';
+    if (score >= 0.6) return '🟡';
+    if (score >= 0.4) return '🟠';
+    return '🔴';
+  }
+
   // Number style for monospace financial data
   static TextStyle get numberStyle => _mono(
         fontSize: 14,

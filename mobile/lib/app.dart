@@ -6,6 +6,9 @@ import 'screens/dashboard_screen.dart';
 import 'screens/trades_screen.dart';
 import 'screens/risk_screen.dart';
 import 'screens/factors_screen.dart';
+import 'screens/news_screen.dart';
+import 'screens/defi_screen.dart';
+import 'screens/blockchain_screen.dart';
 import 'screens/settings_screen.dart';
 import 'widgets/kill_switch_fab.dart';
 
@@ -44,6 +47,9 @@ class _MainShellState extends State<MainShell> {
     TradesScreen(),
     RiskScreen(),
     FactorsScreen(),
+    NewsScreen(),
+    DeFiScreen(),
+    BlockchainScreen(),
     SettingsScreen(),
   ];
 
@@ -77,6 +83,21 @@ class _MainShellState extends State<MainShell> {
             icon: Icon(Icons.science_outlined),
             selectedIcon: Icon(Icons.science),
             label: 'Factors',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.article_outlined),
+            selectedIcon: Icon(Icons.article),
+            label: 'News',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.currency_exchange_outlined),
+            selectedIcon: Icon(Icons.currency_exchange),
+            label: 'DeFi',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.rule_outlined),
+            selectedIcon: Icon(Icons.rule),
+            label: 'Chain',
           ),
           NavigationDestination(
             icon: Icon(Icons.settings_outlined),

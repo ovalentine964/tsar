@@ -352,11 +352,11 @@ class TestRiskParams:
 
     def test_stop_loss_pct(self, strategy):
         params = strategy.get_risk_params()
-        assert params["stop_loss_pct"] == 0.01  # 1%
+        assert params["stop_loss_pct"] == 0.015  # 1.5% (ATR-adaptive)
 
     def test_take_profit_pct(self, strategy):
         params = strategy.get_risk_params()
-        assert params["take_profit_pct"] == 0.02  # 2%
+        assert params["take_profit_pct"] == 0.03  # 3% (2:1 R:R minimum)
 
     def test_max_hold_hours(self, strategy):
         params = strategy.get_risk_params()

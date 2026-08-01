@@ -6,8 +6,14 @@ import 'package:fl_chart/fl_chart.dart';
 import '../theme.dart';
 import '../providers/dashboard_provider.dart';
 import '../providers/settings_provider.dart';
+import '../providers/news_provider.dart';
+import '../providers/signal_quality_provider.dart';
+import '../providers/defi_provider.dart';
 import '../widgets/cards.dart';
 import '../widgets/charts.dart';
+import '../models/news.dart';
+import '../models/signal_quality.dart';
+import '../models/defi_position.dart';
 
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key});
@@ -24,6 +30,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       context.read<DashboardProvider>().refresh();
+      context.read<NewsProvider>().refresh();
+      context.read<SignalQualityProvider>().refresh();
+      context.read<DeFiProvider>().refresh();
       _setupAutoRefresh();
     });
   }
@@ -88,6 +97,12 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 _buildRegimeCard(dash),
                 const SizedBox(height: 12),
                 _buildFlywheelCard(dash),
+                const SizedBox(height: 12),
+                _buildNewsAlertsSection(),
+                const SizedBox(height: 12),
+                _buildSignalQualitySection(),
+                const SizedBox(height: 12),
+                _buildDeFiSection(),
                 const SizedBox(height: 80), // FAB clearance
               ],
             ),
@@ -313,6 +328,198 @@ class _DashboardScreenState extends State<DashboardScreen> {
         ],
       ),
     );
+  }
+
+  Widget _buildNewsAlertsSection() {
+    return Consumer<NewsProvider>(
+      builder: (context, news, _) {
+        final alerts = news.alerts;
+        if (alerts.isEmpty) return const SizedBox.shrink();
+
+        return TsarCard(
+          title: '📰 NEWS ALERTS',
+          trailing: Text(
+            '${alerts.length} alerts',
+            style: TextStyle(
+              fontFamily: GoogleFonts.jetBrainsMono().fontFamily,
+              fontSize: 11,
+              color: TsarTheme.warning,
+            ),
+          ),
+          child: Column(
+            children: alerts.take(3).map((item) {
+              return Padding(
+                padding: const EdgeInsets.symmetric(vertical: 4),
+                child: Row(
+                  children: [
+                    Icon(item.sentimentIcon, size: 14, color: item.sentimentColor),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        item.title,
+                        style: const TextStyle(color: Colors.white70, fontSize: 12),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                    if (item.symbols.isNotEmpty)
+                      Text(
+                        item.symbols.first,
+                        style: TsarTheme.numberStyle.copyWith(
+                          fontSize: 10,
+                          color: TsarTheme.accent,
+                        ),
+                      ),
+                  ],
+                ),
+              );
+            }).toList(),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildSignalQualitySection() {
+    return Consumer<SignalQualityProvider>(
+      builder: (context, provider, _) {
+        final signal = provider.latest;
+        if (signal == null) return const SizedBox.shrink();
+
+        return TsarCard(
+          title: '📡 SIGNAL QUALITY',
+          trailing: Text(
+            signal.statusEmoji,
+            style: const TextStyle(fontSize: 16),
+          ),
+          child: Row(
+            children: [
+              Container(
+                width: 48,
+                height: 48,
+                decoration: BoxDecoration(
+                  color: signal.gradeColor.withOpacity(0.15),
+                  shape: BoxShape.circle,
+                  border: Border.all(color: signal.gradeColor, width: 2),
+                ),
+                child: Center(
+                  child: Text(
+                    signal.grade,
+                    style: TsarTheme.numberStyle.copyWith(
+                      fontSize: 20,
+                      color: signal.gradeColor,
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 16),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      signal.symbol,
+                      style: TsarTheme.numberStyle.copyWith(fontSize: 16),
+                    ),
+                    Text(
+                      '${(signal.overallScore * 100).toStringAsFixed(0)}% quality · ${(signal.confidence * 100).toStringAsFixed(0)}% confidence',
+                      style: const TextStyle(color: Colors.white54, fontSize: 12),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildDeFiSection() {
+    return Consumer<DeFiProvider>(
+      builder: (context, provider, _) {
+        if (provider.positions.isEmpty) return const SizedBox.shrink();
+
+        return TsarCard(
+          title: '🏦 DeFi POSITIONS',
+          trailing: Text(
+            '${provider.activePositions.length} active',
+            style: TsarTheme.numberStyle.copyWith(
+              fontSize: 11,
+              color: TsarTheme.accent,
+            ),
+          ),
+          child: Column(
+            children: [
+              Row(
+                children: [
+                  Expanded(
+                    child: _deFiStat(
+                      'Total Value',
+                      '\\$${_formatK(provider.totalValueUsd)}',
+                      TsarTheme.accent,
+                    ),
+                  ),
+                  Expanded(
+                    child: _deFiStat(
+                      'Yield Earned',
+                      '\\$${_formatK(provider.totalYieldEarned)}',
+                      TsarTheme.profit,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              ...provider.positions.take(3).map((pos) => Padding(
+                padding: const EdgeInsets.symmetric(vertical: 3),
+                child: Row(
+                  children: [
+                    Container(
+                      width: 8,
+                      height: 8,
+                      decoration: BoxDecoration(
+                        color: pos.chainColor,
+                        shape: BoxShape.circle,
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        '${pos.protocol} · ${pos.asset}',
+                        style: const TextStyle(color: Colors.white70, fontSize: 12),
+                      ),
+                    ),
+                    Text(
+                      '${pos.apy.toStringAsFixed(1)}% APY',
+                      style: TsarTheme.numberStyle.copyWith(
+                        fontSize: 11,
+                        color: TsarTheme.profit,
+                      ),
+                    ),
+                  ],
+                ),
+              )),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _deFiStat(String label, String value, Color color) {
+    return Column(
+      children: [
+        Text(label, style: const TextStyle(color: Colors.white38, fontSize: 11)),
+        const SizedBox(height: 4),
+        Text(value, style: TsarTheme.numberStyle.copyWith(color: color, fontSize: 14)),
+      ],
+    );
+  }
+
+  String _formatK(double v) {
+    if (v >= 1000000) return '${(v / 1000000).toStringAsFixed(1)}M';
+    if (v >= 1000) return '${(v / 1000).toStringAsFixed(1)}K';
+    return v.toStringAsFixed(0);
   }
 
   String _formatPnl(double value) {

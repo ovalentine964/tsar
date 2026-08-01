@@ -58,6 +58,9 @@ def _make_rules(**overrides) -> MandateRules:
         "allowed_order_types": ["market", "limit"],
         "max_notional_per_trade": 50000.0,
         "allowed_sides": ["buy", "sell"],
+        "min_paper_trades": 0,
+        "min_paper_days": 0,
+        "min_win_rate": 0.0,
     }
     defaults.update(overrides)
     return MandateRules(**defaults)

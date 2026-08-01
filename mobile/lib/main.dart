@@ -10,6 +10,10 @@ import 'providers/factor_provider.dart';
 import 'providers/strategy_provider.dart';
 import 'providers/knowledge_provider.dart';
 import 'providers/settings_provider.dart';
+import 'providers/news_provider.dart';
+import 'providers/signal_quality_provider.dart';
+import 'providers/defi_provider.dart';
+import 'providers/blockchain_provider.dart';
 import 'services/api_service.dart';
 import 'services/websocket_service.dart';
 import 'services/notification_service.dart';
@@ -36,6 +40,10 @@ void main() async {
         ChangeNotifierProvider(create: (_) => FactorProvider(apiService)),
         ChangeNotifierProvider(create: (_) => StrategyProvider(apiService)),
         ChangeNotifierProvider(create: (_) => KnowledgeProvider(apiService)),
+        ChangeNotifierProvider(create: (_) => NewsProvider(apiService)),
+        ChangeNotifierProvider(create: (_) => SignalQualityProvider(apiService)),
+        ChangeNotifierProvider(create: (_) => DeFiProvider(apiService)),
+        ChangeNotifierProvider(create: (_) => BlockchainProvider(apiService)),
         Provider.value(value: wsService),
         Provider.value(value: notificationService),
       ],
