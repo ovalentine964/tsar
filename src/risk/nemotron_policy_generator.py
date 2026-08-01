@@ -26,10 +26,49 @@ logger = get_logger(__name__)
 
 # ── Nemotron availability check ─────────────────────────────
 
+def _check_nemotron_available() -> bool:
+    """Check if Nemotron NIM is reachable.
+
+    Verifies:
+    1. httpx can be imported
+    2. NVIDIA_API_KEY env var is set
+    3. NIM endpoint responds to a lightweight health check
+    """
+    import os
+
+    try:
+        import httpx  # noqa: F811
+    except ImportError:
+        return False
+
+    api_key = os.environ.get("NVIDIA_API_KEY", "")
+    if not api_key:
+        return False
+
+    # Lightweight connectivity test: GET the models endpoint
+    try:
+        with httpx.Client(timeout=10) as client:
+            response = client.get(
+                "https://integrate.api.nvidia.com/v1/models",
+                headers={"Authorization": f"Bearer {api_key}"},
+            )
+            if response.status_code == 200:
+                return True
+            logger.warning(
+                "nemotron_endpoint_unavailable",
+                status=response.status_code,
+                msg="NIM endpoint returned non-200",
+            )
+            return False
+    except (httpx.ConnectError, httpx.TimeoutException, OSError) as exc:
+        logger.warning("nemotron_connectivity_failed", error=str(exc))
+        return False
+
+
 try:
     import httpx
 
-    NEMOTRON_AVAILABLE = True
+    NEMOTRON_AVAILABLE = _check_nemotron_available()
 except ImportError:
     NEMOTRON_AVAILABLE = False
 
@@ -146,9 +185,6 @@ class NemotronPolicyGenerator:
         # Check for API key
         import os
         self._api_key = os.environ.get("NVIDIA_API_KEY", "")
-        if not self._api_key:
-            self._available = False
-            logger.warning("nvidia_api_key_missing", msg="NVIDIA_API_KEY not set")
 
         if not self._available:
             logger.warning(
@@ -158,8 +194,8 @@ class NemotronPolicyGenerator:
 
     @property
     def available(self) -> bool:
-        """Check if Nemotron is available."""
-        return self._available and bool(self._api_key)
+        """Check if Nemotron NIM is available."""
+        return self._available
 
     # ── Policy Generation ────────────────────────────────────
 

@@ -64,7 +64,7 @@ logging:
 api:
   host: "0.0.0.0"
   port: 8000
-  cors_origins: ["*"]
+  cors_origins: []
   api_key: "${TSAR_API_KEY}"
 
 # --- Agent Supervisor ---
@@ -100,6 +100,21 @@ monitoring:
   grafana:
     enabled: false
     port: 3000
+
+# --- DeFi (On-Chain) ---
+defi:
+  testnet: true                     # true = Sepolia/devnet, false = mainnet
+  wallet_path: "data/wallets.enc"   # Encrypted wallet storage file
+  master_key_env: "TSAR_WALLET_MASTER_KEY"  # Env var for encryption key
+  slippage_tolerance: 1.0           # Default slippage tolerance (%)
+  confirmation_timeout_s: 120       # TX receipt wait timeout (seconds)
+  oneinch_api_key: ""               # 1inch API key (optional, higher rate limits)
+  rpc_endpoints:
+    ethereum: "https://rpc.sepolia.org"
+    polygon: "https://rpc-amoy.polygon.technology"
+    arbitrum: "https://sepolia-rollup.arbitrum.io/rpc"
+    base: "https://sepolia.base.org"
+    solana: "https://api.devnet.solana.com"
 
 # --- Watchdog ---
 watchdog:

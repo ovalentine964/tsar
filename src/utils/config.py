@@ -156,6 +156,46 @@ class StrategyConfig(BaseModel):
     min_profit_factor: float = Field(default=1.2)
 
 
+class MEVConfig(BaseModel):
+    """MEV protection and oracle configuration."""
+    enabled: bool = Field(default=True)
+    chain: str = Field(default="ethereum")
+
+    # Flashbots Protect
+    flashbots_relay_url: str = Field(default="https://relay.flashbots.net")
+    flashbots_enabled: bool = Field(default=True)
+
+    # Jito (Solana)
+    jito_tip_lamports: int = Field(default=10_000)
+    jito_block_engine_url: str = Field(default="https://mainnet.block-engine.jito.wtf")
+    jito_enabled: bool = Field(default=False)
+
+    # Oracle contract addresses (Ethereum mainnet)
+    oracle_rpc_url: str = Field(default="")
+    chainlink_feeds: dict[str, str] = Field(default={
+        "ETH/USD": "0x5f4eC3Df9cbd43714FE2740f5E3616155c5b8419",
+        "BTC/USD": "0xF4030086522a5bEEa4988F8cA5B36dbC97BeE88c",
+        "USDC/USD": "0x8fFfFfd4AfB6115b954Bd326cbe7B4BA576818f6",
+        "USDT/USD": "0x3E7d1eAB13ad0104d2750B8863b489D65364e32D",
+        "SOL/USD": "0x4ffC43a60e009B551865A93d232E33Fce9f01507",
+        "LINK/USD": "0x2c1d072e956AFFC0D435Cb7AC38EF18d24d9127c",
+    })
+    pyth_hermes_url: str = Field(default="https://hermes.pyth.network")
+    pyth_enabled: bool = Field(default=True)
+
+    # Price deviation thresholds
+    deviation_warning_pct: float = Field(default=1.0)
+    deviation_alert_pct: float = Field(default=3.0)
+    deviation_critical_pct: float = Field(default=5.0)
+
+    # Gas optimisation
+    gas_refresh_interval_s: int = Field(default=12)
+
+    # Sandwich detection
+    sandwich_detection_enabled: bool = Field(default=True)
+    mempool_poll_interval_s: int = Field(default=5)
+
+
 class TSARConfig(BaseModel):
     """Top-level TSAR configuration."""
     environment: str = Field(default="development")
@@ -167,6 +207,7 @@ class TSARConfig(BaseModel):
     llm: LLMConfig = Field(default=LLMConfig())
     logging: LoggingConfig = Field(default=LoggingConfig())
     strategy: StrategyConfig = Field(default=StrategyConfig())
+    mev: MEVConfig = Field(default=MEVConfig())
 
 
 def _discover_config_path(explicit: str | Path | None = None) -> Path | None:

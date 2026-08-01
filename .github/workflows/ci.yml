@@ -184,7 +184,8 @@ jobs:
 
       - name: Check dependencies (safety)
         run: safety check --full-report
-        continue-on-error: true
+        # FIXED: was continue-on-error: true (decorative)
+        # Now fails the pipeline on known vulnerable dependencies.
 
       - name: Static analysis (bandit)
         run: bandit -r src/ -c pyproject.toml

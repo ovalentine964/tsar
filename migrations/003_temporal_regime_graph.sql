@@ -51,3 +51,12 @@ CREATE INDEX IF NOT EXISTS idx_rte_to ON regime_transition_edges(to_regime, asse
 -- ============================================================
 
 INSERT INTO schema_migrations (version, name) VALUES (3, '003_temporal_regime_graph');
+
+-- ============================================================
+-- ROLLBACK
+-- To rollback: drop the temporal regime graph tables.
+-- Safe: these are derived/aggregate data, reproducible from trade history.
+-- ============================================================
+-- DROP TABLE IF EXISTS regime_transition_edges;
+-- DROP TABLE IF EXISTS regime_transitions;
+-- DELETE FROM schema_migrations WHERE version = 3;

@@ -10,6 +10,13 @@ Provides:
   - Event impact scoring and proximity alerts
   - Historical event impact analysis
 
+NOTE: This tool overlaps with EconomicCalendarTools (economic_calendar.py).
+  - MarketCalendar is the COMPREHENSIVE tool: economic + crypto events,
+    impact analysis, risk scoring, and event proximity checks.
+  - EconomicCalendarTools focuses narrowly on macroeconomic data.
+  - Prefer MarketCalendar when you need both economic and crypto events.
+  - EconomicCalendarTools remains available for lightweight economic-only use.
+
 All data fetched from free/public APIs with caching.
 """
 

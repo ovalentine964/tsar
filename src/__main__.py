@@ -156,11 +156,54 @@ async def run_full_system(args: argparse.Namespace) -> None:
     logger.info("✅ Knowledge stores ready (TradeMemory, PatternLibrary, LessonArchive, StrategyGenomes, RegimeState)")
 
     # ── Initialize Risk Components ───────────────────────────────
+    from src.risk.guard_state import GuardStatePersistence
     from src.risk.kill_switch import KillSwitch
     from src.risk.mandate import Mandate
+    from src.risk.watchdog import Watchdog, WatchdogConfig
 
-    kill_switch = KillSwitch()
-    logger.info("✅ Risk engine ready")
+    # Guard state — persistent counters (losses, wins, cooldowns)
+    guard_state = GuardStatePersistence()
+    logger.info("✅ Guard state initialized (SQLite + JSON persistence)")
+
+    # Kill switch callbacks — emergency actions on activation
+    async def _cancel_orders(reason: str) -> None:
+        """Cancel all open orders when kill switch activates."""
+        logger.critical(f"🔴 KILL SWITCH: Cancelling all orders — {reason}")
+        try:
+            if execution_engine and hasattr(execution_engine, "cancel_all_orders"):
+                await execution_engine.cancel_all_orders()
+                logger.info("✅ All orders cancelled via execution engine")
+            elif exchange_gateway and hasattr(exchange_gateway, "cancel_all_orders"):
+                await exchange_gateway.cancel_all_orders()
+                logger.info("✅ All orders cancelled via exchange gateway")
+            else:
+                logger.warning("⚠️ No cancel_orders capability available — manual intervention required")
+        except Exception as e:
+            logger.error(f"Failed to cancel orders: {e}")
+
+    async def _flatten_positions(reason: str) -> None:
+        """Close all positions at market when kill switch activates."""
+        logger.critical(f"🔴 KILL SWITCH: Flattening all positions — {reason}")
+        try:
+            if execution_engine and hasattr(execution_engine, "flatten_all"):
+                await execution_engine.flatten_all()
+                logger.info("✅ All positions flattened via execution engine")
+            elif exchange_gateway and hasattr(exchange_gateway, "close_all_positions"):
+                await exchange_gateway.close_all_positions()
+                logger.info("✅ All positions flattened via exchange gateway")
+            else:
+                logger.warning("⚠️ No flatten capability available — manual intervention required")
+        except Exception as e:
+            logger.error(f"Failed to flatten positions: {e}")
+
+    async def _on_kill_activate(reason: str) -> None:
+        """Combined kill switch activation callback — cancel + flatten + notify."""
+        await _cancel_orders(reason)
+        await _flatten_positions(reason)
+        logger.critical(f"🔴 KILL SWITCH activation complete: {reason}")
+
+    kill_switch = KillSwitch(on_activate=_on_kill_activate)
+    logger.info("✅ Risk engine ready (kill switch wired to cancel_orders + flatten_positions)")
 
     # ── Initialize Engines via Registry ──────────────────────────
     try:
@@ -202,9 +245,9 @@ async def run_full_system(args: argparse.Namespace) -> None:
         logger.info(f"⚠️  Mandate check failed: {e}")
 
     # ── Create Event Bus ─────────────────────────────────────────
-    from src.comms.event_bus import EventBus
-    event_bus = EventBus()
-    logger.info("✅ Event bus initialized")
+    from src.comms.event_bus import get_shared_bus
+    event_bus = get_shared_bus()
+    logger.info("✅ Event bus initialized (shared singleton)")
 
     # ── Create All 10 Agents ─────────────────────────────────────
     from src.agents.execution_sniper import ExecutionSniper
@@ -245,6 +288,8 @@ async def run_full_system(args: argparse.Namespace) -> None:
             agent.strategy_genomes = strategy_genomes
         if hasattr(agent, "regime_state"):
             agent.regime_state = regime_state
+        if hasattr(agent, "guard_state"):
+            agent.guard_state = guard_state
         if hasattr(agent, "pricing_engine"):
             agent.pricing_engine = pricing_engine
         if hasattr(agent, "exchange_gateway"):
@@ -260,10 +305,25 @@ async def run_full_system(args: argparse.Namespace) -> None:
         if hasattr(agent, "kill_switch"):
             agent.kill_switch = kill_switch
 
+    # ── Start Watchdog (C-03: heartbeat monitor) ─────────────────
+    watchdog_config = WatchdogConfig()
+    watchdog = Watchdog(kill_switch=kill_switch, config=watchdog_config)
+    watchdog_task = asyncio.create_task(watchdog.run())
+    logger.info("✅ Watchdog started (heartbeat monitor active)")
+
     # ── Start API server in background ───────────────────────────
     api_task = asyncio.create_task(
         start_api(args.host, args.port, config)
     )
+
+    # ── Heartbeat writer task ────────────────────────────────────
+    async def _heartbeat_writer(interval: float = 5.0) -> None:
+        """Write heartbeat file so the watchdog knows we're alive."""
+        while True:
+            Watchdog.write_heartbeat()
+            await asyncio.sleep(interval)
+
+    heartbeat_task = asyncio.create_task(_heartbeat_writer())
 
     # ── Start Orchestrator ───────────────────────────────────────
     logger.info("\n🔄 Orchestrator starting...")
@@ -275,6 +335,20 @@ async def run_full_system(args: argparse.Namespace) -> None:
     except asyncio.CancelledError:
         logger.info("\n⏹️  Shutting down...")
     finally:
+        # Stop heartbeat writer
+        heartbeat_task.cancel()
+        with contextlib.suppress(asyncio.CancelledError):
+            await heartbeat_task
+
+        # Stop watchdog
+        watchdog.stop()
+        watchdog_task.cancel()
+        with contextlib.suppress(asyncio.CancelledError):
+            await watchdog_task
+
+        # Flush guard state to JSON on shutdown
+        guard_state.close()
+
         for _name, agent in reversed(list(agents.items())):
             with contextlib.suppress(Exception):
                 await agent.stop()
@@ -300,41 +374,61 @@ async def trading_loop(config, trading_mode: str) -> None:
     """Main trading loop — scans, evaluates, executes."""
     from src.knowledge.trade_memory import TradeMemory
     from src.risk.kill_switch import KillSwitch
+    from src.risk.watchdog import Watchdog, WatchdogConfig
 
     db = TradeMemory(config.database.db_path)
-    kill_switch = KillSwitch()
+
+    # Wire kill switch with emergency callbacks
+    async def _on_kill_activate(reason: str) -> None:
+        logger.critical(f"🔴 KILL SWITCH: Emergency halt — {reason}")
+        logger.critical("   Manual intervention required to resume trading")
+
+    kill_switch = KillSwitch(on_activate=_on_kill_activate)
+
+    # Start watchdog as background task
+    watchdog = Watchdog(kill_switch=kill_switch, config=WatchdogConfig())
+    watchdog_task = asyncio.create_task(watchdog.run())
 
     scan_interval = 300  # 5 minutes
     cycle = 0
 
-    while True:
-        cycle += 1
-        now = time.strftime("%H:%M:%S")
+    try:
+        while True:
+            cycle += 1
+            now = time.strftime("%H:%M:%S")
 
-        # Check kill switch
-        if await kill_switch.is_active():
-            logger.info(f"[{now}] 🔴 Kill switch ACTIVE — waiting...")
-            await asyncio.sleep(30)
-            continue
+            # Write heartbeat so watchdog knows we're alive
+            Watchdog.write_heartbeat()
 
-        # Run cycle
-        logger.info(f"[{now}] 🔄 Cycle {cycle} — scanning markets...")
+            # Check kill switch
+            if await kill_switch.is_active():
+                logger.info(f"[{now}] 🔴 Kill switch ACTIVE — waiting...")
+                await asyncio.sleep(30)
+                continue
 
-        try:
-            # Get trade stats
-            stats = db.get_trade_stats()
-            logger.info(f"   📊 Trades: {stats.get('total', 0)} | "
-                  f"Win rate: {stats.get('win_rate', 0):.1f}% | "
-                  f"P&L: ${stats.get('total_pnl', 0):.2f}")
+            # Run cycle
+            logger.info(f"[{now}] 🔄 Cycle {cycle} — scanning markets...")
 
-            # Paper mode: simulate a signal
-            if trading_mode == "paper":
-                logger.info("   📝 Paper mode — no real orders placed")
+            try:
+                # Get trade stats
+                stats = db.get_trade_stats()
+                logger.info(f"   📊 Trades: {stats.get('total', 0)} | "
+                      f"Win rate: {stats.get('win_rate', 0):.1f}% | "
+                      f"P&L: ${stats.get('total_pnl', 0):.2f}")
 
-        except Exception as e:
-            logger.info(f"   ⚠️  Cycle error: {e}")
+                # Paper mode: simulate a signal
+                if trading_mode == "paper":
+                    logger.info("   📝 Paper mode — no real orders placed")
 
-        await asyncio.sleep(scan_interval)
+            except Exception as e:
+                logger.info(f"   ⚠️  Cycle error: {e}")
+
+            await asyncio.sleep(scan_interval)
+    finally:
+        watchdog.stop()
+        watchdog_task.cancel()
+        with contextlib.suppress(asyncio.CancelledError):
+            await watchdog_task
 
 
 async def run_api_only(args: argparse.Namespace) -> None:

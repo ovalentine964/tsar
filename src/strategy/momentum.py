@@ -31,6 +31,7 @@ import logging
 from typing import Any
 
 from src.strategy.base import BaseStrategy
+from src.strategy.genome import StrategyGenome
 
 logger = logging.getLogger(__name__)
 
@@ -40,10 +41,105 @@ class MomentumStrategy(BaseStrategy):
 
     Uses EMA crossover, MACD confirmation, and ADX trend strength
     to capture directional moves with funding rate edge.
+
+    Parameters are driven by a StrategyGenome loaded from
+    config/strategies/momentum.yaml. Weights, thresholds, and
+    multipliers are read from genome params instead of hardcoded.
     """
 
-    NAME = "momentum"
+    NAME = "momentum_funding"
     VERSION = "1.0.0"
+
+    # Default weights (used when no genome is provided)
+    _DEFAULT_WEIGHTS: dict[str, float] = {
+        "ema_crossover": 0.25,
+        "funding_rate": 0.20,
+        "adx": 0.25,
+        "volume": 0.10,
+        "macro_alignment": 0.10,
+        "cross_asset": 0.05,
+        "order_flow": 0.05,
+    }
+
+    def __init__(self, genome: StrategyGenome | None = None) -> None:
+        """Initialize with optional genome for parameter-driven behavior.
+
+        Args:
+            genome: StrategyGenome from YAML. If None, uses defaults.
+        """
+        self._genome = genome
+        if genome is not None:
+            self._params = genome.params
+            logger.info(
+                "MomentumStrategy initialized from genome '%s' with %d params",
+                genome.name, len(genome.params),
+            )
+        else:
+            self._params = {}
+            logger.info("MomentumStrategy initialized with default parameters")
+
+    # ── Genome-driven parameter accessors ────────────────────
+
+    def _get_param(self, name: str, default: Any) -> Any:
+        """Get parameter from genome, falling back to default."""
+        return self._params.get(name, default)
+
+    @property
+    def _adx_threshold(self) -> float:
+        return self._get_param("adx_threshold", 25)
+
+    @property
+    def _min_signal_score(self) -> float:
+        return self._get_param("min_signal_score", 0.65)
+
+    @property
+    def _trailing_stop_atr_mult(self) -> float:
+        return self._get_param("trailing_stop_atr_mult", 1.5)
+
+    @property
+    def _take_profit_atr_mult(self) -> float:
+        return self._get_param("take_profit_atr_mult", 3.0)
+
+    @property
+    def _stop_loss_atr_mult(self) -> float:
+        return self._get_param("stop_loss_atr_mult", 1.0)
+
+    @property
+    def _volume_multiplier(self) -> float:
+        return self._get_param("volume_multiplier", 1.2)
+
+    @property
+    def _ema_fast_period(self) -> int:
+        return int(self._get_param("ema_fast_period", 21))
+
+    @property
+    def _ema_slow_period(self) -> int:
+        return self._get_param("ema_slow_period", 55)
+
+    @property
+    def _weights(self) -> dict[str, float]:
+        """Return signal weights — from genome entry_rules or defaults."""
+        if self._genome and "entry_rules" in self._genome.metadata:
+            entry_rules = self._genome.metadata["entry_rules"]
+            long_conditions = entry_rules.get("long_conditions", [])
+            weights: dict[str, float] = {}
+            indicator_to_key = {
+                "ema_crossover": "ema_crossover",
+                "funding_rate": "funding_rate",
+                "adx": "adx",
+                "volume_confirmation": "volume",
+                "macro_alignment": "macro_alignment",
+                "cross_asset_alignment": "cross_asset",
+                "order_flow": "order_flow",
+            }
+            for cond in long_conditions:
+                indicator = cond.get("indicator", "")
+                key = indicator_to_key.get(indicator)
+                if key and "weight" in cond:
+                    weights[key] = cond["weight"]
+            if weights:
+                return weights
+        return self._DEFAULT_WEIGHTS
 
     # ── Entry ────────────────────────────────────────────────
 
@@ -139,8 +235,9 @@ class MomentumStrategy(BaseStrategy):
         data: dict[str, Any],
     ) -> dict[str, Any] | None:
         """Check long entry: EMA bullish crossover + MACD cross + ADX trend."""
-        adx_threshold = 25
-        min_score = 0.65
+        adx_threshold = self._adx_threshold
+        min_score = self._min_signal_score
+        volume_multiplier = self._volume_multiplier
 
         # EMA filter: fast must be above slow
         if ema_fast <= ema_slow:
@@ -173,16 +270,16 @@ class MomentumStrategy(BaseStrategy):
         if score < min_score:
             return None
 
-        # ATR-based levels
-        stop_loss_atr_mult = 1.0
-        take_profit_atr_mult = 3.0
+        # ATR-based levels from genome parameters
+        stop_loss_atr_mult = self._stop_loss_atr_mult
+        take_profit_atr_mult = self._take_profit_atr_mult
 
         entry_price = price
         stop_loss = price - (atr * stop_loss_atr_mult)
         take_profit = price + (atr * take_profit_atr_mult)
 
         reasoning_parts = [
-            f"EMA_cross(21>{55})",
+            f"EMA_cross({self._ema_fast_period}>{self._ema_slow_period})",
             f"MACD_{'xover' if macd_crossover else 'bullish'}",
             f"ADX={adx:.1f}",
             f"vol_ratio={volume_ratio:.2f}",
@@ -196,7 +293,7 @@ class MomentumStrategy(BaseStrategy):
             "stop_loss": stop_loss,
             "take_profit": take_profit,
             "atr": atr,
-            "trailing_stop_atr_mult": 1.5,
+            "trailing_stop_atr_mult": self._trailing_stop_atr_mult,
             "reasoning": ", ".join(reasoning_parts),
             "components": components,
         }
@@ -217,8 +314,9 @@ class MomentumStrategy(BaseStrategy):
         data: dict[str, Any],
     ) -> dict[str, Any] | None:
         """Check short entry: EMA bearish crossover + MACD cross + ADX trend."""
-        adx_threshold = 25
-        min_score = 0.65
+        adx_threshold = self._adx_threshold
+        min_score = self._min_signal_score
+        volume_multiplier = self._volume_multiplier
 
         # EMA filter: fast must be below slow
         if ema_fast >= ema_slow:
@@ -251,16 +349,16 @@ class MomentumStrategy(BaseStrategy):
         if score < min_score:
             return None
 
-        # ATR-based levels
-        stop_loss_atr_mult = 1.0
-        take_profit_atr_mult = 3.0
+        # ATR-based levels from genome parameters
+        stop_loss_atr_mult = self._stop_loss_atr_mult
+        take_profit_atr_mult = self._take_profit_atr_mult
 
         entry_price = price
         stop_loss = price + (atr * stop_loss_atr_mult)
         take_profit = price - (atr * take_profit_atr_mult)
 
         reasoning_parts = [
-            f"EMA_cross(21<{55})",
+            f"EMA_cross({self._ema_fast_period}<{self._ema_slow_period})",
             f"MACD_{'xunder' if macd_crossunder else 'bearish'}",
             f"ADX={adx:.1f}",
             f"vol_ratio={volume_ratio:.2f}",
@@ -274,7 +372,7 @@ class MomentumStrategy(BaseStrategy):
             "stop_loss": stop_loss,
             "take_profit": take_profit,
             "atr": atr,
-            "trailing_stop_atr_mult": 1.5,
+            "trailing_stop_atr_mult": self._trailing_stop_atr_mult,
             "reasoning": ", ".join(reasoning_parts),
             "components": components,
         }
@@ -339,17 +437,8 @@ class MomentumStrategy(BaseStrategy):
         order_flow = data.get("order_flow", 0.5)
         components["order_flow"] = max(0.0, min(1.0, order_flow))
 
-        # Weighted sum
-        weights = {
-            "ema_crossover": 0.25,
-            "funding_rate": 0.20,
-            "adx": 0.25,
-            "volume": 0.10,
-            "macro_alignment": 0.10,
-            "cross_asset": 0.05,
-            "order_flow": 0.05,
-        }
-        score = sum(components[k] * weights[k] for k in weights)
+        # Weighted sum from genome
+        score = sum(components[k] * self._weights.get(k, 0.0) for k in components if k in self._weights)
         # Add MACD bonus (not weighted, additive)
         score = min(1.0, score + components.get("macd_bonus", 0.0) * 0.05)
         return round(score, 4), components
@@ -407,16 +496,8 @@ class MomentumStrategy(BaseStrategy):
         order_flow = data.get("order_flow", 0.5)
         components["order_flow"] = max(0.0, min(1.0, 1.0 - order_flow))
 
-        weights = {
-            "ema_crossover": 0.25,
-            "funding_rate": 0.20,
-            "adx": 0.25,
-            "volume": 0.10,
-            "macro_alignment": 0.10,
-            "cross_asset": 0.05,
-            "order_flow": 0.05,
-        }
-        score = sum(components[k] * weights[k] for k in weights)
+        # Weighted sum from genome
+        score = sum(components[k] * self._weights.get(k, 0.0) for k in components if k in self._weights)
         score = min(1.0, score + components.get("macd_bonus", 0.0) * 0.05)
         return round(score, 4), components
 
@@ -442,23 +523,23 @@ class MomentumStrategy(BaseStrategy):
         if entry_price <= 0 or atr <= 0:
             return None
 
-        stop_loss_atr_mult = 1.0
-        take_profit_atr_mult = 3.0
+        stop_loss_atr_mult = self._stop_loss_atr_mult
+        take_profit_atr_mult = self._take_profit_atr_mult
+        trailing_stop_mult = self._trailing_stop_atr_mult
 
         # ── Long exits ──
         if side == "buy":
-            # Stop loss: 1x ATR below entry
+            # Stop loss: ATR multiple from genome
             stop_loss = entry_price - (atr * stop_loss_atr_mult)
             if current_price <= stop_loss:
                 return {"reason": "stop_loss_atr", "action": "close", "level": stop_loss}
 
-            # Take profit: 3x ATR above entry
+            # Take profit: ATR multiple from genome
             take_profit = entry_price + (atr * take_profit_atr_mult)
             if current_price >= take_profit:
                 return {"reason": "take_profit_atr", "action": "close", "level": take_profit}
 
-            # Trailing stop: 1.5x ATR from highest since entry
-            trailing_stop_mult = 1.5
+            # Trailing stop: ATR multiple from genome
             highest = position.get("highest_price", entry_price)
             trailing_stop = highest - (atr * trailing_stop_mult)
             if current_price <= trailing_stop and current_price > entry_price:
@@ -470,18 +551,17 @@ class MomentumStrategy(BaseStrategy):
 
         # ── Short exits ──
         if side == "sell":
-            # Stop loss: 1x ATR above entry
+            # Stop loss: ATR multiple from genome
             stop_loss = entry_price + (atr * stop_loss_atr_mult)
             if current_price >= stop_loss:
                 return {"reason": "stop_loss_atr", "action": "close", "level": stop_loss}
 
-            # Take profit: 3x ATR below entry
+            # Take profit: ATR multiple from genome
             take_profit = entry_price - (atr * take_profit_atr_mult)
             if current_price <= take_profit:
                 return {"reason": "take_profit_atr", "action": "close", "level": take_profit}
 
-            # Trailing stop: 1.5x ATR from lowest since entry
-            trailing_stop_mult = 1.5
+            # Trailing stop: ATR multiple from genome
             lowest = position.get("lowest_price", entry_price)
             trailing_stop = lowest + (atr * trailing_stop_mult)
             if current_price >= trailing_stop and current_price < entry_price:
@@ -496,12 +576,12 @@ class MomentumStrategy(BaseStrategy):
     # ── Risk params ──────────────────────────────────────────
 
     def get_risk_params(self) -> dict[str, Any]:
-        """Return risk parameters for this strategy."""
+        """Return risk parameters for this strategy, driven by genome."""
         return {
-            "stop_loss_atr_multiple": 1.0,
-            "take_profit_atr_multiple": 3.0,
-            "trailing_stop_atr_multiple": 1.5,
-            "min_score": 0.65,
+            "stop_loss_atr_multiple": self._stop_loss_atr_mult,
+            "take_profit_atr_multiple": self._take_profit_atr_mult,
+            "trailing_stop_atr_multiple": self._trailing_stop_atr_mult,
+            "min_score": self._min_signal_score,
             "max_position_pct": 0.15,
             "risk_per_trade_pct": 0.02,
             "method": "half_kelly",

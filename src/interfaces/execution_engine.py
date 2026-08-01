@@ -15,11 +15,15 @@ from __future__ import annotations
 import abc
 from typing import TYPE_CHECKING
 
+from src.interfaces.types import OrderType
+
 if TYPE_CHECKING:
     from src.interfaces.types import (
+        BracketOrder,
         ExecutionResult,
         Fill,
         Order,
+        OrderSide,
         OrderStatus,
     )
 
@@ -120,5 +124,69 @@ class ExecutionEngine(abc.ABC):
 
         Raises:
             OrderNotFoundError: Order does not exist on the exchange.
+        """
+        ...
+
+    # ═══════════════════════════════════════════════════════════════
+    # BRACKET / OCO ORDERS (H-021)
+    # ═══════════════════════════════════════════════════════════════
+
+    @abc.abstractmethod
+    async def execute_bracket_order(
+        self,
+        symbol: str,
+        side: OrderSide,
+        quantity: float,
+        entry_price: float | None,
+        stop_loss_price: float,
+        take_profit_price: float,
+        entry_type: OrderType = OrderType.LIMIT,
+    ) -> BracketOrder:
+        """Execute a bracket order: entry + linked stop-loss + take-profit.
+
+        Places three linked orders. A background monitor cancels the
+        remaining exit order when one fills.
+
+        Args:
+            symbol: Trading pair (e.g. "BTC/USDT").
+            side: Direction of the entry (BUY or SELL).
+            quantity: Position size.
+            entry_price: Entry price for limit orders (None for market).
+            stop_loss_price: Stop-loss trigger price.
+            take_profit_price: Take-profit limit price.
+            entry_type: Entry order type (LIMIT or MARKET).
+
+        Returns:
+            BracketOrder with all linked order IDs.
+
+        Raises:
+            ValueError: Invalid parameters.
+            ConnectionError: Not connected.
+        """
+        ...
+
+    @abc.abstractmethod
+    async def execute_oco_order(
+        self,
+        symbol: str,
+        side: OrderSide,
+        quantity: float,
+        stop_loss_price: float,
+        take_profit_price: float,
+    ) -> BracketOrder:
+        """Execute an OCO (One-Cancels-Other) order.
+
+        Uses the exchange's native OCO order type when available.
+        Falls back to two linked orders with a monitor.
+
+        Args:
+            symbol: Trading pair.
+            side: Exit direction (opposite of the position).
+            quantity: Order quantity.
+            stop_loss_price: Stop-loss trigger price.
+            take_profit_price: Take-profit limit price.
+
+        Returns:
+            BracketOrder tracking the OCO.
         """
         ...

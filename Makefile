@@ -4,7 +4,7 @@
 # Common commands. Run `make help` for list.
 
 .PHONY: help install install-dev lint format typecheck test run run-dry \
-       docker-build docker-up docker-down docker-logs clean
+       docker-build docker-up docker-down docker-logs clean migrate migrate-rollback
 
 help: ## Show this help
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-20s\033[0m %s\n", $$1, $$2}'
@@ -60,6 +60,41 @@ docker-logs: ## View Docker logs (follow)
 
 docker-restart: ## Restart Docker services
 	docker compose restart
+
+# --- Database Migrations ---
+
+DB_PATH ?= data/tsar.db
+
+migrate: ## Run all pending SQL migrations
+	@echo "Running migrations against $(DB_PATH)..."
+	@mkdir -p data
+	@for f in migrations/*.sql; do \
+		case "$$f" in *rollback*) continue ;; esac; \
+		version=$$(basename "$$f" | grep -oP '^\d+'); \
+		name=$$(basename "$$f"); \
+		already=$$(sqlite3 "$(DB_PATH)" "SELECT version FROM schema_migrations WHERE version=$$version" 2>/dev/null || echo ""); \
+		if [ -z "$$already" ]; then \
+			echo "  ▶ Applying $$name"; \
+		sqlite3 "$(DB_PATH)" < "$$f" || { echo "  ✗ FAILED: $$name"; exit 1; }; \
+		else \
+			echo "  ✓ Already applied: $$name"; \
+		fi; \
+	done
+	@echo "✅ All migrations applied."
+
+migrate-rollback: ## Rollback last migration
+	@echo "Rolling back last migration from $(DB_PATH)..."
+	@last=$$(sqlite3 "$(DB_PATH)" "SELECT MAX(version) FROM schema_migrations" 2>/dev/null || echo ""); \
+	if [ -z "$$last" ]; then echo "No migrations to rollback."; exit 0; fi; \
+	rollback="migrations/$$(printf '%03d' $$last)_"*.rollback.sql; \
+	if [ -f $$rollback ]; then \
+		echo "  ◀ Rolling back version $$last"; \
+		sqlite3 "$(DB_PATH)" < $$rollback || { echo "  ✗ ROLLBACK FAILED"; exit 1; }; \
+		echo "✅ Rolled back version $$last."; \
+	else \
+		echo "  ✗ No rollback script found for version $$last"; \
+		exit 1; \
+	fi
 
 # --- Maintenance ---
 

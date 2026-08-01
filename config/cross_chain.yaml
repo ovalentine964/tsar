@@ -1,0 +1,218 @@
+# ============================================================
+# TSAR — Cross-Chain & Intent Protocol Configuration
+# ============================================================
+# Bridge protocol settings, intent protocol endpoints, and solver URLs.
+# See TSAR_ARCHITECTURE.md §7
+
+# --- Cross-Chain Bridge Configuration ---
+bridge:
+  # Global bridge settings
+  default_preference: "cheapest"  # cheapest | fastest | most_reliable
+  max_slippage_bps: 100           # Max acceptable slippage for bridge quotes
+  quote_timeout_s: 10             # Timeout for fetching bridge quotes
+  monitoring_interval_s: 30       # How often to check pending bridge status
+
+  # Wormhole Protocol
+  wormhole:
+    enabled: true
+    api_base: "https://api.wormholescan.io"
+    portal_bridge: "https://wormhole.io"
+    api_key: "${WORMHOLE_API_KEY}"
+    guardian_rpc: "https://wormhole-v2-mainnet-api.certus.one"
+    supported_chains:
+      - ethereum
+      - solana
+      - polygon
+      - arbitrum
+      - base
+      - avalanche
+    # Guardian network settings
+    guardians:
+      quorum: 13  # Minimum guardians for attestation
+      retry_attempts: 3
+      retry_delay_s: 5
+
+  # LayerZero Protocol
+  layerzero:
+    enabled: true
+    api_base: "https://api.layerzero.network"
+    supported_chains:
+      - ethereum
+      - polygon
+      - arbitrum
+      - base
+      - avalanche
+    # Oracle + Relayer configuration
+    oracle:
+      endpoint: "https://lz-oracle.mainnet.io"
+      chain_ids:
+        ethereum: 101
+        polygon: 109
+        arbitrum: 110
+        base: 184
+        avalanche: 106
+    relayer:
+      endpoint: "https://lz-relayer.mainnet.io"
+      native_fee_buffer_bps: 10  # Extra buffer for native fee estimation
+
+  # Axelar Protocol
+  axelar:
+    enabled: true
+    api_base: "https://api.axelarscan.io"
+    gateway_api: "https://lcd-axelar.imperator.co"
+    supported_chains:
+      - ethereum
+      - polygon
+      - arbitrum
+      - base
+      - avalanche
+    # GMP (General Message Passing) settings
+    gmp:
+      gas_estimate_multiplier: 1.2  # Safety multiplier for gas estimates
+      destination_gas_buffer_bps: 15
+
+# --- Intent Protocol Configuration ---
+intent:
+  # Global intent settings
+  default_slippage_bps: 50
+  quote_timeout_s: 15
+  settlement_verification: true  # Verify settlements on-chain
+  verification_tolerance_bps: 100
+
+  # CoW Protocol (Coincidence of Wants)
+  cow_protocol:
+    enabled: true
+    api_base: "https://api.cow.fi/mainnet"
+    explorer: "https://explorer.cow.fi"
+    supported_chains:
+      - ethereum
+    # Solver competition settings
+    solver_urls:
+      - "https://solver.cow.fi"
+      - "https://solver-1.cow.fi"
+      - "https://solver-2.cow.fi"
+    auction:
+      duration_s: 30
+      max_slippage_bps: 100
+      solver_count_estimate: 8
+    # Order signing
+    signing:
+      eip712_domain: "COW Protocol"
+      eip712_version: "v4"
+
+  # UniswapX
+  uniswapx:
+    enabled: true
+    api_base: "https://api.uniswap.org/v1"
+    supported_chains:
+      - ethereum
+      - arbitrum
+      - base
+    # Dutch auction settings
+    auction:
+      duration_s: 60
+      max_slippage_bps: 100
+      filler_count_estimate: 5
+    # Reactor contracts (order settlement)
+    reactors:
+      ethereum: "0x6000da47483062A0D734Ba3dc7576Ce6A0B645C4"
+      arbitrum: "0x6000da47483062A0D734Ba3dc7576Ce6A0B645C4"
+      base: "0x6000da47483062A0D734Ba3dc7576Ce6A0B645C4"
+
+  # 1inch Fusion
+  oneinch_fusion:
+    enabled: true
+    api_base: "https://fusion.1inch.io"
+    api_key: "${ONEINCH_API_KEY}"
+    supported_chains:
+      - ethereum
+      - arbitrum
+      - base
+    # Resolver competition settings
+    auction:
+      duration_s: 45
+      max_slippage_bps: 100
+      resolver_count_estimate: 12
+    # Supported tokens
+    tokens:
+      ethereum:
+        - ETH
+        - WETH
+        - USDC
+        - USDT
+        - DAI
+        - WBTC
+      arbitrum:
+        - ETH
+        - WETH
+        - USDC
+        - USDT
+      base:
+        - ETH
+        - WETH
+        - USDC
+
+# --- Token Registry ---
+tokens:
+  # Canonical token addresses by chain
+  ethereum:
+    ETH: "0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE"
+    WETH: "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2"
+    USDC: "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48"
+    USDT: "0xdAC17F958D2ee523a2206206994597C13D831ec7"
+    DAI: "0x6B175474E89094C44Da98b954EedeAC495271d0F"
+    WBTC: "0x2260FAC5E5542a773Aa44fBCfeDf7C193bc2C599"
+  arbitrum:
+    ETH: "0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE"
+    WETH: "0x82aF49447D8a07e3bd95BD0d56f35241523fBab1"
+    USDC: "0xaf88d065e77c8cC2239327C5EDb3A432268e5831"
+    USDT: "0xFd086bC7CD5C481DCC9C85ebE478A1C0b69FCbb9"
+  base:
+    ETH: "0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE"
+    WETH: "0x4200000000000000000000000000000000000006"
+    USDC: "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913"
+  polygon:
+    MATIC: "0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE"
+    WMATIC: "0x0d500B1d8E8eF31E21C99d1Db9A6444d3ADf1270"
+    USDC: "0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174"
+    USDT: "0xc2132D05D31c914a87C6611C10748AEb04B58e8F"
+  avalanche:
+    AVAX: "0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE"
+    WAVAX: "0xB31f66AA3C1e785363F0875A1B74E27b85FD66c7"
+    USDC: "0xB97EF9Ef8734C71904D8002F8b6Bc66Dd9c48a6E"
+    USDT: "0x9702230A8Ea53601f5cD2dc00fDBc13d4dF4A8c7"
+  solana:
+    SOL: "So11111111111111111111111111111111111111112"
+    USDC: "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v"
+    USDT: "Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB"
+
+# --- Chain Gas Settings ---
+chain_gas:
+  ethereum:
+    gas_price_gwei: 20
+    gas_limit_swap: 200000
+    gas_limit_bridge: 250000
+    eth_price_usd: 3500
+  arbitrum:
+    gas_price_gwei: 0.1
+    gas_limit_swap: 500000
+    gas_limit_bridge: 600000
+    eth_price_usd: 3500
+  base:
+    gas_price_gwei: 0.01
+    gas_limit_swap: 200000
+    gas_limit_bridge: 250000
+    eth_price_usd: 3500
+  polygon:
+    gas_price_gwei: 30
+    gas_limit_swap: 200000
+    gas_limit_bridge: 250000
+    matic_price_usd: 0.8
+  avalanche:
+    gas_price_gwei: 25
+    gas_limit_swap: 200000
+    gas_limit_bridge: 250000
+    avax_price_usd: 35
+  solana:
+    lamports_per_signature: 5000
+    sol_price_usd: 150

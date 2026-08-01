@@ -196,14 +196,28 @@ class SQLitePool:
                 self._errors += 1
                 raise RuntimeError(f"Failed to create connection: {exc}") from exc
 
-    def release(self, conn: sqlite3.Connection) -> None:
+    def release(self, conn: sqlite3.Connection, *, had_error: bool = False) -> None:
         """Release a connection back to the pool.
 
         Args:
             conn: The connection to release.
+            had_error: If True, close the connection instead of returning
+                it to the pool. Failed connections may be in an inconsistent
+                state (partial transactions, corrupt cursors, etc.) and
+                should not be reused.
         """
         with self._lock:
             self._in_use.discard(conn)
+
+            if had_error:
+                # Connection had an exception — close it, don't reuse
+                try:
+                    conn.close()
+                except Exception:
+                    pass
+                self._released += 1
+                self._semaphore.release()
+                return
 
             # Return to pool if below pool_size, otherwise close
             if len(self._pool) < self._pool_size:
@@ -228,26 +242,33 @@ class SQLitePool:
     def connection(self) -> Generator[sqlite3.Connection, None, None]:
         """Context manager for acquiring and releasing a connection.
 
+        On exception, the connection is closed (not returned to pool)
+        to prevent leaking corrupt connections.
+
         Usage::
 
             with pool.connection() as conn:
                 conn.execute("SELECT * FROM trade_records")
         """
         conn = self.acquire()
+        had_error = False
         try:
             yield conn
             conn.commit()
         except Exception:
+            had_error = True
             conn.rollback()
             raise
         finally:
-            self.release(conn)
+            self.release(conn, had_error=had_error)
 
     @contextmanager
     def transaction(self) -> Generator[sqlite3.Connection, None, None]:
         """Context manager for a transaction (explicit commit/rollback).
 
         Same as connection() but makes the transaction semantics explicit.
+
+        On exception, the connection is closed (not returned to pool).
 
         Usage::
 
@@ -257,14 +278,16 @@ class SQLitePool:
                 # Auto-commits on success, rolls back on exception
         """
         conn = self.acquire()
+        had_error = False
         try:
             yield conn
             conn.commit()
         except Exception:
+            had_error = True
             conn.rollback()
             raise
         finally:
-            self.release(conn)
+            self.release(conn, had_error=had_error)
 
     def close_all(self) -> None:
         """Close all connections in the pool."""

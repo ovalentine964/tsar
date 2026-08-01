@@ -32,6 +32,9 @@ class ExecutionTracker(BaseAgent):
     AGENT_NAME = "execution_tracker"
     ROLE = "TRADE_EXECUTE"
 
+    PUBLISH_STREAM = "positions"
+    SUBSCRIBE_STREAMS = ["orders", "trades"]
+
     def __init__(self, config: dict[str, Any], trading_mode: str = "paper") -> None:
         super().__init__(config, trading_mode)
         self._last_reconciliation: float = 0.0

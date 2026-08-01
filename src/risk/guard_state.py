@@ -29,6 +29,7 @@ SAFETY:
 
 from __future__ import annotations
 
+import contextlib
 import json
 import logging
 import os
@@ -41,6 +42,11 @@ logger = logging.getLogger(__name__)
 
 DEFAULT_DB_PATH = os.environ.get(
     "TSAR_GUARD_STATE_DB", "./data/guard_state.db"
+)
+
+# JSON file fallback — survives even if SQLite DB is corrupted
+DEFAULT_JSON_PATH = os.environ.get(
+    "TSAR_GUARD_STATE_JSON", "./data/guard_state.json"
 )
 
 
@@ -73,6 +79,7 @@ class GuardStatePersistence:
     def __init__(
         self,
         db_path: str = DEFAULT_DB_PATH,
+        json_path: str = DEFAULT_JSON_PATH,
         redis_client: Any | None = None,
         redis_prefix: str = "tsar:guard:",
     ) -> None:
@@ -80,26 +87,33 @@ class GuardStatePersistence:
 
         Args:
             db_path: Path to SQLite database file.
+            json_path: Path to JSON fallback file.
             redis_client: Optional Redis client for cache layer.
             redis_prefix: Redis key prefix for guard state.
         """
         self._db_path = Path(db_path)
+        self._json_path = Path(json_path)
         self._redis = redis_client
         self._redis_prefix = redis_prefix
         self._memory_cache: dict[str, Any] = {}
         self._conn: sqlite3.Connection | None = None
 
-        # Ensure parent directory exists
+        # Ensure parent directories exist
         self._db_path.parent.mkdir(parents=True, exist_ok=True)
+        self._json_path.parent.mkdir(parents=True, exist_ok=True)
 
         # Initialize SQLite
         self._init_db()
 
         # Load existing state into memory cache
+        # Try SQLite first, then JSON fallback
         self._load_all_to_cache()
+        if not self._memory_cache:
+            self._load_from_json()
 
         logger.info(
             f"GuardStatePersistence initialized: db={self._db_path}, "
+            f"json={self._json_path}, "
             f"redis={'yes' if redis_client else 'no'}, "
             f"cached_keys={len(self._memory_cache)}"
         )
@@ -359,6 +373,9 @@ class GuardStatePersistence:
             except Exception:
                 pass  # Redis failure is non-fatal
 
+        # 4. JSON file fallback (best effort, survives SQLite corruption)
+        self._save_to_json()
+
     def _delete(self, key: str) -> None:
         """Delete a key from ALL storage layers."""
         # 1. Memory
@@ -381,8 +398,67 @@ class GuardStatePersistence:
             except Exception:
                 pass
 
+    # ------------------------------------------------------------------
+    # JSON file persistence (fallback — survives SQLite corruption)
+    # ------------------------------------------------------------------
+
+    def _save_to_json(self) -> None:
+        """Write the full in-memory cache to JSON file.
+
+        Called after every write-through to ensure the JSON fallback
+        is always current. This survives SQLite corruption, WAL
+        issues, and can be read by external monitoring tools.
+        """
+        try:
+            import tempfile
+
+            payload = {
+                "updated_at": time.time(),
+                "state": dict(self._memory_cache),
+            }
+            content = json.dumps(payload, indent=2)
+
+            # Atomic write
+            dir_name = str(self._json_path.parent) or "."
+            fd, tmp_path = tempfile.mkstemp(dir=dir_name, suffix=".json")
+            try:
+                with os.fdopen(fd, "w") as f:
+                    f.write(content)
+                os.rename(tmp_path, str(self._json_path))
+            except Exception:
+                with contextlib.suppress(OSError):
+                    os.unlink(tmp_path)
+                raise
+        except Exception as e:
+            logger.error(f"GuardState: failed to write JSON fallback: {e}")
+
+    def _load_from_json(self) -> None:
+        """Load guard state from JSON file into memory cache.
+
+        Used as fallback when SQLite is empty or unavailable
+        (e.g., fresh start with only a JSON file from a prior run).
+        """
+        if not self._json_path.exists():
+            return
+        try:
+            payload = json.loads(self._json_path.read_text())
+            state = payload.get("state", {})
+            if isinstance(state, dict):
+                self._memory_cache.update(state)
+                logger.info(
+                    f"GuardState: loaded {len(state)} keys from JSON fallback"
+                )
+        except Exception as e:
+            logger.error(f"GuardState: failed to load JSON fallback: {e}")
+
     def close(self) -> None:
-        """Close the SQLite connection gracefully."""
+        """Close the SQLite connection gracefully.
+
+        Also flushes current state to JSON as a final safety net.
+        """
+        # Flush to JSON before closing
+        self._save_to_json()
+
         if self._conn:
             try:
                 self._conn.close()

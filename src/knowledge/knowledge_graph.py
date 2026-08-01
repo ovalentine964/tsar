@@ -305,17 +305,18 @@ class KnowledgeGraph:
         # Each edge is (source_type, source_id, target_type, target_id, relationship)
         edges_cte = self._build_edges_cte()
 
-        # Recursive traversal CTE
-        recursive_cte = f"""
+        # Build parameterized query — no f-string interpolation of user input
+        # to prevent SQL injection.
+        parts: list[str] = [f"""
             WITH RECURSIVE
             {edges_cte},
             -- Recursive walk
             traversal(node_type, node_id, path_nodes, path_edges, depth) AS (
-                -- Anchor: starting node
+                -- Anchor: starting node (parameters bound via ? placeholders)
                 SELECT
-                    '{start_type}' AS node_type,
-                    '{start_id}' AS node_id,
-                    json_array(json_object('type', '{start_type}', 'id', '{start_id}')) AS path_nodes,
+                    ? AS node_type,
+                    ? AS node_id,
+                    json_array(json_object('type', ?, 'id', ?)) AS path_nodes,
                     json_array() AS path_edges,
                     0 AS depth
 
@@ -344,7 +345,7 @@ class KnowledgeGraph:
                     t.depth + 1
                 FROM traversal t
                 JOIN edges e ON e.source_type = t.node_type AND e.source_id = t.node_id
-                WHERE t.depth < {max_depth}
+                WHERE t.depth < ?
                   -- Prevent cycles: check target not already in path
                   AND NOT EXISTS (
                       SELECT 1 FROM json_each(t.path_nodes) je
@@ -355,16 +356,22 @@ class KnowledgeGraph:
             SELECT node_type, node_id, path_nodes, path_edges, depth
             FROM traversal
             WHERE depth > 0
-        """
+        """]
+
+        params: list[Any] = [start_type, start_id, start_type, start_id, max_depth]
 
         if end_type:
-            recursive_cte += f"\n              AND node_type = '{end_type}'"
+            parts.append("AND node_type = ?")
+            params.append(end_type)
 
-        recursive_cte += f"\n            ORDER BY depth\n            LIMIT {limit}"
+        parts.append("ORDER BY depth LIMIT ?")
+        params.append(limit)
+
+        sql = "\n".join(parts)
 
         with self._conn() as conn:
             try:
-                rows = conn.execute(recursive_cte).fetchall()
+                rows = conn.execute(sql, params).fetchall()
             except Exception as exc:
                 logger.error("graph_traversal_error", error=str(exc))
                 return []
@@ -495,18 +502,26 @@ class KnowledgeGraph:
             List of neighboring GraphNodes.
         """
         edges_cte = self._build_edges_cte()
-        rel_filter = f"AND e.relationship = '{relationship}'" if relationship else ""
 
+        # Parameterized query — no f-string interpolation of user input
         sql = f"""
             WITH {edges_cte}
             SELECT e.target_type, e.target_id, e.relationship
             FROM edges e
-            WHERE e.source_type = ? AND e.source_id = ? {rel_filter}
-            LIMIT ?
+            WHERE e.source_type = ? AND e.source_id = ?
         """
+        params: list[Any] = [node_type, node_id]
+
+        if relationship:
+            sql += " AND e.relationship = ?"
+            params.append(relationship)
+
+        sql += " LIMIT ?"
+        params.append(limit)
+
         with self._conn() as conn:
             try:
-                rows = conn.execute(sql, (node_type, node_id, limit)).fetchall()
+                rows = conn.execute(sql, params).fetchall()
             except Exception as exc:
                 logger.error("neighbor_query_error", error=str(exc))
                 return []
@@ -520,6 +535,11 @@ class KnowledgeGraph:
 
     def get_graph_stats(self) -> dict[str, Any]:
         """Return counts of nodes and edges in the knowledge graph."""
+        # Whitelist of known table names — prevents any accidental injection
+        _ALLOWED_TABLES = frozenset({
+            "trade_records", "strategy_genomes", "patterns", "lessons",
+            "trade_patterns", "trade_lessons", "pattern_relationships",
+        })
         stats: dict[str, Any] = {}
         with self._conn() as conn:
             for table, label in [
@@ -528,6 +548,7 @@ class KnowledgeGraph:
                 ("patterns", "patterns"),
                 ("lessons", "lessons"),
             ]:
+                assert table in _ALLOWED_TABLES
                 try:
                     row = conn.execute(
                         f"SELECT COUNT(*) AS cnt FROM {table} WHERE is_deleted = 0 OR is_archived = 0"
@@ -542,6 +563,7 @@ class KnowledgeGraph:
                 ("trade_lessons", "trade_lesson_edges"),
                 ("pattern_relationships", "pattern_pattern_edges"),
             ]:
+                assert table in _ALLOWED_TABLES
                 try:
                     row = conn.execute(f"SELECT COUNT(*) AS cnt FROM {table}").fetchone()
                     stats[label] = row["cnt"] if row else 0
@@ -573,6 +595,7 @@ class KnowledgeGraph:
             return node
 
         table, id_col = table_map[node.node_type]
+        # Table and column names are from a hardcoded whitelist — safe to interpolate.
         with self._conn() as conn:
             row = conn.execute(
                 f"SELECT * FROM {table} WHERE {id_col} = ?", (node.node_id,)

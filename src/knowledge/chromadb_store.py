@@ -145,18 +145,36 @@ class ChromaVectorStore:
             persist_path = str(persist_dir) if persist_dir else None
             if persist_path:
                 Path(persist_path).mkdir(parents=True, exist_ok=True)
-                self._client = chromadb.Client(
-                    ChromaSettings(
-                        chroma_db_impl="duckdb+parquet",
-                        persist_directory=persist_path,
-                        anonymized_telemetry=False,
-                    )
+                # Modern ChromaDB API (>=0.4): PersistentClient
+                # Replaces deprecated duckdb+parquet Settings approach
+                self._client = chromadb.PersistentClient(
+                    path=persist_path,
+                    settings=ChromaSettings(anonymized_telemetry=False),
                 )
             else:
                 self._client = chromadb.Client(
                     ChromaSettings(anonymized_telemetry=False)
                 )
             logger.info("chromadb_initialized", persist_dir=persist_path)
+        except TypeError:
+            # Fallback for older ChromaDB versions (<0.4) that lack PersistentClient
+            try:
+                if persist_path:
+                    self._client = chromadb.Client(
+                        ChromaSettings(
+                            chroma_db_impl="duckdb+parquet",
+                            persist_directory=persist_path,
+                            anonymized_telemetry=False,
+                        )
+                    )
+                else:
+                    self._client = chromadb.Client(
+                        ChromaSettings(anonymized_telemetry=False)
+                    )
+                logger.info("chromadb_initialized_legacy", persist_dir=persist_path)
+            except Exception as exc:
+                logger.error("chromadb_init_failed", error=str(exc))
+                self._available = False
         except Exception as exc:
             logger.error("chromadb_init_failed", error=str(exc))
             self._available = False

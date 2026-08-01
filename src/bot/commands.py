@@ -56,6 +56,11 @@ COMMANDS = {
     "/help": "Show available commands",
 }
 
+# Confirmation tokens for dangerous commands (in-memory, per-session)
+_pending_confirmations: dict[str, str] = {}
+
+import secrets as _secrets
+
 
 def _get_db_path() -> str:
     """Get the database path from environment or config."""
@@ -147,27 +152,57 @@ async def _handle_status(_args: list[str]) -> str:
     return "\n".join(lines)
 
 
-async def _handle_stop(_args: list[str]) -> str:
-    """Activate kill switch."""
+async def _handle_stop(args: list[str]) -> str:
+    """Activate kill switch — requires confirmation."""
     from src.risk.kill_switch import KillSwitch
-    ks = KillSwitch()
-    await ks.activate("telegram_command")
+
+    if args and args[0] == "confirm":
+        token = _pending_confirmations.pop("/stop", None)
+        if not token:
+            return "⚠️ No pending /stop confirmation. Run /stop first."
+        ks = KillSwitch()
+        await ks.activate("telegram_command")
+        return (
+            "🛑 <b>KILL SWITCH ACTIVATED</b>\n\n"
+            "All trading has been halted.\n"
+            "Use /start to resume trading."
+        )
+
+    token = _secrets.token_hex(4)
+    _pending_confirmations["/stop"] = token
     return (
-        "🛑 <b>KILL SWITCH ACTIVATED</b>\n\n"
-        "All trading has been halted.\n"
-        "Use /start to resume trading."
+        "⚠️ <b>Confirm Kill Switch</b>\n\n"
+        "This will halt ALL trading immediately.\n"
+        "To confirm, reply with:\n"
+        "<code>/stop confirm</code>\n\n"
+        "This confirmation expires after the next /stop request."
     )
 
 
-async def _handle_start(_args: list[str]) -> str:
-    """Deactivate kill switch."""
+async def _handle_start(args: list[str]) -> str:
+    """Deactivate kill switch — requires confirmation."""
     from src.risk.kill_switch import KillSwitch
-    ks = KillSwitch()
-    await ks.deactivate()
+
+    if args and args[0] == "confirm":
+        token = _pending_confirmations.pop("/start", None)
+        if not token:
+            return "⚠️ No pending /start confirmation. Run /start first."
+        ks = KillSwitch()
+        await ks.deactivate()
+        return (
+            "✅ <b>Trading resumed</b>\n\n"
+            "Gated Recovery Protocol engaged.\n"
+            "TSAR will resume scanning for signals."
+        )
+
+    token = _secrets.token_hex(4)
+    _pending_confirmations["/start"] = token
     return (
-        "✅ <b>Trading resumed</b>\n\n"
-        "Gated Recovery Protocol engaged.\n"
-        "TSAR will resume scanning for signals."
+        "⚠️ <b>Confirm Resume Trading</b>\n\n"
+        "This will deactivate the kill switch and resume live trading.\n"
+        "To confirm, reply with:\n"
+        "<code>/start confirm</code>\n\n"
+        "This confirmation expires after the next /start request."
     )
 
 

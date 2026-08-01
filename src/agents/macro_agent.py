@@ -34,6 +34,7 @@ from src.tools.fundamental import FundamentalAnalysisTools
 from src.tools.economic_calendar import EconomicCalendarTools
 from src.tools.sentiment import SocialSentimentAnalyzer
 from src.tools.news import NewsAggregator
+from src.tools.on_chain import OnChainAnalytics
 
 logger = logging.getLogger(__name__)
 
@@ -422,6 +423,7 @@ class MacroAgent(BaseAgent):
         self._economic_calendar: EconomicCalendarTools | None = None
         self._sentiment_analyzer: SocialSentimentAnalyzer | None = None
         self._news_aggregator: NewsAggregator | None = None
+        self._on_chain: OnChainAnalytics | None = None
 
         # State
         self._pricing_engine = None
@@ -442,9 +444,10 @@ class MacroAgent(BaseAgent):
             self._economic_calendar = EconomicCalendarTools(config=self.config)
             self._sentiment_analyzer = SocialSentimentAnalyzer(config=self.config)
             self._news_aggregator = NewsAggregator(config=self.config)
+            self._on_chain = OnChainAnalytics(config=self.config)
             logger.info(
                 "MacroAgent tools initialized: "
-                "[fundamental, economic_calendar, sentiment, news]"
+                "[fundamental, economic_calendar, sentiment, news, on_chain]"
             )
         except Exception as e:
             logger.warning("MacroAgent tool init failed: %s", e)
@@ -493,28 +496,76 @@ class MacroAgent(BaseAgent):
             logger.error("Macro analysis failed: %s", e, exc_info=True)
 
     async def _enrich_with_tools(self, indicators: MacroIndicators) -> None:
-        """Enrich macro indicators with sentiment, news, and fundamental data."""
-        # Sentiment enrichment
+        """Enrich macro indicators with sentiment, news, and economic calendar data."""
+        # Sentiment enrichment — pull social sentiment for BTC
         if self._sentiment_analyzer:
             try:
-                # SocialSentimentAnalyzer can provide additional sentiment context
-                logger.debug("Sentiment tool available for macro enrichment")
+                sentiment = await self._sentiment_analyzer.get_social_sentiment("BTC")
+                if sentiment and sentiment.fear_greed_index:
+                    # Blend tool-derived fear/greed with fetched value (60/40)
+                    tool_fg = sentiment.fear_greed_index
+                    indicators.fear_greed = int(
+                        indicators.fear_greed * 0.4 + tool_fg * 0.6
+                    )
+                    logger.info(
+                        "MacroAgent: sentiment enriched — fear_greed=%d (tool=%d)",
+                        indicators.fear_greed, tool_fg,
+                    )
             except Exception:
                 logger.debug("Sentiment enrichment failed", exc_info=True)
 
-        # News enrichment
+        # News enrichment — check for high-impact news signals
         if self._news_aggregator:
             try:
-                logger.debug("News tool available for macro enrichment")
+                news_signal = await self._news_aggregator.get_news_signal("BTC/USDT")
+                if news_signal and news_signal.confidence > 0.3:
+                    # Adjust risk score based on news direction
+                    if news_signal.signal == "bearish":
+                        indicators.fear_greed = max(0, indicators.fear_greed - 10)
+                    elif news_signal.signal == "bullish":
+                        indicators.fear_greed = min(100, indicators.fear_greed + 10)
+                    logger.info(
+                        "MacroAgent: news enriched — signal=%s confidence=%.2f",
+                        news_signal.signal, news_signal.confidence,
+                    )
             except Exception:
                 logger.debug("News enrichment failed", exc_info=True)
 
-        # Economic calendar check
+        # Economic calendar — check for upcoming high-impact events
         if self._economic_calendar:
             try:
-                logger.debug("Economic calendar available for macro context")
+                is_risky, risk_events = await self._economic_calendar.check_risk_window(hours=48)
+                if is_risky and risk_events:
+                    # High-impact event imminent → nudge toward caution
+                    indicators.fear_greed = max(0, indicators.fear_greed - 5)
+                    event_names = ", ".join(e.name for e in risk_events[:3])
+                    logger.info(
+                        "MacroAgent: economic calendar — risk window active: %s",
+                        event_names,
+                    )
             except Exception:
                 logger.debug("Economic calendar check failed", exc_info=True)
+
+        # On-chain analytics — exchange flows and whale activity
+        if self._on_chain:
+            try:
+                flow = await self._on_chain.get_exchange_flow("BTC")
+                if flow.flow_signal == "bearish":
+                    # Large exchange inflow → selling pressure → nudge fear
+                    indicators.fear_greed = max(0, indicators.fear_greed - 5)
+                    logger.info(
+                        "MacroAgent: on-chain bearish — net_flow=$%s",
+                        f"{flow.net_flow_24h:,.0f}",
+                    )
+                elif flow.flow_signal == "bullish":
+                    # Large exchange outflow → accumulation → nudge greed
+                    indicators.fear_greed = min(100, indicators.fear_greed + 5)
+                    logger.info(
+                        "MacroAgent: on-chain bullish — net_flow=$%s",
+                        f"{flow.net_flow_24h:,.0f}",
+                    )
+            except Exception:
+                logger.debug("On-chain enrichment failed", exc_info=True)
 
     async def _update_from_pricing_engine(self, indicators: MacroIndicators) -> None:
         """Try to update DXY/US10Y from pricing engine if available."""

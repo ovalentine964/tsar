@@ -24,6 +24,8 @@ from typing import Any
 
 import httpx
 
+from ..backends.defi.analytics_providers import FallbackChain
+
 logger = logging.getLogger(__name__)
 
 
@@ -258,16 +260,30 @@ class OnChainAnalytics:
         self._etherscan_key = self._config.get("etherscan_api_key", "")
         self._blockchain_key = self._config.get("blockchain_api_key", "")
 
+        # Professional analytics providers (Glassnode, CryptoQuant, etc.)
+        # with automatic fallback to CoinGecko estimates
+        self._analytics_chain: FallbackChain | None = None
+        self._analytics_initialized = False
+
+    def _init_analytics_chain(self) -> FallbackChain:
+        """Lazy-initialize the professional analytics fallback chain."""
+        if not self._analytics_initialized:
+            self._analytics_initialized = True
+            self._analytics_chain = FallbackChain.from_config(self._config)
+        return self._analytics_chain
+
+    async def close(self) -> None:
+        """Close HTTP client and analytics providers."""
+        if self._client and not self._client.is_closed:
+            await self._client.aclose()
+        if self._analytics_chain:
+            await self._analytics_chain.close()
+
     async def _get_client(self) -> httpx.AsyncClient:
         """Get or create HTTP client."""
         if self._client is None or self._client.is_closed:
             self._client = httpx.AsyncClient(timeout=15.0)
         return self._client
-
-    async def close(self) -> None:
-        """Close HTTP client."""
-        if self._client and not self._client.is_closed:
-            await self._client.aclose()
 
     def _get_cached(self, key: str) -> Any | None:
         """Get from cache if not expired."""
@@ -533,8 +549,8 @@ class OnChainAnalytics:
         Large inflows to exchanges suggest selling pressure (bearish).
         Large outflows from exchanges suggest accumulation (bullish).
 
-        Data is derived from volume patterns and price action when
-        direct on-chain exchange flow APIs are unavailable.
+        Uses professional providers (Glassnode, CryptoQuant) when API keys
+        are configured, falling back to CoinGecko volume-based estimation.
 
         Args:
             symbol: Asset symbol (e.g. "BTC", "ETH").
@@ -547,8 +563,47 @@ class OnChainAnalytics:
         if cached:
             return cached
 
-        client = await self._get_client()
         base_symbol = symbol.split("/")[0].upper()
+
+        # Try professional analytics providers first (Glassnode → CryptoQuant → CoinGecko)
+        analytics = self._init_analytics_chain()
+        pro_flow = await analytics.get_exchange_flows(base_symbol)
+
+        if pro_flow.source and pro_flow.source != "none" and (pro_flow.inflow_24h > 0 or pro_flow.outflow_24h > 0):
+            # Derive signal from professional data
+            net_flow = pro_flow.net_flow_24h
+            total_volume = pro_flow.inflow_24h + pro_flow.outflow_24h
+            flow_ratio = abs(net_flow) / total_volume if total_volume > 0 else 0
+
+            if net_flow > 0 and flow_ratio > 0.05:
+                signal = "bearish"
+            elif net_flow < 0 and flow_ratio > 0.05:
+                signal = "bullish"
+            else:
+                signal = "neutral"
+
+            result = ExchangeFlow(
+                symbol=base_symbol,
+                inflow_24h=round(pro_flow.inflow_24h, 2),
+                outflow_24h=round(pro_flow.outflow_24h, 2),
+                net_flow_24h=round(net_flow, 2),
+                flow_signal=signal,
+                reserve_change_pct=pro_flow.reserve_change_pct,
+                whale_inflow_count=pro_flow.whale_inflow_count,
+                whale_outflow_count=pro_flow.whale_outflow_count,
+                timestamp=datetime.now(UTC),
+            )
+
+            self._set_cached(cache_key, result)
+            return result
+
+        # Fallback: CoinGecko volume-based estimation (original logic)
+        return await self._exchange_flow_coingecko_fallback(base_symbol)
+
+    async def _exchange_flow_coingecko_fallback(self, base_symbol: str) -> ExchangeFlow:
+        """CoinGecko-based exchange flow estimation (fallback when pro APIs unavailable)."""
+        cache_key = f"exchange_flow:{base_symbol}"
+        client = await self._get_client()
 
         try:
             coin_id = _COINGECKO_IDS.get(base_symbol)
@@ -568,32 +623,24 @@ class OnChainAnalytics:
             price_change_pct = float(market.get("price_change_percentage_24h", 0))
 
             # Estimate exchange flows from volume and price patterns
-            # In bearish conditions, more volume flows to exchanges (selling)
-            # In bullish conditions, more volume flows out (accumulation)
             base_inflow = total_volume * 0.30
             base_outflow = total_volume * 0.28
 
-            # Adjust based on price movement
             if price_change_pct > 5:
-                # Strong rally: more outflow (accumulation)
                 inflow = base_inflow * 0.8
                 outflow = base_outflow * 1.3
             elif price_change_pct > 0:
-                # Mild rally
                 inflow = base_inflow * 0.9
                 outflow = base_outflow * 1.1
             elif price_change_pct > -5:
-                # Mild decline
                 inflow = base_inflow * 1.1
                 outflow = base_outflow * 0.9
             else:
-                # Sharp decline: more inflow (panic selling)
                 inflow = base_inflow * 1.3
                 outflow = base_outflow * 0.8
 
             net_flow = inflow - outflow
 
-            # Signal generation
             flow_ratio = abs(net_flow) / total_volume if total_volume > 0 else 0
             if net_flow > 0 and flow_ratio > 0.05:
                 signal = "bearish"
@@ -602,7 +649,6 @@ class OnChainAnalytics:
             else:
                 signal = "neutral"
 
-            # Estimate whale-level flows
             whale_threshold = self._whale_threshold_usd
             whale_inflow_count = max(0, int(inflow / whale_threshold * 0.1))
             whale_outflow_count = max(0, int(outflow / whale_threshold * 0.1))
@@ -622,7 +668,7 @@ class OnChainAnalytics:
             return result
 
         except Exception as exc:
-            logger.warning("Exchange flow fetch failed for %s: %s", symbol, exc)
+            logger.warning("Exchange flow fetch failed for %s: %s", base_symbol, exc)
             return self._default_exchange_flow(base_symbol)
 
     @staticmethod

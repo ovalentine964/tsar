@@ -329,12 +329,39 @@ class BacktestEngine:
     ) -> dict[str, Any]:
         """Build data dict for strategy entry/exit checks.
 
-        Provides OHLCV fields plus a rolling window of recent closes
-        for indicator calculations.
+        Provides OHLCV fields plus computed technical indicators:
+        EMA(21/55), RSI(14), ADX(14), ATR(14), Bollinger Bands(20,2),
+        MACD(12,26,9), volume ratio, and a rolling window of closes.
         """
         # Rolling window of closes (up to 100 bars back)
         lookback = min(index + 1, 100)
         recent_closes = [ohlcv[index - j].close for j in range(lookback - 1, -1, -1)]
+
+        # Highs and lows for ATR/ADX computation
+        recent_highs = [ohlcv[index - j].high for j in range(lookback - 1, -1, -1)]
+        recent_lows = [ohlcv[index - j].low for j in range(lookback - 1, -1, -1)]
+        recent_volumes = [ohlcv[index - j].volume for j in range(lookback - 1, -1, -1)]
+
+        # ── Compute indicators ──
+        ema_fast = self._ema(recent_closes, 21)
+        ema_slow = self._ema(recent_closes, 55)
+        rsi = self._rsi(recent_closes, 14)
+        atr = self._atr(recent_highs, recent_lows, recent_closes, 14)
+        adx = self._adx(recent_highs, recent_lows, recent_closes, 14)
+        bb_upper, bb_middle, bb_lower = self._bollinger(recent_closes, 20, 2.0)
+        macd_line, macd_signal, macd_histogram = self._macd(recent_closes)
+
+        # Previous MACD histogram for crossover detection
+        if index >= 1:
+            prev_closes = [ohlcv[index - 1 - j].close for j in range(min(index, 100) - 1, -1, -1)]
+            _, _, macd_histogram_prev = self._macd(prev_closes)
+        else:
+            macd_histogram_prev = 0.0
+
+        # Volume ratio: current / 20-period average
+        vol_window = recent_volumes[-20:] if len(recent_volumes) >= 20 else recent_volumes
+        avg_volume = sum(vol_window) / len(vol_window) if vol_window else 1.0
+        volume_ratio = bar.volume / avg_volume if avg_volume > 0 else 1.0
 
         return {
             "open": bar.open,
@@ -346,7 +373,250 @@ class BacktestEngine:
             "bar_index": index,
             "closes": recent_closes,
             "ohlcv_recent": ohlcv[max(0, index - 99): index + 1],
+            # Indicators
+            "ema_fast": ema_fast,
+            "ema_slow": ema_slow,
+            "rsi": rsi,
+            "adx": adx,
+            "atr": atr,
+            "bb_upper": bb_upper,
+            "bb_middle": bb_middle,
+            "bb_lower": bb_lower,
+            "macd_line": macd_line,
+            "macd_signal": macd_signal,
+            "macd_histogram": macd_histogram,
+            "macd_histogram_prev": macd_histogram_prev,
+            "volume_ratio": volume_ratio,
         }
+
+    # ── Technical indicator helpers ──────────────────────────
+
+    @staticmethod
+    def _ema(data: list[float], period: int) -> float:
+        """Compute Exponential Moving Average."""
+        if len(data) < period:
+            return data[-1] if data else 0.0
+        k = 2.0 / (period + 1)
+        ema = sum(data[:period]) / period  # SMA seed
+        for val in data[period:]:
+            ema = val * k + ema * (1 - k)
+        return ema
+
+    @staticmethod
+    def _rsi(closes: list[float], period: int = 14) -> float:
+        """Compute Relative Strength Index."""
+        if len(closes) < period + 1:
+            return 50.0  # neutral when insufficient data
+        gains = []
+        losses = []
+        for i in range(1, len(closes)):
+            delta = closes[i] - closes[i - 1]
+            gains.append(max(delta, 0.0))
+            losses.append(max(-delta, 0.0))
+        # Use EMA-style smoothing (Wilder's method)
+        avg_gain = sum(gains[:period]) / period
+        avg_loss = sum(losses[:period]) / period
+        for i in range(period, len(gains)):
+            avg_gain = (avg_gain * (period - 1) + gains[i]) / period
+            avg_loss = (avg_loss * (period - 1) + losses[i]) / period
+        if avg_loss == 0:
+            return 100.0 if avg_gain > 0 else 50.0
+        rs = avg_gain / avg_loss
+        return 100.0 - (100.0 / (1.0 + rs))
+
+    @staticmethod
+    def _atr(highs: list[float], lows: list[float], closes: list[float], period: int = 14) -> float:
+        """Compute Average True Range."""
+        if len(closes) < 2:
+            return 0.0
+        true_ranges = []
+        for i in range(1, len(closes)):
+            tr = max(
+                highs[i] - lows[i],
+                abs(highs[i] - closes[i - 1]),
+                abs(lows[i] - closes[i - 1]),
+            )
+            true_ranges.append(tr)
+        if not true_ranges:
+            return 0.0
+        # Wilder's smoothing
+        atr_val = sum(true_ranges[:period]) / min(period, len(true_ranges))
+        for tr in true_ranges[period:]:
+            atr_val = (atr_val * (period - 1) + tr) / period
+        return atr_val
+
+    @staticmethod
+    def _adx(highs: list[float], lows: list[float], closes: list[float], period: int = 14) -> float:
+        """Compute Average Directional Index."""
+        if len(closes) < period + 2:
+            return 0.0
+        plus_dm_list = []
+        minus_dm_list = []
+        true_ranges = []
+        for i in range(1, len(closes)):
+            up_move = highs[i] - highs[i - 1]
+            down_move = lows[i - 1] - lows[i]
+            plus_dm = up_move if (up_move > down_move and up_move > 0) else 0.0
+            minus_dm = down_move if (down_move > up_move and down_move > 0) else 0.0
+            plus_dm_list.append(plus_dm)
+            minus_dm_list.append(minus_dm)
+            tr = max(
+                highs[i] - lows[i],
+                abs(highs[i] - closes[i - 1]),
+                abs(lows[i] - closes[i - 1]),
+            )
+            true_ranges.append(tr)
+        if len(true_ranges) < period:
+            return 0.0
+        # Wilder's smoothing for TR, +DM, -DM
+        atr_val = sum(true_ranges[:period]) / period
+        plus_dm_smooth = sum(plus_dm_list[:period]) / period
+        minus_dm_smooth = sum(minus_dm_list[:period]) / period
+        dx_values = []
+        for i in range(period, len(true_ranges)):
+            atr_val = (atr_val * (period - 1) + true_ranges[i]) / period
+            plus_dm_smooth = (plus_dm_smooth * (period - 1) + plus_dm_list[i]) / period
+            minus_dm_smooth = (minus_dm_smooth * (period - 1) + minus_dm_list[i]) / period
+            if atr_val > 0:
+                plus_di = 100.0 * plus_dm_smooth / atr_val
+                minus_di = 100.0 * minus_dm_smooth / atr_val
+            else:
+                plus_di = 0.0
+                minus_di = 0.0
+            di_sum = plus_di + minus_di
+            if di_sum > 0:
+                dx = abs(plus_di - minus_di) / di_sum * 100.0
+            else:
+                dx = 0.0
+            dx_values.append(dx)
+        if not dx_values:
+            return 0.0
+        # ADX = smoothed DX
+        adx_val = sum(dx_values[:period]) / min(period, len(dx_values))
+        for dx in dx_values[period:]:
+            adx_val = (adx_val * (period - 1) + dx) / period
+        return adx_val
+
+    @staticmethod
+    def _bollinger(closes: list[float], period: int = 20, num_std: float = 2.0) -> tuple[float, float, float]:
+        """Compute Bollinger Bands (upper, middle, lower)."""
+        window = closes[-period:] if len(closes) >= period else closes
+        if not window:
+            return 0.0, 0.0, 0.0
+        middle = sum(window) / len(window)
+        variance = sum((x - middle) ** 2 for x in window) / len(window)
+        std = variance ** 0.5
+        return middle + num_std * std, middle, middle - num_std * std
+
+    @staticmethod
+    def _macd(closes: list[float], fast: int = 12, slow: int = 26, signal: int = 9) -> tuple[float, float, float]:
+        """Compute MACD (line, signal, histogram)."""
+        if len(closes) < slow:
+            return 0.0, 0.0, 0.0
+
+        def _ema_series(data: list[float], period: int) -> list[float]:
+            k = 2.0 / (period + 1)
+            ema_vals = [sum(data[:period]) / period]
+            for val in data[period:]:
+                ema_vals.append(val * k + ema_vals[-1] * (1 - k))
+            return ema_vals
+
+        ema_fast_series = _ema_series(closes, fast)
+        ema_slow_series = _ema_series(closes, slow)
+        # Align: slow EMA starts later
+        offset = slow - fast
+        macd_line_series = [ema_fast_series[offset + i] - ema_slow_series[i] for i in range(len(ema_slow_series))]
+        if len(macd_line_series) < signal:
+            return macd_line_series[-1] if macd_line_series else 0.0, 0.0, 0.0
+        signal_series = _ema_series(macd_line_series, signal)
+        macd_line_val = macd_line_series[-1]
+        signal_val = signal_series[-1]
+        histogram_val = macd_line_val - signal_val
+        return macd_line_val, signal_val, histogram_val
+
+    # ── Signal scanning (SignalScout equivalent) ─────────────
+
+    def scan_signals(
+        self,
+        ohlcv: list[OHLCV],
+        start_index: int = 0,
+    ) -> list[dict[str, Any]]:
+        """Scan for basic trading signals across the OHLCV data.
+
+        Provides a SignalScout-equivalent for backtest context.
+        Detects:
+          - RSI oversold (< 30) / overbought (> 70)
+          - EMA(21) / EMA(55) crossover (bullish and bearish)
+
+        Args:
+            ohlcv: Full OHLCV history.
+            start_index: Bar index to start scanning from.
+
+        Returns:
+            List of signal dicts with type, side, score, bar_index.
+        """
+        signals: list[dict[str, Any]] = []
+        for i in range(max(start_index, 55), len(ohlcv)):
+            data = self._build_bar_data(ohlcv[i], ohlcv, i)
+            rsi = data["rsi"]
+            ema_fast = data["ema_fast"]
+            ema_slow = data["ema_slow"]
+
+            # RSI oversold → buy signal
+            if rsi < 30:
+                signals.append({
+                    "type": "rsi_oversold",
+                    "side": "buy",
+                    "score": min(1.0, (30 - rsi) / 15),
+                    "bar_index": i,
+                    "price": data["close"],
+                    "rsi": rsi,
+                })
+
+            # RSI overbought → sell signal
+            if rsi > 70:
+                signals.append({
+                    "type": "rsi_overbought",
+                    "side": "sell",
+                    "score": min(1.0, (rsi - 70) / 15),
+                    "bar_index": i,
+                    "price": data["close"],
+                    "rsi": rsi,
+                })
+
+            # EMA crossover detection
+            if i >= 56:
+                prev_data = self._build_bar_data(ohlcv[i - 1], ohlcv, i - 1)
+                prev_fast = prev_data["ema_fast"]
+                prev_slow = prev_data["ema_slow"]
+
+                # Bullish crossover: fast crosses above slow
+                if prev_fast <= prev_slow and ema_fast > ema_slow:
+                    spread = (ema_fast - ema_slow) / ema_slow if ema_slow > 0 else 0
+                    signals.append({
+                        "type": "ema_bullish_crossover",
+                        "side": "buy",
+                        "score": min(1.0, spread * 50),
+                        "bar_index": i,
+                        "price": data["close"],
+                        "ema_fast": ema_fast,
+                        "ema_slow": ema_slow,
+                    })
+
+                # Bearish crossover: fast crosses below slow
+                if prev_fast >= prev_slow and ema_fast < ema_slow:
+                    spread = (ema_slow - ema_fast) / ema_slow if ema_slow > 0 else 0
+                    signals.append({
+                        "type": "ema_bearish_crossover",
+                        "side": "sell",
+                        "score": min(1.0, spread * 50),
+                        "bar_index": i,
+                        "price": data["close"],
+                        "ema_fast": ema_fast,
+                        "ema_slow": ema_slow,
+                    })
+
+        return signals
 
     def _apply_slippage(self, price: float, side: str, is_entry: bool) -> float:
         """Apply slippage to a price.

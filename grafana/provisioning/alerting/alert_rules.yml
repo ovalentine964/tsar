@@ -1,0 +1,175 @@
+# ============================================================
+# TSAR — Grafana Alert Rules
+# Provisioned automatically on Grafana startup.
+# ============================================================
+# Alerts for:
+#   1. Kill Switch — any activation is critical
+#   2. Drawdown    — circuit breaker level changes
+#   3. DLQ         — dead letter queue depth (message loss)
+# ============================================================
+
+apiVersion: 1
+
+groups:
+  - orgId: 1
+    name: TSAR Risk Alerts
+    folder: TSAR
+    interval: 30s
+    rules:
+      # ─────────────────────────────────────────────────────
+      # 1. Kill Switch Activation (CRITICAL)
+      # ─────────────────────────────────────────────────────
+      - uid: tsar-kill-switch-active
+        title: "Kill Switch Activated"
+        condition: kill_switch_active
+        data:
+          - refId: kill_switch_active
+            relativeTimeRange:
+              from: 60
+              to: 0
+            datasourceUid: prometheus
+            model:
+              expr: tsar_kill_switch_active > 0
+              instant: true
+              refId: kill_switch_active
+        noDataState: Alerting
+        execErrState: Alerting
+        for: 0s
+        annotations:
+          summary: "TSAR Kill Switch has been ACTIVATED"
+          description: "All trading halted. Immediate investigation required."
+          runbook: "Check /api/kill-switch/status and review recent risk events."
+        labels:
+          severity: critical
+          team: trading
+          component: risk
+
+      # ─────────────────────────────────────────────────────
+      # 2. Drawdown Level Elevated (WARNING → CRITICAL)
+      # ─────────────────────────────────────────────────────
+      - uid: tsar-drawdown-yellow
+        title: "Drawdown Level: YELLOW"
+        condition: drawdown_yellow
+        data:
+          - refId: drawdown_yellow
+            relativeTimeRange:
+              from: 60
+              to: 0
+            datasourceUid: prometheus
+            model:
+              expr: tsar_drawdown_level >= 1
+              instant: true
+              refId: drawdown_yellow
+        noDataState: OK
+        execErrState: Alerting
+        for: 1m
+        annotations:
+          summary: "Drawdown at YELLOW level (2-3%)"
+          description: "Position sizes reduced 50%. Monitor closely."
+        labels:
+          severity: warning
+          team: trading
+          component: risk
+
+      - uid: tsar-drawdown-orange
+        title: "Drawdown Level: ORANGE"
+        condition: drawdown_orange
+        data:
+          - refId: drawdown_orange
+            relativeTimeRange:
+              from: 60
+              to: 0
+            datasourceUid: prometheus
+            model:
+              expr: tsar_drawdown_level >= 2
+              instant: true
+              refId: drawdown_orange
+        noDataState: Alerting
+        execErrState: Alerting
+        for: 0s
+        annotations:
+          summary: "Drawdown at ORANGE level (3-5%) — No new entries"
+          description: "New trades blocked. Review positions immediately."
+        labels:
+          severity: critical
+          team: trading
+          component: risk
+
+      - uid: tsar-drawdown-red
+        title: "Drawdown Level: RED"
+        condition: drawdown_red
+        data:
+          - refId: drawdown_red
+            relativeTimeRange:
+              from: 60
+              to: 0
+            datasourceUid: prometheus
+            model:
+              expr: tsar_drawdown_level >= 3
+              instant: true
+              refId: drawdown_red
+        noDataState: Alerting
+        execErrState: Alerting
+        for: 0s
+        annotations:
+          summary: "Drawdown at RED level (>5%) — KILL SWITCH expected"
+          description: "All positions should be flattened. Kill switch auto-triggered."
+        labels:
+          severity: critical
+          team: trading
+          component: risk
+
+      # ─────────────────────────────────────────────────────
+      # 3. Dead Letter Queue Depth (message loss indicator)
+      # ─────────────────────────────────────────────────────
+      - uid: tsar-dlq-depth
+        title: "DLQ Depth Exceeds Threshold"
+        condition: dlq_depth
+        data:
+          - refId: dlq_depth
+            relativeTimeRange:
+              from: 300
+              to: 0
+            datasourceUid: prometheus
+            model:
+              expr: tsar_dlq_depth > 10
+              instant: true
+              refId: dlq_depth
+        noDataState: OK
+        execErrState: Alerting
+        for: 2m
+        annotations:
+          summary: "Dead Letter Queue has {{ $value }} messages"
+          description: "Messages are failing processing. Check event bus health and error logs."
+          runbook: "Inspect DLQ contents and retry or discard failed messages."
+        labels:
+          severity: warning
+          team: trading
+          component: event-bus
+
+      # ─────────────────────────────────────────────────────
+      # 4. DLQ Growing Rapidly (spike detection)
+      # ─────────────────────────────────────────────────────
+      - uid: tsar-dlq-spike
+        title: "DLQ Depth Spike"
+        condition: dlq_spike
+        data:
+          - refId: dlq_spike
+            relativeTimeRange:
+              from: 300
+              to: 0
+            datasourceUid: prometheus
+            model:
+              expr: increase(tsar_dlq_depth[5m]) > 5
+              instant: true
+              refId: dlq_spike
+        noDataState: OK
+        execErrState: Alerting
+        for: 0s
+        annotations:
+          summary: "DLQ depth increased by {{ $value }} in 5 minutes"
+          description: "Rapid message failure spike. Possible systemic issue."
+        labels:
+          severity: critical
+          team: trading
+          component: event-bus

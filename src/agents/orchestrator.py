@@ -26,7 +26,7 @@ import time
 from typing import Any
 
 from src.agents.base import BaseAgent
-from src.comms.event_bus import EventBus
+from src.comms.event_bus import get_shared_bus
 from src.comms.events import (
     TSAR_RULE_VALIDATED,
     TSAR_SHADOW_EXTRACTED,
@@ -39,6 +39,7 @@ from src.comms.subscriber import EventSubscriber
 # ── Domain Tools (Tools-to-Agents Wiring) ──────────────────────────
 from src.tools.knowledge import KnowledgeTools
 from src.tools.monitoring import PnLTracker, WinRateTracker, AlertGenerator
+from src.tools.portfolio import PortfolioTools
 
 logger = logging.getLogger(__name__)
 
@@ -101,17 +102,18 @@ class Orchestrator(BaseAgent):
 
         # ── Domain Tools (Tools-to-Agents Wiring) ───────
         self._knowledge_tools: KnowledgeTools | None = None
+        self._portfolio_tools: PortfolioTools | None = None
         self._pnl_tracker: PnLTracker | None = None
         self._win_rate_tracker: WinRateTracker | None = None
         self._alert_generator: AlertGenerator | None = None
 
-        # Event bus for flywheel
-        self._event_bus = EventBus()
+        # Event bus for flywheel (shared singleton so all agents see the same events)
+        self._event_bus = get_shared_bus()
         self._trade_count = 0
 
         # Wire event bus to flywheel orchestrator for trade forwarding
-        self._event_bus.subscribe("tsar.trade.executed", self._forward_to_flywheel)
-        self._event_bus.subscribe("tsar.trade.recorded", self._forward_to_flywheel)
+        self._event_bus.subscribe("tsar.trade.executed.v1", self._forward_to_flywheel)
+        self._event_bus.subscribe("tsar.trade.recorded.v1", self._forward_to_flywheel)
 
         # Graceful shutdown
         self._shutdown_event = asyncio.Event()
@@ -128,8 +130,14 @@ class Orchestrator(BaseAgent):
             "signal_scout",
             "risk_guardian",
             "execution_sniper",
+            "execution_tracker",
             "strategy_geneticist",
             "flywheel_orchestrator",
+            "market_cartographer",
+            "macro_agent",
+            "regime_detector",
+            "sentiment_agent",
+            "trade_philosopher",
         ])
 
         # Shared pub/sub for all agents
@@ -185,22 +193,46 @@ class Orchestrator(BaseAgent):
         await super().stop()
 
     def _load_agent_registry(self) -> None:
-        """Load agent classes into the registry.
+        """Load all 12 agent classes into the registry.
 
-        Includes StrategyGeneticist for the flywheel EXTRACT→ADAPT pipeline.
+        Full agent roster:
+          1. signal_scout
+          2. risk_guardian
+          3. execution_sniper
+          4. execution_tracker
+          5. strategy_geneticist
+          6. flywheel_orchestrator
+          7. market_cartographer
+          8. macro_agent
+          9. regime_detector
+         10. sentiment_agent
+         11. trade_philosopher
+         12. orchestrator (self — not managed via registry)
         """
         from src.agents.execution_sniper import ExecutionSniper
+        from src.agents.execution_tracker import ExecutionTracker
         from src.agents.flywheel_orchestrator import FlywheelOrchestrator
+        from src.agents.macro_agent import MacroAgent
+        from src.agents.market_cartographer import MarketCartographer
+        from src.agents.regime_detector import RegimeDetector
         from src.agents.risk_guardian import RiskGuardian
+        from src.agents.sentiment_agent import SentimentAgent
         from src.agents.signal_scout import SignalScout
         from src.agents.strategy_geneticist import StrategyGeneticist
+        from src.agents.trade_philosopher import TradePhilosopher
 
         self.AGENT_REGISTRY = {
             "signal_scout": SignalScout,
             "risk_guardian": RiskGuardian,
             "execution_sniper": ExecutionSniper,
+            "execution_tracker": ExecutionTracker,
             "strategy_geneticist": StrategyGeneticist,
             "flywheel_orchestrator": FlywheelOrchestrator,
+            "market_cartographer": MarketCartographer,
+            "macro_agent": MacroAgent,
+            "regime_detector": RegimeDetector,
+            "sentiment_agent": SentimentAgent,
+            "trade_philosopher": TradePhilosopher,
         }
 
     def _create_agent(
@@ -253,6 +285,12 @@ class Orchestrator(BaseAgent):
             logger.info("Orchestrator: KnowledgeTools initialized")
         except Exception as e:
             logger.warning("Orchestrator KnowledgeTools init failed: %s", e)
+
+        try:
+            self._portfolio_tools = PortfolioTools(config=self.config)
+            logger.info("Orchestrator: PortfolioTools initialized")
+        except Exception as e:
+            logger.warning("Orchestrator PortfolioTools init failed: %s", e)
 
         try:
             self._pnl_tracker = PnLTracker()
@@ -471,8 +509,8 @@ class Orchestrator(BaseAgent):
 
                 # Flywheel: publish trade event to event bus
                 # The FlywheelOrchestrator subscribes to these events
-                await self._event_bus.publish("tsar.trade.executed", event.data)
-                await self._event_bus.publish("tsar.trade.recorded", event.data)
+                await self._event_bus.publish("tsar.trade.executed.v1", event.data)
+                await self._event_bus.publish("tsar.trade.recorded.v1", event.data)
 
             elif event.type == "tsar.trade.failed.v1":
                 self._trades_failed += 1

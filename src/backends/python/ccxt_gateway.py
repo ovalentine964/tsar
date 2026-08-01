@@ -421,7 +421,7 @@ class CcxtGateway(ExchangeGateway):
         self._ws_session: aiohttp.ClientSession | None = None
         self._ws_tasks: dict[str, asyncio.Task[None]] = {}
         self._ws_cancel_events: dict[str, asyncio.Event] = {}
-        self._ws_base_url: str = "wss://stream.binance.com:9443/ws"
+        self._ws_base_url: str = cfg.get("ws_url", "")
 
         # Market data cache (H-020)
         redis_url_cfg = cfg.get("redis_url", redis_url)
@@ -1011,6 +1011,33 @@ class CcxtGateway(ExchangeGateway):
         self._ws_tasks[symbol] = task
         logger.info("Subscribed to %s ticker (WebSocket mode)", symbol)
 
+    # Default WebSocket base URLs per exchange
+    _DEFAULT_WS_URLS: dict[str, str] = {
+        "binance": "wss://stream.binance.com:9443/ws",
+        "binanceus": "wss://stream.binance.com:9443/ws",
+        "okx": "wss://ws.okx.com:8443/ws/v5/public",
+        "bybit": "wss://stream.bybit.com/v5/public/spot",
+        "kucoin": "wss://ws-api-spot.kucoin.com",
+        "coinbase": "wss://ws-feed.exchange.coinbase.com",
+    }
+
+    def _resolve_ws_base_url(self) -> str:
+        """Resolve WebSocket base URL.
+
+        Returns the configured ws_url, or auto-detects from exchange_id.
+        Raises ConnectionError if no URL can be determined.
+        """
+        if self._ws_base_url:
+            return self._ws_base_url
+        url = self._DEFAULT_WS_URLS.get(self._exchange_id)
+        if url is None:
+            raise ConnectionError(
+                f"No default WebSocket URL for exchange '{self._exchange_id}'. "
+                f"Set 'ws_url' in config. "
+                f"Supported: {', '.join(self._DEFAULT_WS_URLS)}"
+            )
+        return url
+
     async def _ws_ticker_loop(
         self,
         symbol: str,
@@ -1019,13 +1046,14 @@ class CcxtGateway(ExchangeGateway):
     ) -> None:
         """WebSocket loop for real-time ticker streaming.
 
-        Connects to Binance WebSocket, parses ticker messages, and
+        Connects to exchange WebSocket, parses ticker messages, and
         invokes the callback with Price objects. Reconnects on failure
         with exponential backoff.
         """
+        base_url = self._resolve_ws_base_url()
         # Binance uses lowercase symbol without slash: BTC/USDT -> btcusdt
         ws_symbol = symbol.replace("/", "").lower()
-        ws_url = f"{self._ws_base_url}/{ws_symbol}@ticker"
+        ws_url = f"{base_url}/{ws_symbol}@ticker"
 
         backoff_s = 1.0
         max_backoff_s = 60.0

@@ -14,12 +14,16 @@ Full working API with real data from all tools:
 
 import logging
 import os
+import secrets
 from datetime import UTC, datetime
 from typing import Any
 
 from fastapi import FastAPI, HTTPException, Depends, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+from slowapi import Limiter
+from slowapi.util import get_remote_address
+from slowapi.errors import RateLimitExceeded
 
 logger = logging.getLogger(__name__)
 
@@ -67,7 +71,7 @@ async def require_api_key(
             detail="Missing Authorization header. Use: Bearer <TSAR_API_KEY>",
         )
 
-    if credentials.credentials != expected:
+    if not secrets.compare_digest(credentials.credentials, expected):
         logger.warning(
             "Invalid API key attempt from %s",
             request.client.host if request.client else "unknown",
@@ -84,13 +88,27 @@ def _db_path() -> str:
 
 def create_app(config: Any = None) -> FastAPI:
     """Create the TSAR FastAPI application with all tool-backed routes."""
+    environment = os.environ.get("TSAR_ENVIRONMENT", os.environ.get("APP_ENV", "development"))
+    is_production = environment == "production"
+
     app = FastAPI(
         title="TSAR — Trading Super Agent Regime",
         description="Self-improving autonomous trading system",
         version="0.5.0",
-        docs_url="/docs",
-        redoc_url="/redoc",
+        docs_url=None if is_production else "/docs",
+        redoc_url=None if is_production else "/redoc",
     )
+
+    # Rate limiting
+    limiter = Limiter(key_func=get_remote_address, default_limits=["60/minute"])
+    app.state.limiter = limiter
+
+    @app.exception_handler(RateLimitExceeded)
+    async def rate_limit_handler(request: Request, exc: RateLimitExceeded):
+        return HTTPException(
+            status_code=429,
+            detail="Rate limit exceeded. Please try again later.",
+        )
 
     # CORS
     cors_origins_str = os.environ.get("TSAR_CORS_ORIGINS", "")
@@ -191,6 +209,7 @@ def create_app(config: Any = None) -> FastAPI:
         api_key: str = Depends(require_api_key),
     ):
         """Get trade history from TradeMemory tool."""
+        limit = min(limit, 1000)
         try:
             from src.knowledge.trade_memory import TradeMemory
             db = TradeMemory(_db_path())
@@ -200,7 +219,8 @@ def create_app(config: Any = None) -> FastAPI:
                 "total": db.get_trade_count(),
             }
         except Exception as e:
-            return {"trades": [], "total": 0, "error": str(e)}
+            logger.error("Failed to fetch trades: %s", e)
+            return {"trades": [], "total": 0, "error": "Failed to retrieve trade data."}
 
     @app.get("/api/v1/trades/stats")
     async def get_trade_stats(api_key: str = Depends(require_api_key)):
@@ -210,7 +230,8 @@ def create_app(config: Any = None) -> FastAPI:
             db = TradeMemory(_db_path())
             return db.get_trade_stats()
         except Exception as e:
-            return {"total": 0, "error": str(e)}
+            logger.error("Failed to fetch trade stats: %s", e)
+            return {"total": 0, "error": "Failed to retrieve trade statistics."}
 
     @app.get("/api/v1/strategies")
     async def get_strategies(api_key: str = Depends(require_api_key)):
@@ -221,7 +242,8 @@ def create_app(config: Any = None) -> FastAPI:
             summaries = db.get_strategy_summary()
             return {"strategies": summaries, "count": len(summaries)}
         except Exception as e:
-            return {"strategies": [], "count": 0, "error": str(e)}
+            logger.error("Failed to fetch strategies: %s", e)
+            return {"strategies": [], "count": 0, "error": "Failed to retrieve strategy data."}
 
     # ════════════════════════════════════════════════════════════════
     # POSITIONS — Wired to market_data + trade_memory tools
@@ -254,7 +276,8 @@ def create_app(config: Any = None) -> FastAPI:
                 "count": len(open_trades),
             }
         except Exception as e:
-            return {"positions": [], "count": 0, "error": str(e)}
+            logger.error("Failed to fetch positions: %s", e)
+            return {"positions": [], "count": 0, "error": "Failed to retrieve position data."}
 
     # ════════════════════════════════════════════════════════════════
     # P&L — Wired to monitoring tool (MonitoringTools)
@@ -283,7 +306,8 @@ def create_app(config: Any = None) -> FastAPI:
                 "by_regime": regime_perf,
             }
         except Exception as e:
-            return {"total_pnl": 0, "win_rate": 0, "total_trades": 0, "error": str(e)}
+            logger.error("Failed to fetch PnL: %s", e)
+            return {"total_pnl": 0, "win_rate": 0, "total_trades": 0, "error": "Failed to retrieve PnL data."}
 
     # ════════════════════════════════════════════════════════════════
     # RISK — Wired to risk_management tool + KillSwitch
@@ -328,10 +352,13 @@ def create_app(config: Any = None) -> FastAPI:
                 "win_rate": stats.get("win_rate", 0),
             }
         except Exception as e:
-            return {"level": "unknown", "kill_switch_active": False, "error": str(e)}
+            logger.error("Failed to fetch risk state: %s", e)
+            return {"level": "unknown", "kill_switch_active": False, "error": "Failed to retrieve risk data."}
 
+    @limiter.limit("10/minute")
     @app.post("/api/v1/kill-switch")
     async def activate_kill_switch(
+        request: Request,
         reason: str = "manual", api_key: str = Depends(require_api_key),
     ):
         """Emergency halt — stop all trading immediately."""
@@ -341,10 +368,12 @@ def create_app(config: Any = None) -> FastAPI:
             await ks.activate(reason)
             return {"status": "activated", "reason": reason}
         except Exception as e:
-            raise HTTPException(status_code=500, detail=str(e))
+            logger.error("Failed to activate kill switch: %s", e)
+            raise HTTPException(status_code=500, detail="Failed to activate kill switch.")
 
+    @limiter.limit("10/minute")
     @app.post("/api/v1/resume")
-    async def resume_trading(api_key: str = Depends(require_api_key)):
+    async def resume_trading(request: Request, api_key: str = Depends(require_api_key)):
         """Resume trading after kill switch."""
         try:
             from src.risk.kill_switch import KillSwitch
@@ -352,7 +381,8 @@ def create_app(config: Any = None) -> FastAPI:
             await ks.deactivate()
             return {"status": "resumed"}
         except Exception as e:
-            raise HTTPException(status_code=500, detail=str(e))
+            logger.error("Failed to resume trading: %s", e)
+            raise HTTPException(status_code=500, detail="Failed to resume trading.")
 
     # ════════════════════════════════════════════════════════════════
     # REGIME — Wired to regime_detector data via TradeMemory
@@ -385,7 +415,8 @@ def create_app(config: Any = None) -> FastAPI:
                 "all_regimes": [],
             }
         except Exception as e:
-            return {"regime": "unknown", "confidence": 0.0, "error": str(e)}
+            logger.error("Failed to fetch regime: %s", e)
+            return {"regime": "unknown", "confidence": 0.0, "error": "Failed to retrieve regime data."}
 
     # ════════════════════════════════════════════════════════════════
     # FACTORS — Wired to factor_library tool
@@ -410,7 +441,8 @@ def create_app(config: Any = None) -> FastAPI:
                 })
             return {"factors": factors, "count": len(factors)}
         except Exception as e:
-            return {"factors": [], "count": 0, "error": str(e)}
+            logger.error("Failed to fetch factors: %s", e)
+            return {"factors": [], "count": 0, "error": "Failed to retrieve factor data."}
 
     @app.get("/api/v1/factors/compute")
     async def compute_factors(
@@ -423,7 +455,8 @@ def create_app(config: Any = None) -> FastAPI:
             # FactorLibrary computes from real data
             return {"symbol": symbol, "status": "computed", "factors": {}}
         except Exception as e:
-            return {"symbol": symbol, "error": str(e)}
+            logger.error("Failed to compute factors: %s", e)
+            return {"symbol": symbol, "error": "Failed to compute factors."}
 
     @app.get("/api/v1/factors/benchmark")
     async def benchmark_factors(api_key: str = Depends(require_api_key)):
@@ -433,14 +466,17 @@ def create_app(config: Any = None) -> FastAPI:
             fb = FactorBenchmarker()
             return {"status": "completed", "rankings": []}
         except Exception as e:
-            return {"status": "error", "error": str(e)}
+            logger.error("Failed to benchmark factors: %s", e)
+            return {"status": "error", "error": "Failed to benchmark factors."}
 
     # ════════════════════════════════════════════════════════════════
     # BACKTEST — Wired to backtesting tool (BacktestingTools)
     # ════════════════════════════════════════════════════════════════
 
+    @limiter.limit("10/minute")
     @app.post("/api/v1/backtest")
     async def run_backtest(
+        request: Request,
         strategy: str = "mean_reversion",
         symbol: str = "BTC/USDT",
         days: int = 90,
@@ -470,7 +506,8 @@ def create_app(config: Any = None) -> FastAPI:
                 "note": "Connect exchange gateway for live OHLCV data",
             }
         except Exception as e:
-            return {"status": "error", "strategy": strategy, "error": str(e)}
+            logger.error("Backtest failed: %s", e)
+            return {"status": "error", "strategy": strategy, "error": "Backtest execution failed."}
 
     # ════════════════════════════════════════════════════════════════
     # FLYWHEEL — Wired to flywheel_orchestrator + FlywheelHealth
@@ -501,7 +538,8 @@ def create_app(config: Any = None) -> FastAPI:
                 "last_cycle": datetime.now(UTC).isoformat(),
             }
         except Exception as e:
-            return {"status": "error", "error": str(e)}
+            logger.error("Failed to fetch flywheel status: %s", e)
+            return {"status": "error", "error": "Failed to retrieve flywheel status."}
 
     # ════════════════════════════════════════════════════════════════
     # MANDATE
@@ -519,10 +557,12 @@ def create_app(config: Any = None) -> FastAPI:
                 "rules_count": len(m.rules) if hasattr(m, "rules") else 0,
             }
         except Exception as e:
-            return {"status": "DRAFT", "error": str(e)}
+            logger.error("Failed to fetch mandate: %s", e)
+            return {"status": "DRAFT", "error": "Failed to retrieve mandate data."}
 
+    @limiter.limit("10/minute")
     @app.post("/api/v1/mandate/commit")
-    async def commit_mandate(api_key: str = Depends(require_api_key)):
+    async def commit_mandate(request: Request, api_key: str = Depends(require_api_key)):
         """Commit the mandate (enables live trading)."""
         try:
             from pathlib import Path
@@ -531,10 +571,12 @@ def create_app(config: Any = None) -> FastAPI:
             m.commit("api_user")
             return {"status": "ACTIVE", "message": "Mandate committed"}
         except Exception as e:
-            raise HTTPException(status_code=500, detail=str(e))
+            logger.error("Failed to commit mandate: %s", e)
+            raise HTTPException(status_code=500, detail="Failed to commit mandate.")
 
+    @limiter.limit("10/minute")
     @app.post("/api/v1/mandate/revoke")
-    async def revoke_mandate(api_key: str = Depends(require_api_key)):
+    async def revoke_mandate(request: Request, api_key: str = Depends(require_api_key)):
         """Revoke the mandate (blocks live trading)."""
         try:
             from pathlib import Path
@@ -543,7 +585,8 @@ def create_app(config: Any = None) -> FastAPI:
             m.revoke("api_user")
             return {"status": "REVOKED", "message": "Mandate revoked"}
         except Exception as e:
-            raise HTTPException(status_code=500, detail=str(e))
+            logger.error("Failed to revoke mandate: %s", e)
+            raise HTTPException(status_code=500, detail="Failed to revoke mandate.")
 
     # ════════════════════════════════════════════════════════════════
     # SHADOW EXTRACTION
@@ -559,8 +602,9 @@ def create_app(config: Any = None) -> FastAPI:
         except Exception:
             return {"rules": [], "count": 0}
 
+    @limiter.limit("10/minute")
     @app.post("/api/v1/shadow/extract")
-    async def trigger_shadow_extraction(api_key: str = Depends(require_api_key)):
+    async def trigger_shadow_extraction(request: Request, api_key: str = Depends(require_api_key)):
         """Manually trigger shadow extraction via shadow_extractor tool."""
         return {"status": "triggered", "message": "Shadow extraction started in background"}
 
@@ -592,7 +636,8 @@ def create_app(config: Any = None) -> FastAPI:
                 "count": len(results),
             }
         except Exception as e:
-            return {"query": query, "results": [], "error": str(e)}
+            logger.error("Knowledge search failed: %s", e)
+            return {"query": query, "results": [], "error": "Knowledge search failed."}
 
     # ════════════════════════════════════════════════════════════════
     # PATTERNS & LESSONS
@@ -720,3 +765,7 @@ def create_app(config: Any = None) -> FastAPI:
         logger.info("Web dashboard mounted at /app")
 
     return app
+
+
+# Module-level app instance for import convenience
+app = create_app()

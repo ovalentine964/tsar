@@ -75,6 +75,7 @@ def _ensure_registered() -> None:
     from src.tools.execution import ExecutionTools
     from src.tools.backtesting import BacktestingTools
     from src.tools.portfolio import PortfolioTools
+    from src.tools.market_calendar import MarketCalendar
 
     register_tool("market_data", MarketDataTools)
     register_tool("technical_analysis", TechnicalAnalysisTools)
@@ -83,6 +84,7 @@ def _ensure_registered() -> None:
     register_tool("sentiment", SocialSentimentAnalyzer)
     register_tool("news", NewsAggregator)
     register_tool("economic_calendar", EconomicCalendarTools)
+    register_tool("market_calendar", MarketCalendar)
     register_tool("risk_management", RiskManagementTools)
     register_tool("execution", ExecutionTools)
     register_tool("backtesting", BacktestingTools)
@@ -145,6 +147,13 @@ def _ensure_registered() -> None:
     except ImportError:
         pass
 
+    # MEV Protection tools
+    try:
+        from src.tools.mev_protection import MEVProtectionTools
+        register_tool("mev_protection", MEVProtectionTools)
+    except ImportError:
+        pass
+
     try:
         from src.tools.pattern_recognition import PatternRecognitionTools
         register_tool("pattern_recognition", PatternRecognitionTools)
@@ -157,6 +166,33 @@ def _ensure_registered() -> None:
     except ImportError:
         pass
 
+    # Settlement & L2 optimization tools
+    try:
+        from src.tools.settlement import SettlementTools
+        register_tool("settlement", SettlementTools)
+    except ImportError:
+        pass
+
+    # Information Asymmetry Tools (Anti-Loss: breaks the 78% retail disadvantage)
+    try:
+        from src.tools.order_flow import OrderFlowTools
+        register_tool("order_flow", OrderFlowTools)
+    except ImportError:
+        pass
+
+    try:
+        from src.tools.market_microstructure import MarketMicrostructureTools
+        register_tool("market_microstructure", MarketMicrostructureTools)
+    except ImportError:
+        pass
+
+    # DeFi execution tools (requires web3, solana, cryptography)
+    try:
+        from src.tools.defi_execution import DeFiExecutionTools
+        register_tool("defi_execution", DeFiExecutionTools)
+    except ImportError:
+        pass
+
     try:
         from src.tools.monitoring import PnLTracker, WinRateTracker, EquityCurve, RiskStateMonitor, AlertGenerator
         register_tool("pnl_tracker", PnLTracker)
@@ -164,6 +200,13 @@ def _ensure_registered() -> None:
         register_tool("equity_curve", EquityCurve)
         register_tool("risk_state_monitor", RiskStateMonitor)
         register_tool("alert_generator", AlertGenerator)
+    except ImportError:
+        pass
+
+    # Flywheel health monitoring
+    try:
+        from src.tools.flywheel_health import FlywheelHealthTool
+        register_tool("flywheel_health", FlywheelHealthTool)
     except ImportError:
         pass
 

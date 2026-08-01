@@ -4,12 +4,21 @@
 # Stage 1: Build dependencies
 # Stage 2: Lean production image
 
-# --- Stage 1a: Rust Builder ---
+# --- Stage 1a: Rust Builder (optional) ---
+# TSAR_RUST_BUILD=1 to build; otherwise explicitly skipped.
+# If enabled, build MUST succeed (no silent fallback).
+ARG TSAR_RUST_BUILD=0
 FROM rust:1.79-slim AS rust-builder
-
+ARG TSAR_RUST_BUILD
 WORKDIR /build/rust
 COPY rust/ ./
-RUN cargo build --release 2>/dev/null || echo "Rust build skipped (no compatible deps)"
+RUN if [ "$TSAR_RUST_BUILD" = "1" ]; then \
+        echo "🦀 Building Rust crates..." && \
+        cargo build --release && \
+        echo "✅ Rust build succeeded"; \
+    else \
+        echo "⏭️  TSAR_RUST_BUILD=0 — Rust build explicitly skipped"; \
+    fi
 
 # --- Stage 1b: Python Builder ---
 FROM python:3.12-slim AS builder

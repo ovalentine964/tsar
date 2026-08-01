@@ -110,7 +110,7 @@ class StrategyGeneticist(BaseAgent):
     ROLE = "ANALYSIS"
 
     PUBLISH_STREAM = "strategy_mutations"
-    SUBSCRIBE_STREAMS = ["analytics", "regime", "fills", "strategy_proposals"]
+    SUBSCRIBE_STREAMS = ["analytics", "regime", "trades", "strategy_proposals"]
 
     def __init__(
         self,

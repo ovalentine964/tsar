@@ -491,3 +491,12 @@ class EventBus:
 # ═══════════════════════════════════════════════════════════════
 
 bus = EventBus()
+
+
+def get_shared_bus() -> EventBus:
+    """Return the module-level shared EventBus singleton.
+
+    All agents that need a local event bus should call this instead of
+    ``EventBus()`` so that events flow through a single shared instance.
+    """
+    return bus

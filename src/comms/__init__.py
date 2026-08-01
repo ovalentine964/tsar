@@ -10,7 +10,7 @@ Components:
   - Subscriber: Subscribe to Redis streams with consumer groups
 """
 
-from src.comms.event_bus import EventBus
+from src.comms.event_bus import EventBus, get_shared_bus
 from src.comms.events import CloudEvent, create_event, decode_event, encode_event
 from src.comms.publisher import EventPublisher, InMemoryBus
 from src.comms.subscriber import EventSubscriber
@@ -21,6 +21,7 @@ __all__: list[str] = [
     "EventSubscriber",
     "EventBus",
     "InMemoryBus",
+    "get_shared_bus",
     "create_event",
     "decode_event",
     "encode_event",

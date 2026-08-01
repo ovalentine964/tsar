@@ -1,0 +1,99 @@
+# ============================================================
+# TSAR — .dockerignore
+# ============================================================
+# Keeps Docker build context lean. Excludes everything not needed
+# for building or running the production image.
+
+# --- Git ---
+.git
+.gitignore
+
+# --- Python build artifacts ---
+__pycache__
+*.py[cod]
+*.pyo
+*.pyd
+*.egg-info
+*.egg
+dist
+build
+eggs
+*.whl
+.pytest_cache
+.mypy_cache
+.ruff_cache
+.coverage
+.coverage.*
+htmlcov
+coverage.xml
+.tox
+.nox
+venv
+.venv
+env
+ENV
+
+# --- Rust (not needed in Python image) ---
+rust/target
+rust/**/*.rs.bk
+rust/Cargo.lock
+
+# --- C++ (not needed in Python image) ---
+cpp/build
+cpp/CMakeCache.txt
+cpp/CMakeFiles
+cpp/cmake-build-*
+
+# --- Docker ---
+.docker
+docker-compose.yml
+
+# --- IDE ---
+.idea
+.vscode
+*.swp
+*.swo
+*~
+*.sublime-project
+*.sublime-workspace
+.code-workspace
+
+# --- OS ---
+.DS_Store
+Thumbs.db
+
+# --- Data & logs (runtime, not build) ---
+data
+logs
+*.log
+*.db
+*.db-shm
+*.db-wal
+
+# --- Docs & analysis (not needed in image) ---
+docs
+analysis
+council_reviews
+mobile
+README.md
+CHANGELOG.md
+COUNCIL.md
+INSTALL.md
+MASTER_AUDIT_REPORT.md
+MASTER_BLUEPRINT.md
+council-quantum-agi.md
+
+# --- CI ---
+.github
+
+# --- Monitoring config (mounted at runtime) ---
+monitoring
+
+# --- Jupyter ---
+.ipynb_checkpoints
+*.ipynb
+
+# --- Env files (secrets) ---
+.env
+.env.*
+!.env.example

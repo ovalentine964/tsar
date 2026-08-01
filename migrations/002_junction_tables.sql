@@ -108,3 +108,17 @@ CREATE INDEX IF NOT EXISTS idx_lesson_strategies_type ON lesson_strategies(strat
 -- ============================================================
 
 INSERT INTO schema_migrations (version, name) VALUES (2, '002_junction_tables');
+
+-- ============================================================
+-- ROLLBACK (run manually: sqlite3 tsar.db < migrations/002_junction_tables.sql.rollback)
+-- To rollback: reverse the migration by dropping junction tables.
+-- Safe: these tables are additive and contain no irreplaceable data
+--        (the JSON columns in the original tables still exist).
+-- ============================================================
+-- DROP TABLE IF EXISTS lesson_strategies;
+-- DROP TABLE IF EXISTS lesson_symbols;
+-- DROP TABLE IF EXISTS lesson_regimes;
+-- DROP TABLE IF EXISTS pattern_example_trades;
+-- DROP TABLE IF EXISTS trade_patterns;
+-- DROP TABLE IF EXISTS trade_lessons;
+-- DELETE FROM schema_migrations WHERE version = 2;

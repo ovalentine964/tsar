@@ -32,6 +32,7 @@ from typing import Any
 from src.interfaces.execution_engine import ExecutionEngine
 from src.interfaces.exchange_gateway import ExchangeGateway
 from src.interfaces.types import (
+    BracketOrder,
     ExecutionResult,
     Fill,
     Order,
@@ -132,9 +133,10 @@ class PaperExecutionEngine(ExecutionEngine):
         Simulates the full order lifecycle:
         1. Validate order parameters
         2. Get live price from gateway (or use limit price)
-        3. Simulate fill with slippage and fees
-        4. Update virtual balance and positions
-        5. Return realistic ExecutionResult
+        3. Simulate fill(s) with slippage and fees
+        4. For large orders, simulate partial fills
+        5. Update virtual balance and positions
+        6. Return realistic ExecutionResult
 
         Args:
             order: The Order to execute.
@@ -163,83 +165,269 @@ class PaperExecutionEngine(ExecutionEngine):
         # Determine fill price based on order type
         fill_price = self._simulate_fill_price(order, price)
 
-        # Simulate slippage
-        slippage_bps = self._simulate_slippage(order, fill_price)
-        if order.side == OrderSide.BUY:
-            actual_price = fill_price * (1 + slippage_bps / 10_000)
+        # Check balance/position before simulating fills
+        self._pre_check_balance(order, fill_price)
+
+        # Simulate partial fills for large orders
+        fills = self._simulate_partial_fills(order, order_id, fill_price)
+
+        # Aggregate fill data
+        total_filled = sum(f.quantity for f in fills)
+        total_fee = sum(f.fee for f in fills)
+        total_cost = sum(f.quantity * f.price for f in fills)
+        avg_price = total_cost / total_filled if total_filled > 0 else fill_price
+
+        # Weighted average slippage
+        if order.price and order.price > 0 and avg_price > 0:
+            if order.side == OrderSide.BUY:
+                avg_slippage = (avg_price - order.price) / order.price * 10_000
+            else:
+                avg_slippage = (order.price - avg_price) / order.price * 10_000
         else:
-            actual_price = fill_price * (1 - slippage_bps / 10_000)
+            avg_slippage = 0.0
 
-        # Calculate fees
-        notional = order.quantity * actual_price
-        fee = notional * (self._fee_rate_bps / 10_000)
+        # Apply fills to portfolio
+        for fill in fills:
+            self._apply_fill(order, fill.price, fill.fee)
+            self._fill_history.append(fill)
+            self._slippage_history.append(avg_slippage)
 
-        # Check balance for buy orders
-        if order.side == OrderSide.BUY:
-            total_cost = notional + fee
-            quote_balance = self._balances.get(self._quote_currency, 0.0)
-            if total_cost > quote_balance:
-                raise ValueError(
-                    f"Insufficient balance: need {total_cost:.2f} {self._quote_currency}, "
-                    f"have {quote_balance:.2f}"
-                )
+        # Determine status
+        if total_filled >= order.quantity * 0.999:  # Account for float precision
+            status = OrderStatus.FILLED
+        elif total_filled > 0:
+            status = OrderStatus.PARTIALLY_FILLED
         else:
-            # Check position for sell orders
-            base_asset = order.symbol.split("/")[0]
-            position_qty = self._positions.get(base_asset, {}).get("qty", 0.0)
-            if order.quantity > position_qty:
-                raise ValueError(
-                    f"Insufficient position: need {order.quantity} {base_asset}, "
-                    f"have {position_qty}"
-                )
-
-        # Execute the fill — update balances and positions
-        self._apply_fill(order, actual_price, fee)
-
-        # Build fill record
-        fill = Fill(
-            fill_id=f"{order_id}:fill:0",
-            order_id=order_id,
-            symbol=order.symbol,
-            side=order.side,
-            price=actual_price,
-            quantity=order.quantity,
-            fee=fee,
-            fee_currency=self._quote_currency,
-            timestamp=_utcnow(),
-        )
-
-        self._fill_history.append(fill)
-        self._slippage_history.append(slippage_bps)
+            status = OrderStatus.OPEN
 
         result = ExecutionResult(
             order_id=order_id,
             symbol=order.symbol,
-            status=OrderStatus.FILLED,
-            filled_quantity=order.quantity,
-            average_price=actual_price,
-            total_fee=fee,
-            fills=(fill,),
-            slippage_bps=slippage_bps,
+            status=status,
+            filled_quantity=total_filled,
+            average_price=avg_price,
+            total_fee=total_fee,
+            fills=tuple(fills),
+            slippage_bps=avg_slippage,
             timestamp=_utcnow(),
         )
 
         self._order_history.append(result)
 
         logger.info(
-            "Paper fill: %s %s %.8f @ %.2f (fee=%.4f, slippage=%.2f bps) — "
+            "Paper fill: %s %s %.8f @ %.2f (fee=%.4f, slippage=%.2f bps, fills=%d) — "
             "balance: %.2f %s",
             order.side.value,
             order.symbol,
-            order.quantity,
-            actual_price,
-            fee,
-            slippage_bps,
+            total_filled,
+            avg_price,
+            total_fee,
+            avg_slippage,
+            len(fills),
             self._balances.get(self._quote_currency, 0.0),
             self._quote_currency,
         )
 
         return result
+
+    def _pre_check_balance(self, order: Order, estimated_price: float) -> None:
+        """Pre-check balance/position before fill simulation.
+
+        Raises ValueError if insufficient funds.
+        """
+        notional = order.quantity * estimated_price
+        estimated_fee = notional * (self._fee_rate_bps / 10_000)
+
+        if order.side == OrderSide.BUY:
+            total_cost = notional + estimated_fee
+            quote_balance = self._balances.get(self._quote_currency, 0.0)
+            if total_cost > quote_balance * 1.01:  # 1% tolerance for slippage
+                raise ValueError(
+                    f"Insufficient balance: need ~{total_cost:.2f} {self._quote_currency}, "
+                    f"have {quote_balance:.2f}"
+                )
+        else:
+            base_asset = order.symbol.split("/")[0]
+            position_qty = self._positions.get(base_asset, {}).get("qty", 0.0)
+            if order.quantity > position_qty * 1.001:  # Tolerance for float
+                raise ValueError(
+                    f"Insufficient position: need {order.quantity} {base_asset}, "
+                    f"have {position_qty}"
+                )
+
+    def _simulate_partial_fills(
+        self,
+        order: Order,
+        order_id: str,
+        base_fill_price: float,
+    ) -> list[Fill]:
+        """Simulate partial fills for an order.
+
+        For small orders (< $1000 notional), fills in one shot.
+        For larger orders, splits into 2-4 partial fills with varying
+        prices to simulate realistic market impact.
+
+        Args:
+            order: The order to fill.
+            order_id: Paper order ID.
+            base_fill_price: Base price before slippage.
+
+        Returns:
+            List of Fill objects.
+        """
+        import random
+
+        notional = order.quantity * base_fill_price
+
+        # Determine number of fills based on order size
+        if notional < 1_000:
+            num_fills = 1
+        elif notional < 10_000:
+            num_fills = random.randint(1, 2)  # noqa: S311
+        elif notional < 50_000:
+            num_fills = random.randint(2, 3)  # noqa: S311
+        else:
+            num_fills = random.randint(2, 4)  # noqa: S311
+
+        fills: list[Fill] = []
+        remaining_qty = order.quantity
+
+        for i in range(num_fills):
+            # Determine this fill's quantity
+            if i == num_fills - 1:
+                fill_qty = remaining_qty  # Last fill gets remainder
+            else:
+                # Random portion of remaining (20-60%)
+                pct = random.uniform(0.2, 0.6)  # noqa: S311
+                fill_qty = remaining_qty * pct
+                # Ensure minimum fill size
+                fill_qty = max(fill_qty, remaining_qty * 0.1)
+
+            fill_qty = min(fill_qty, remaining_qty)
+            if fill_qty <= 0:
+                break
+
+            # Each partial fill gets slightly different slippage
+            slippage_bps = self._simulate_slippage(order, base_fill_price)
+            # Add per-fill jitter (market impact of each chunk)
+            jitter = random.uniform(-0.5, 1.0) * self._slippage_bps  # noqa: S311
+            fill_slippage = max(0.0, slippage_bps + jitter)
+
+            if order.side == OrderSide.BUY:
+                fill_price = base_fill_price * (1 + fill_slippage / 10_000)
+            else:
+                fill_price = base_fill_price * (1 - fill_slippage / 10_000)
+
+            fill_notional = fill_qty * fill_price
+            fill_fee = fill_notional * (self._fee_rate_bps / 10_000)
+
+            fills.append(Fill(
+                fill_id=f"{order_id}:fill:{i}",
+                order_id=order_id,
+                symbol=order.symbol,
+                side=order.side,
+                price=fill_price,
+                quantity=fill_qty,
+                fee=fill_fee,
+                fee_currency=self._quote_currency,
+                timestamp=_utcnow(),
+            ))
+
+            remaining_qty -= fill_qty
+
+        return fills
+
+    # ═══════════════════════════════════════════════════════════════
+    # BRACKET / OCO ORDERS (paper simulation)
+    # ═══════════════════════════════════════════════════════════════
+
+    async def execute_bracket_order(
+        self,
+        symbol: str,
+        side: OrderSide,
+        quantity: float,
+        entry_price: float | None,
+        stop_loss_price: float,
+        take_profit_price: float,
+        entry_type: OrderType = OrderType.LIMIT,
+    ) -> BracketOrder:
+        """Execute a bracket order in paper trading mode.
+
+        Places the entry order immediately, then records the stop-loss
+        and take-profit levels for monitoring.
+        """
+        if stop_loss_price <= 0 or take_profit_price <= 0:
+            raise ValueError("Stop-loss and take-profit prices must be positive")
+
+        bracket_id = f"PBRK-{uuid.uuid4().hex[:8]}"
+
+        # Execute entry order
+        entry_order = Order(
+            order_id="",
+            symbol=symbol,
+            side=side,
+            order_type=entry_type,
+            quantity=quantity,
+            price=entry_price,
+            timestamp=_utcnow(),
+        )
+        entry_result = await self.execute_order(entry_order)
+
+        bracket = BracketOrder(
+            bracket_id=bracket_id,
+            symbol=symbol,
+            side=side,
+            quantity=quantity,
+            entry_order_id=entry_result.order_id,
+            stop_loss_price=stop_loss_price,
+            take_profit_price=take_profit_price,
+            status="active",
+            timestamp=_utcnow(),
+            linked_order_ids=[entry_result.order_id],
+        )
+
+        logger.info(
+            "Paper bracket %s: entry=%s SL=%.2f TP=%.2f",
+            bracket_id,
+            entry_result.order_id,
+            stop_loss_price,
+            take_profit_price,
+        )
+        return bracket
+
+    async def execute_oco_order(
+        self,
+        symbol: str,
+        side: OrderSide,
+        quantity: float,
+        stop_loss_price: float,
+        take_profit_price: float,
+    ) -> BracketOrder:
+        """Execute an OCO order in paper trading mode.
+
+        Records both exit orders. The paper engine doesn't simulate
+        live price monitoring, so both are recorded as pending.
+        """
+        bracket_id = f"POCO-{uuid.uuid4().hex[:8]}"
+
+        bracket = BracketOrder(
+            bracket_id=bracket_id,
+            symbol=symbol,
+            side=side,
+            quantity=quantity,
+            stop_loss_price=stop_loss_price,
+            take_profit_price=take_profit_price,
+            status="active",
+            timestamp=_utcnow(),
+        )
+
+        logger.info(
+            "Paper OCO %s: SL=%.2f TP=%.2f",
+            bracket_id,
+            stop_loss_price,
+            take_profit_price,
+        )
+        return bracket
 
     async def cancel_order(self, order_id: str) -> bool:
         """Cancel a paper order.

@@ -20,7 +20,6 @@ import asyncio
 import contextlib
 import logging
 import uuid
-from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from typing import Any
 
@@ -38,6 +37,7 @@ from ccxt import (
 
 from src.interfaces.execution_engine import ExecutionEngine
 from src.interfaces.types import (
+    BracketOrder,
     ExecutionResult,
     Fill,
     Order,
@@ -779,426 +779,375 @@ class CcxtExecEngine(ExecutionEngine):
 
         return fills
 
+    # ═══════════════════════════════════════════════════════════════
+    # BRACKET / OCO ORDER SUPPORT (H-021)
+    # ═══════════════════════════════════════════════════════════════
 
-# ═══════════════════════════════════════════════════════════════════════
-# OCO / BRACKET ORDER SUPPORT (H-021)
-# ═══════════════════════════════════════════════════════════════════════
+    async def execute_bracket_order(
+        self,
+        symbol: str,
+        side: OrderSide,
+        quantity: float,
+        entry_price: float | None,
+        stop_loss_price: float,
+        take_profit_price: float,
+        entry_type: OrderType = OrderType.LIMIT,
+    ) -> BracketOrder:
+        """Execute a bracket order: entry + linked stop-loss + take-profit.
 
+        Places three linked orders:
+        1. Entry order (limit or market)
+        2. Stop-loss order (opposite side, triggers at stop_loss_price)
+        3. Take-profit order (opposite side, limit at take_profit_price)
 
-@dataclass
-class BracketOrder:
-    """A linked bracket order: entry + stop-loss + take-profit.
+        A background monitor cancels the remaining exit order when one fills.
 
-    When one exit order fills, the other is automatically cancelled.
+        Args:
+            symbol: Trading pair (e.g. "BTC/USDT").
+            side: Direction of the entry (BUY or SELL).
+            quantity: Position size.
+            entry_price: Entry price for limit orders (None for market).
+            stop_loss_price: Stop-loss trigger price.
+            take_profit_price: Take-profit limit price.
+            entry_type: Entry order type (LIMIT or MARKET).
 
-    Attributes:
-        bracket_id: Unique bracket identifier.
-        symbol: Trading pair.
-        side: Direction of the entry order.
-        quantity: Total position quantity.
-        entry_order_id: Exchange order ID for the entry.
-        stop_loss_order_id: Exchange order ID for the stop-loss.
-        take_profit_order_id: Exchange order ID for the take-profit.
-        stop_loss_price: Stop-loss trigger price.
-        take_profit_price: Take-profit limit price.
-        status: Current bracket status.
-        timestamp: Time the bracket was created.
-    """
+        Returns:
+            BracketOrder with all linked order IDs.
 
-    bracket_id: str
-    symbol: str
-    side: OrderSide
-    quantity: float
-    entry_order_id: str = ""
-    stop_loss_order_id: str = ""
-    take_profit_order_id: str = ""
-    stop_loss_price: float = 0.0
-    take_profit_price: float = 0.0
-    status: str = "pending"  # pending | active | closed | cancelled
-    timestamp: datetime | None = None
-    linked_order_ids: list[str] = field(default_factory=list)
+        Raises:
+            ValueError: Invalid parameters.
+            ConnectionError: Not connected.
+        """
+        if stop_loss_price <= 0 or take_profit_price <= 0:
+            raise ValueError("Stop-loss and take-profit prices must be positive")
 
+        if side == OrderSide.BUY:
+            if entry_price and stop_loss_price >= entry_price:
+                raise ValueError("BUY stop-loss must be below entry price")
+            if entry_price and take_profit_price <= entry_price:
+                raise ValueError("BUY take-profit must be above entry price")
+        else:
+            if entry_price and stop_loss_price <= entry_price:
+                raise ValueError("SELL stop-loss must be above entry price")
+            if entry_price and take_profit_price >= entry_price:
+                raise ValueError("SELL take-profit must be below entry price")
 
-# Add OCO/Bracket methods to CcxtExecEngine
+        bracket_id = f"BRK-{uuid.uuid4().hex[:12]}"
+        exit_side = OrderSide.SELL if side == OrderSide.BUY else OrderSide.BUY
 
+        bracket = BracketOrder(
+            bracket_id=bracket_id,
+            symbol=symbol,
+            side=side,
+            quantity=quantity,
+            stop_loss_price=stop_loss_price,
+            take_profit_price=take_profit_price,
+            timestamp=_utcnow(),
+        )
 
-async def execute_bracket_order(
-    self,
-    symbol: str,
-    side: OrderSide,
-    quantity: float,
-    entry_price: float | None,
-    stop_loss_price: float,
-    take_profit_price: float,
-    entry_type: OrderType = OrderType.LIMIT,
-) -> BracketOrder:
-    """Execute a bracket order: entry + linked stop-loss + take-profit.
+        # 1. Place entry order
+        entry_order = Order(
+            order_id="",
+            symbol=symbol,
+            side=side,
+            order_type=entry_type,
+            quantity=quantity,
+            price=entry_price,
+            timestamp=_utcnow(),
+        )
+        entry_result = await self.execute_order(entry_order)
+        bracket.entry_order_id = entry_result.order_id
 
-    Places three linked orders:
-    1. Entry order (limit or market)
-    2. Stop-loss order (opposite side, triggers at stop_loss_price)
-    3. Take-profit order (opposite side, limit at take_profit_price)
+        logger.info(
+            "Bracket %s: entry %s placed (%s %s @ %.2f)",
+            bracket_id,
+            entry_result.order_id,
+            side.value,
+            symbol,
+            entry_result.average_price,
+        )
 
-    A background monitor cancels the remaining exit order when one fills.
+        # 2. Place stop-loss order
+        sl_order = Order(
+            order_id="",
+            symbol=symbol,
+            side=exit_side,
+            order_type=OrderType.STOP_MARKET,
+            quantity=quantity,
+            stop_price=stop_loss_price,
+            timestamp=_utcnow(),
+        )
+        try:
+            sl_result = await self.execute_order(sl_order)
+            bracket.stop_loss_order_id = sl_result.order_id
+            bracket.linked_order_ids.append(sl_result.order_id)
+        except Exception as exc:
+            logger.error("Failed to place stop-loss for bracket %s: %s", bracket_id, exc)
+            try:
+                await self.cancel_order(entry_result.order_id)
+            except Exception:
+                pass
+            bracket.status = "cancelled"
+            raise
 
-    Args:
-        symbol: Trading pair (e.g. "BTC/USDT").
-        side: Direction of the entry (BUY or SELL).
-        quantity: Position size.
-        entry_price: Entry price for limit orders (None for market).
-        stop_loss_price: Stop-loss trigger price.
-        take_profit_price: Take-profit limit price.
-        entry_type: Entry order type (LIMIT or MARKET).
+        # 3. Place take-profit order
+        tp_order = Order(
+            order_id="",
+            symbol=symbol,
+            side=exit_side,
+            order_type=OrderType.LIMIT,
+            quantity=quantity,
+            price=take_profit_price,
+            timestamp=_utcnow(),
+        )
+        try:
+            tp_result = await self.execute_order(tp_order)
+            bracket.take_profit_order_id = tp_result.order_id
+            bracket.linked_order_ids.append(tp_result.order_id)
+        except Exception as exc:
+            logger.error("Failed to place take-profit for bracket %s: %s", bracket_id, exc)
+            try:
+                await self.cancel_order(bracket.stop_loss_order_id)
+                await self.cancel_order(entry_result.order_id)
+            except Exception:
+                pass
+            bracket.status = "cancelled"
+            raise
 
-    Returns:
-        BracketOrder with all linked order IDs.
+        bracket.status = "active"
+        self._bracket_orders[bracket_id] = bracket
 
-    Raises:
-        ValueError: Invalid parameters.
-        ConnectionError: Not connected.
-    """
-    if stop_loss_price <= 0 or take_profit_price <= 0:
-        raise ValueError("Stop-loss and take-profit prices must be positive")
+        # Start background monitor
+        monitor_task = asyncio.create_task(
+            self._monitor_bracket(bracket_id),
+            name=f"bracket-monitor:{bracket_id}",
+        )
+        self._bracket_monitor_tasks[bracket_id] = monitor_task
 
-    if side == OrderSide.BUY:
-        if entry_price and stop_loss_price >= entry_price:
-            raise ValueError("BUY stop-loss must be below entry price")
-        if entry_price and take_profit_price <= entry_price:
-            raise ValueError("BUY take-profit must be above entry price")
-    else:
-        if entry_price and stop_loss_price <= entry_price:
-            raise ValueError("SELL stop-loss must be above entry price")
-        if entry_price and take_profit_price >= entry_price:
-            raise ValueError("SELL take-profit must be below entry price")
+        logger.info(
+            "Bracket %s active: entry=%s SL=%.2f TP=%.2f",
+            bracket_id,
+            entry_result.order_id,
+            stop_loss_price,
+            take_profit_price,
+        )
 
-    bracket_id = f"BRK-{uuid.uuid4().hex[:12]}"
-    exit_side = OrderSide.SELL if side == OrderSide.BUY else OrderSide.BUY
+        return bracket
 
-    bracket = BracketOrder(
-        bracket_id=bracket_id,
-        symbol=symbol,
-        side=side,
-        quantity=quantity,
-        stop_loss_price=stop_loss_price,
-        take_profit_price=take_profit_price,
-        timestamp=_utcnow(),
-    )
+    async def execute_oco_order(
+        self,
+        symbol: str,
+        side: OrderSide,
+        quantity: float,
+        stop_loss_price: float,
+        take_profit_price: float,
+    ) -> BracketOrder:
+        """Execute an OCO (One-Cancels-Other) order.
 
-    # 1. Place entry order
-    entry_order = Order(
-        order_id="",
-        symbol=symbol,
-        side=side,
-        order_type=entry_type,
-        quantity=quantity,
-        price=entry_price,
-        timestamp=_utcnow(),
-    )
-    entry_result = await self.execute_order(entry_order)
-    bracket.entry_order_id = entry_result.order_id
+        Uses the exchange's native OCO order type when available (e.g. Binance).
+        Falls back to two linked limit orders with a monitor if OCO is not
+        supported by the exchange.
 
-    logger.info(
-        "Bracket %s: entry %s placed (%s %s @ %.2f)",
-        bracket_id,
-        entry_result.order_id,
-        side.value,
-        symbol,
-        entry_result.average_price,
-    )
+        Args:
+            symbol: Trading pair.
+            side: Exit direction (opposite of the position).
+            quantity: Order quantity.
+            stop_loss_price: Stop-loss trigger price.
+            take_profit_price: Take-profit limit price.
 
-    # 2. Place stop-loss order
-    sl_order = Order(
-        order_id="",
-        symbol=symbol,
-        side=exit_side,
-        order_type=OrderType.STOP_MARKET,
-        quantity=quantity,
-        stop_price=stop_loss_price,
-        timestamp=_utcnow(),
-    )
-    try:
+        Returns:
+            BracketOrder tracking the OCO.
+        """
+        exchange = await self._ensure_exchange()
+        bracket_id = f"OCO-{uuid.uuid4().hex[:12]}"
+
+        bracket = BracketOrder(
+            bracket_id=bracket_id,
+            symbol=symbol,
+            side=side,
+            quantity=quantity,
+            stop_loss_price=stop_loss_price,
+            take_profit_price=take_profit_price,
+            timestamp=_utcnow(),
+        )
+
+        # Try native OCO via Binance-specific endpoint
+        if self._exchange_id == "binance":
+            try:
+                params: dict[str, Any] = {
+                    "stopPrice": stop_loss_price,
+                    "type": "OCO",
+                }
+                raw = await exchange.create_order(
+                    symbol=symbol,
+                    type="limit",
+                    side=side.value,
+                    amount=quantity,
+                    price=take_profit_price,
+                    params=params,
+                )
+                bracket.entry_order_id = str(raw.get("id", ""))
+                bracket.status = "active"
+                bracket.linked_order_ids = [bracket.entry_order_id]
+                self._bracket_orders[bracket_id] = bracket
+                logger.info(
+                    "OCO %s placed on Binance: SL=%.2f TP=%.2f",
+                    bracket_id,
+                    stop_loss_price,
+                    take_profit_price,
+                )
+                return bracket
+            except Exception as exc:
+                logger.warning(
+                    "Native OCO failed (%s), falling back to linked orders",
+                    exc,
+                )
+
+        # Fallback: place two linked orders with a monitor
+        exit_side = side
+
+        # Stop-loss (stop-market)
+        sl_order = Order(
+            order_id="",
+            symbol=symbol,
+            side=exit_side,
+            order_type=OrderType.STOP_MARKET,
+            quantity=quantity,
+            stop_price=stop_loss_price,
+            timestamp=_utcnow(),
+        )
         sl_result = await self.execute_order(sl_order)
         bracket.stop_loss_order_id = sl_result.order_id
         bracket.linked_order_ids.append(sl_result.order_id)
-    except Exception as exc:
-        logger.error("Failed to place stop-loss for bracket %s: %s", bracket_id, exc)
-        try:
-            await self.cancel_order(entry_result.order_id)
-        except Exception:
-            pass
-        bracket.status = "cancelled"
-        raise
 
-    # 3. Place take-profit order
-    tp_order = Order(
-        order_id="",
-        symbol=symbol,
-        side=exit_side,
-        order_type=OrderType.LIMIT,
-        quantity=quantity,
-        price=take_profit_price,
-        timestamp=_utcnow(),
-    )
-    try:
+        # Take-profit (limit)
+        tp_order = Order(
+            order_id="",
+            symbol=symbol,
+            side=exit_side,
+            order_type=OrderType.LIMIT,
+            quantity=quantity,
+            price=take_profit_price,
+            timestamp=_utcnow(),
+        )
         tp_result = await self.execute_order(tp_order)
         bracket.take_profit_order_id = tp_result.order_id
         bracket.linked_order_ids.append(tp_result.order_id)
-    except Exception as exc:
-        logger.error("Failed to place take-profit for bracket %s: %s", bracket_id, exc)
-        try:
-            await self.cancel_order(bracket.stop_loss_order_id)
-            await self.cancel_order(entry_result.order_id)
-        except Exception:
-            pass
-        bracket.status = "cancelled"
-        raise
 
-    bracket.status = "active"
-    self._bracket_orders[bracket_id] = bracket
+        bracket.status = "active"
+        self._bracket_orders[bracket_id] = bracket
 
-    # Start background monitor
-    monitor_task = asyncio.create_task(
-        self._monitor_bracket(bracket_id),
-        name=f"bracket-monitor:{bracket_id}",
-    )
-    self._bracket_monitor_tasks[bracket_id] = monitor_task
+        # Start monitor to cancel the other when one fills
+        monitor_task = asyncio.create_task(
+            self._monitor_bracket(bracket_id),
+            name=f"oco-monitor:{bracket_id}",
+        )
+        self._bracket_monitor_tasks[bracket_id] = monitor_task
 
-    logger.info(
-        "Bracket %s active: entry=%s SL=%.2f TP=%.2f",
-        bracket_id,
-        entry_result.order_id,
-        stop_loss_price,
-        take_profit_price,
-    )
+        logger.info(
+            "OCO %s active (linked orders): SL=%s TP=%s",
+            bracket_id,
+            sl_result.order_id,
+            tp_result.order_id,
+        )
 
-    return bracket
+        return bracket
 
+    async def _monitor_bracket(self, bracket_id: str) -> None:
+        """Monitor a bracket/OCO order and cancel the other side when one fills.
 
-async def execute_oco_order(
-    self,
-    symbol: str,
-    side: OrderSide,
-    quantity: float,
-    stop_loss_price: float,
-    take_profit_price: float,
-) -> BracketOrder:
-    """Execute an OCO (One-Cancels-Other) order.
-
-    Uses the exchange's native OCO order type when available (e.g. Binance).
-    Falls back to two linked limit orders with a monitor if OCO is not
-    supported by the exchange.
-
-    Args:
-        symbol: Trading pair.
-        side: Exit direction (opposite of the position).
-        quantity: Order quantity.
-        stop_loss_price: Stop-loss trigger price.
-        take_profit_price: Take-profit limit price.
-
-    Returns:
-        BracketOrder tracking the OCO.
-    """
-    exchange = await self._ensure_exchange()
-    bracket_id = f"OCO-{uuid.uuid4().hex[:12]}"
-
-    bracket = BracketOrder(
-        bracket_id=bracket_id,
-        symbol=symbol,
-        side=side,
-        quantity=quantity,
-        stop_loss_price=stop_loss_price,
-        take_profit_price=take_profit_price,
-        timestamp=_utcnow(),
-    )
-
-    # Try native OCO via Binance-specific endpoint
-    if self._exchange_id == "binance":
-        try:
-            params: dict[str, Any] = {
-                "stopPrice": stop_loss_price,
-                "type": "OCO",
-            }
-            raw = await exchange.create_order(
-                symbol=symbol,
-                type="limit",
-                side=side.value,
-                amount=quantity,
-                price=take_profit_price,
-                params=params,
-            )
-            bracket.entry_order_id = str(raw.get("id", ""))
-            bracket.status = "active"
-            bracket.linked_order_ids = [bracket.entry_order_id]
-            self._bracket_orders[bracket_id] = bracket
-            logger.info(
-                "OCO %s placed on Binance: SL=%.2f TP=%.2f",
-                bracket_id,
-                stop_loss_price,
-                take_profit_price,
-            )
-            return bracket
-        except Exception as exc:
-            logger.warning(
-                "Native OCO failed (%s), falling back to linked orders",
-                exc,
-            )
-
-    # Fallback: place two linked orders with a monitor
-    exit_side = side
-
-    # Stop-loss (stop-market)
-    sl_order = Order(
-        order_id="",
-        symbol=symbol,
-        side=exit_side,
-        order_type=OrderType.STOP_MARKET,
-        quantity=quantity,
-        stop_price=stop_loss_price,
-        timestamp=_utcnow(),
-    )
-    sl_result = await self.execute_order(sl_order)
-    bracket.stop_loss_order_id = sl_result.order_id
-    bracket.linked_order_ids.append(sl_result.order_id)
-
-    # Take-profit (limit)
-    tp_order = Order(
-        order_id="",
-        symbol=symbol,
-        side=exit_side,
-        order_type=OrderType.LIMIT,
-        quantity=quantity,
-        price=take_profit_price,
-        timestamp=_utcnow(),
-    )
-    tp_result = await self.execute_order(tp_order)
-    bracket.take_profit_order_id = tp_result.order_id
-    bracket.linked_order_ids.append(tp_result.order_id)
-
-    bracket.status = "active"
-    self._bracket_orders[bracket_id] = bracket
-
-    # Start monitor to cancel the other when one fills
-    monitor_task = asyncio.create_task(
-        self._monitor_bracket(bracket_id),
-        name=f"oco-monitor:{bracket_id}",
-    )
-    self._bracket_monitor_tasks[bracket_id] = monitor_task
-
-    logger.info(
-        "OCO %s active (linked orders): SL=%s TP=%s",
-        bracket_id,
-        sl_result.order_id,
-        tp_result.order_id,
-    )
-
-    return bracket
-
-
-async def _monitor_bracket(self, bracket_id: str) -> None:
-    """Monitor a bracket/OCO order and cancel the other side when one fills.
-
-    Polls order status for both exit orders. When one fills or cancels,
-    cancels the other.
-    """
-    bracket = self._bracket_orders.get(bracket_id)
-    if bracket is None:
-        return
-
-    poll_interval = 2.0  # seconds
-    max_wait = 86400  # 24 hours
-    elapsed = 0.0
-
-    while elapsed < max_wait:
-        await asyncio.sleep(poll_interval)
-        elapsed += poll_interval
-
+        Polls order status for both exit orders. When one fills or cancels,
+        cancels the other.
+        """
         bracket = self._bracket_orders.get(bracket_id)
-        if bracket is None or bracket.status != "active":
+        if bracket is None:
             return
 
-        sl_id = bracket.stop_loss_order_id
-        tp_id = bracket.take_profit_order_id
+        poll_interval = 2.0  # seconds
+        max_wait = 86400  # 24 hours
+        elapsed = 0.0
 
-        try:
-            if sl_id:
-                sl_status = await self.get_order_status(sl_id)
-                if sl_status == OrderStatus.FILLED:
-                    logger.info("Bracket %s: stop-loss filled, cancelling take-profit", bracket_id)
-                    if tp_id:
-                        try:
-                            await self.cancel_order(tp_id)
-                        except Exception:
-                            pass
-                    bracket.status = "closed"
-                    return
+        while elapsed < max_wait:
+            await asyncio.sleep(poll_interval)
+            elapsed += poll_interval
 
-            if tp_id:
-                tp_status = await self.get_order_status(tp_id)
-                if tp_status == OrderStatus.FILLED:
-                    logger.info("Bracket %s: take-profit filled, cancelling stop-loss", bracket_id)
-                    if sl_id:
-                        try:
-                            await self.cancel_order(sl_id)
-                        except Exception:
-                            pass
-                    bracket.status = "closed"
-                    return
+            bracket = self._bracket_orders.get(bracket_id)
+            if bracket is None or bracket.status != "active":
+                return
 
-        except Exception as exc:
-            logger.debug("Bracket monitor poll error for %s: %s", bracket_id, exc)
+            sl_id = bracket.stop_loss_order_id
+            tp_id = bracket.take_profit_order_id
 
-    logger.warning("Bracket %s monitor timed out after %ds", bracket_id, max_wait)
+            try:
+                if sl_id:
+                    sl_status = await self.get_order_status(sl_id)
+                    if sl_status == OrderStatus.FILLED:
+                        logger.info("Bracket %s: stop-loss filled, cancelling take-profit", bracket_id)
+                        if tp_id:
+                            try:
+                                await self.cancel_order(tp_id)
+                            except Exception:
+                                pass
+                        bracket.status = "closed"
+                        return
 
+                if tp_id:
+                    tp_status = await self.get_order_status(tp_id)
+                    if tp_status == OrderStatus.FILLED:
+                        logger.info("Bracket %s: take-profit filled, cancelling stop-loss", bracket_id)
+                        if sl_id:
+                            try:
+                                await self.cancel_order(sl_id)
+                            except Exception:
+                                pass
+                        bracket.status = "closed"
+                        return
 
-async def cancel_bracket_order(self, bracket_id: str) -> bool:
-    """Cancel all orders in a bracket.
+            except Exception as exc:
+                logger.debug("Bracket monitor poll error for %s: %s", bracket_id, exc)
 
-    Args:
-        bracket_id: Bracket identifier.
+        logger.warning("Bracket %s monitor timed out after %ds", bracket_id, max_wait)
 
-    Returns:
-        True if all orders were cancelled.
-    """
-    bracket = self._bracket_orders.get(bracket_id)
-    if bracket is None:
-        logger.warning("Bracket %s not found", bracket_id)
-        return False
+    async def cancel_bracket_order(self, bracket_id: str) -> bool:
+        """Cancel all orders in a bracket.
 
-    cancelled = True
-    for order_id in bracket.linked_order_ids:
-        try:
-            await self.cancel_order(order_id)
-        except Exception as exc:
-            logger.warning("Failed to cancel %s in bracket %s: %s", order_id, bracket_id, exc)
-            cancelled = False
+        Args:
+            bracket_id: Bracket identifier.
 
-    # Stop monitor
-    monitor_task = self._bracket_monitor_tasks.pop(bracket_id, None)
-    if monitor_task is not None:
-        monitor_task.cancel()
-        with contextlib.suppress(asyncio.CancelledError):
-            await monitor_task
+        Returns:
+            True if all orders were cancelled.
+        """
+        bracket = self._bracket_orders.get(bracket_id)
+        if bracket is None:
+            logger.warning("Bracket %s not found", bracket_id)
+            return False
 
-    bracket.status = "cancelled"
-    logger.info("Bracket %s cancelled", bracket_id)
-    return cancelled
+        cancelled = True
+        for order_id in bracket.linked_order_ids:
+            try:
+                await self.cancel_order(order_id)
+            except Exception as exc:
+                logger.warning("Failed to cancel %s in bracket %s: %s", order_id, bracket_id, exc)
+                cancelled = False
 
+        # Stop monitor
+        monitor_task = self._bracket_monitor_tasks.pop(bracket_id, None)
+        if monitor_task is not None:
+            monitor_task.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await monitor_task
 
-async def get_bracket_status(self, bracket_id: str) -> BracketOrder | None:
-    """Get the current status of a bracket order.
+        bracket.status = "cancelled"
+        logger.info("Bracket %s cancelled", bracket_id)
+        return cancelled
 
-    Args:
-        bracket_id: Bracket identifier.
+    async def get_bracket_status(self, bracket_id: str) -> BracketOrder | None:
+        """Get the current status of a bracket order.
 
-    Returns:
-        BracketOrder or None if not found.
-    """
-    return self._bracket_orders.get(bracket_id)
+        Args:
+            bracket_id: Bracket identifier.
 
-
-# Monkey-patch bracket methods onto CcxtExecEngine
-CcxtExecEngine.execute_bracket_order = execute_bracket_order  # type: ignore[attr-defined]
-CcxtExecEngine.execute_oco_order = execute_oco_order  # type: ignore[attr-defined]
-CcxtExecEngine.cancel_bracket_order = cancel_bracket_order  # type: ignore[attr-defined]
-CcxtExecEngine.get_bracket_status = get_bracket_status  # type: ignore[attr-defined]
-CcxtExecEngine._monitor_bracket = _monitor_bracket  # type: ignore[attr-defined]
+        Returns:
+            BracketOrder or None if not found.
+        """
+        return self._bracket_orders.get(bracket_id)

@@ -29,6 +29,7 @@ dependencies = [
     # --- API ---
     "fastapi>=0.110",         # REST API framework
     "uvicorn>=0.27",          # ASGI server
+    "slowapi>=0.1.9",         # Rate limiting for FastAPI
     # --- Messaging ---
     "msgpack>=1.0",           # MessagePack serialization (CloudEvents payload)
     # --- Observability ---
@@ -49,6 +50,20 @@ dev = [
 ]
 rust = [
     "maturin>=1.4",           # Build Rust extensions via PyO3
+]
+nvidia = [
+    "nvidia-cuopt>=24.08",     # GPU-accelerated optimization (cuOpt)
+    "cupy-cuda12x>=13.0",      # CuPy for GPU array ops (CUDA 12.x)
+    "nvidia-rag>=1.0",         # RAG Blueprint (retrieval-augmented generation)
+    "nvidia-nemo-eval>=0.1",   # Nemo Evaluator for agent output quality
+]
+defi = [
+    "web3>=7.0",               # EVM chain interaction (ETH, Polygon, Arbitrum, Base)
+    "solana>=0.35",            # Solana RPC client
+    "solders>=0.21",           # Solana keypair & transaction signing
+    "cryptography>=42.0",      # Fernet encryption for wallet key storage
+    "eth-account>=0.13",       # Ethereum account/key management
+    "httpx>=0.27",             # HTTP client for 1inch & Jupiter APIs
 ]
 
 [project.scripts]

@@ -271,7 +271,7 @@ class MarketCartographer(BaseAgent):
     ROLE = "ANALYSIS"
 
     PUBLISH_STREAM = "cartography"
-    SUBSCRIBE_STREAMS = ["regime", "fills"]
+    SUBSCRIBE_STREAMS = ["regime", "trades"]
 
     def __init__(self, config: dict[str, Any], trading_mode: str = "paper") -> None:
         super().__init__(config, trading_mode)

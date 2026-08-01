@@ -169,6 +169,9 @@ class TradePhilosopher(BaseAgent):
     AGENT_NAME = "trade_philosopher"
     ROLE = "ANALYSIS"
 
+    PUBLISH_STREAM = "analytics"
+    SUBSCRIBE_STREAMS = ["trades", "positions", "risk_decisions"]
+
     def __init__(self, config: dict[str, Any], trading_mode: str = "paper") -> None:
         super().__init__(config, trading_mode)
         self.trade_memory = None

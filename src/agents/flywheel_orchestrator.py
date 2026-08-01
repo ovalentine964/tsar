@@ -21,7 +21,7 @@ import time
 from typing import Any
 
 from src.agents.base import BaseAgent
-from src.comms.event_bus import EventBus
+from src.comms.event_bus import get_shared_bus
 from src.comms.events import CloudEvent
 
 logger = logging.getLogger(__name__)
@@ -75,8 +75,8 @@ class FlywheelOrchestrator(BaseAgent):
         self._total_mutations_proposed = 0
         self._total_mutations_applied = 0
 
-        # EventBus for trade monitoring
-        self._event_bus = EventBus()
+        # Shared EventBus singleton (same instance as Orchestrator)
+        self._event_bus = get_shared_bus()
 
         # Flywheel lock to prevent concurrent runs
         self._flywheel_lock = asyncio.Lock()
@@ -87,9 +87,9 @@ class FlywheelOrchestrator(BaseAgent):
 
         await self._init_pipeline_components()
 
-        # Subscribe to trade events on the EventBus
-        self._event_bus.subscribe("tsar.trade.executed", self._on_trade_executed)
-        self._event_bus.subscribe("tsar.trade.recorded", self._on_trade_executed)
+        # Subscribe to trade events on the shared EventBus
+        self._event_bus.subscribe("tsar.trade.executed.v1", self._on_trade_executed)
+        self._event_bus.subscribe("tsar.trade.recorded.v1", self._on_trade_executed)
 
         logger.info(
             "🔄 Flywheel Orchestrator ready: "

@@ -386,6 +386,46 @@ class ExecutionResult:
 
 
 # ═══════════════════════════════════════════════════════════════════════
+# BRACKET / OCO ORDER TYPES
+# ═══════════════════════════════════════════════════════════════════════
+
+
+@dataclass
+class BracketOrder:
+    """A linked bracket order: entry + stop-loss + take-profit.
+
+    When one exit order fills, the other is automatically cancelled.
+
+    Attributes:
+        bracket_id: Unique bracket identifier.
+        symbol: Trading pair.
+        side: Direction of the entry order.
+        quantity: Total position quantity.
+        entry_order_id: Exchange order ID for the entry.
+        stop_loss_order_id: Exchange order ID for the stop-loss.
+        take_profit_order_id: Exchange order ID for the take-profit.
+        stop_loss_price: Stop-loss trigger price.
+        take_profit_price: Take-profit limit price.
+        status: Current bracket status.
+        timestamp: Time the bracket was created.
+        linked_order_ids: All linked exchange order IDs.
+    """
+
+    bracket_id: str
+    symbol: str
+    side: OrderSide
+    quantity: float
+    entry_order_id: str = ""
+    stop_loss_order_id: str = ""
+    take_profit_order_id: str = ""
+    stop_loss_price: float = 0.0
+    take_profit_price: float = 0.0
+    status: str = "pending"  # pending | active | closed | cancelled
+    timestamp: datetime | None = None
+    linked_order_ids: list[str] = field(default_factory=list)
+
+
+# ═══════════════════════════════════════════════════════════════════════
 # SIGNAL & RISK TYPES
 # ═══════════════════════════════════════════════════════════════════════
 

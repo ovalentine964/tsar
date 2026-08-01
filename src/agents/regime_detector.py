@@ -341,6 +341,9 @@ class RegimeDetector(BaseAgent):
     AGENT_NAME = "regime_detector"
     ROLE = "ANALYSIS"
 
+    PUBLISH_STREAM = "regime"
+    SUBSCRIBE_STREAMS = ["cartography", "trades"]
+
     REGIMES = ["STRONG_TREND_UP", "STRONG_TREND_DOWN", "RANGING", "HIGH_VOLATILITY", "UNCERTAIN"]
 
     def __init__(self, config: dict[str, Any], trading_mode: str = "paper") -> None:
@@ -372,10 +375,15 @@ class RegimeDetector(BaseAgent):
             logger.info("RegimeDetector: using rule-based classification")
 
     async def on_initialize(self) -> None:
-        """Initialize pricing engine and domain tools."""
+        """Initialize pricing engine, domain tools, and regime state."""
         from src.interfaces import get_pricing_engine, get_exchange_gateway
+        from src.knowledge.regime_state import RegimeStateStore
 
         self.pricing_engine = get_pricing_engine()
+
+        # Initialize regime_state so run_cycle() doesn't skip
+        self.regime_state = RegimeStateStore()
+        logger.info("RegimeDetector: regime_state initialized")
 
         try:
             gateway = get_exchange_gateway()

@@ -27,14 +27,36 @@ logger = get_logger(__name__)
 
 # ── cuOpt availability check ────────────────────────────────
 
-try:
+def _check_cuopt_available() -> bool:
+    """Check if cuOpt is available with a working GPU.
+
+    Verifies:
+    1. cupy can be imported
+    2. cuopt can be imported
+    3. At least one CUDA GPU is accessible
+    """
+    try:
+        import cupy as cp  # noqa: F811
+        from cuopt import Optimizer  # noqa: F811
+
+        # Verify GPU is actually accessible
+        gpu_count = cp.cuda.runtime.getDeviceCount()
+        if gpu_count == 0:
+            logger.warning("cuopt_no_gpu", msg="cuOpt packages installed but no CUDA GPU found")
+            return False
+        return True
+    except (ImportError, RuntimeError, OSError) as exc:
+        logger.debug("cuopt_check_failed", error=str(exc))
+        return False
+
+
+CUOPT_AVAILABLE = _check_cuopt_available()
+
+if CUOPT_AVAILABLE:
     import cupy as cp
     from cuopt import Optimizer as CuOptOptimizer
-
-    CUOPT_AVAILABLE = True
     logger.info("cuopt_available", msg="GPU-accelerated optimization enabled")
-except ImportError:
-    CUOPT_AVAILABLE = False
+else:
     cp = None  # type: ignore[assignment]
 
     class _Stub:
@@ -42,7 +64,8 @@ except ImportError:
 
         def __init__(self, *args: Any, **kwargs: Any) -> None:
             raise ImportError(
-                "cuOpt not installed. Install with: pip install nvidia-cuopt"
+                "cuOpt not installed or no GPU available. "
+                "Install with: pip install nvidia-cuopt cupy-cuda12x"
             )
 
     CuOptOptimizer = _Stub  # type: ignore[assignment,misc]

@@ -50,3 +50,58 @@ llm_provider:
       priority: 300
   config:
     config_path: "config/models.yaml"
+
+# --- Settlement & L2 Optimization ---
+settlement_engine:
+  primary: "src.backends.defi.settlement.SettlementEngine"
+  config:
+    chain: "arbitrum"                   # ethereum | polygon | arbitrum | optimism | base
+    settlement_timeout_s: 3600           # 1 hour
+    max_retries: 3
+    gas_limit_buffer: 1.2               # 20% buffer on gas estimates
+    confirmation_timeout_s: 600          # 10 min
+    multisig_threshold: 2                # approvals needed for large trades
+    multisig_threshold_usd: 100000       # trades above this require multi-sig
+  escrow_contracts:
+    ethereum: "${ETH_ESCROW_ADDRESS}"
+    polygon: "${POLYGON_ESCROW_ADDRESS}"
+    arbitrum: "${ARBITRUM_ESCROW_ADDRESS}"
+    optimism: "${OPTIMISM_ESCROW_ADDRESS}"
+    base: "${BASE_ESCROW_ADDRESS}"
+  multisig:
+    wallet: "${MULTISIG_WALLET_ADDRESS}"
+    signers:
+      - "${SIGNER_1_ADDRESS}"
+      - "${SIGNER_2_ADDRESS}"
+      - "${SIGNER_3_ADDRESS}"
+
+l2_optimizer:
+  primary: "src.backends.defi.l2_optimizer.L2Optimizer"
+  config:
+    eth_price_usd: 3000.0               # updated via oracle in production
+    gas_limit_default: 200000
+    priority_fee_gwei: 1.5
+    max_fee_multiplier: 1.5
+    cache_ttl_s: 12                      # gas price cache TTL
+    batch_max_size: 50
+    batch_max_gas: 5000000
+  rpc_endpoints:
+    ethereum: "${ETH_RPC_URL}"
+    polygon: "${POLYGON_RPC_URL}"
+    arbitrum: "${ARBITRUM_RPC_URL}"
+    optimism: "${OPTIMISM_RPC_URL}"
+    base: "${BASE_RPC_URL}"
+  gas_params:
+    # EIP-1559 base fee tracking
+    base_fee_update_interval_s: 12       # one block on Ethereum
+    priority_fee_percentiles: [25, 50, 75, 95]
+    # Chain-specific overrides
+    overrides:
+      polygon:
+        priority_fee_gwei: 30.0          # Polygon needs higher priority
+      arbitrum:
+        gas_limit_default: 80000         # L2s need less gas
+      optimism:
+        gas_limit_default: 80000
+      base:
+        gas_limit_default: 80000
