@@ -1,0 +1,167 @@
+groups:
+  - name: tsar_trading_alerts
+    rules:
+      - alert: HighDrawdown
+        expr: tsar_portfolio_drawdown_pct > 15
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Portfolio drawdown exceeds 15%"
+          description: "Current drawdown: {{ $value }}%"
+
+      - alert: KillSwitchTripped
+        expr: increase(tsar_kill_switch_trips_total[5m]) > 0
+        labels:
+          severity: critical
+        annotations:
+          summary: "Kill switch has been tripped"
+          description: "Kill switch tripped in the last 5 minutes"
+
+      - alert: HighPortfolioHeat
+        expr: tsar_portfolio_heat > 0.8
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Portfolio heat is critically high"
+          description: "Portfolio heat: {{ $value }}"
+
+      - alert: LowWinRate
+        expr: tsar_trade_win_rate < 40
+        for: 1h
+        labels:
+          severity: warning
+        annotations:
+          summary: "Win rate has dropped below 40%"
+          description: "Current win rate: {{ $value }}%"
+
+  - name: tsar_signal_alerts
+    rules:
+      - alert: SignalQualityDegraded
+        expr: avg(tsar_signal_quality_score) < 0.5
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Signal quality has degraded"
+          description: "Average signal quality score: {{ $value }}"
+
+      - alert: HighSignalRejectionRate
+        expr: rate(tsar_signals_rejected_total[15m]) / rate(tsar_signals_generated_total[15m]) > 0.8
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Signal rejection rate is very high"
+          description: "Rejection rate: {{ $value | humanizePercentage }}"
+
+  - name: tsar_news_alerts
+    rules:
+      - alert: CriticalNewsDetected
+        expr: increase(tsar_news_critical_total[5m]) > 0
+        labels:
+          severity: critical
+        annotations:
+          summary: "Critical news event detected"
+          description: "Critical news event detected in the last 5 minutes"
+
+      - alert: NewsClassifierAccuracyDrop
+        expr: tsar_news_classifier_accuracy < 0.7
+        for: 30m
+        labels:
+          severity: warning
+        annotations:
+          summary: "News classifier accuracy has dropped"
+          description: "Current accuracy: {{ $value }}"
+
+      - alert: HighNewsVelocity
+        expr: rate(tsar_news_events_total[5m]) > 10
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Unusually high news event velocity"
+          description: "News event rate: {{ $value }}/sec"
+
+  - name: tsar_defi_alerts
+    rules:
+      - alert: DeFiPositionAtRisk
+        expr: tsar_defi_position_health < 0.3
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "DeFi position health is critically low"
+          description: "Position health score: {{ $value }}"
+
+      - alert: HighGasCost
+        expr: tsar_defi_gas_cost_usd > 50
+        labels:
+          severity: warning
+        annotations:
+          summary: "DeFi gas costs are unusually high"
+          description: "Current gas cost: ${{ $value }}"
+
+      - alert: DeFiLiquidationRisk
+        expr: tsar_defi_liquidation_risk > 0.7
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "DeFi position approaching liquidation"
+          description: "Liquidation risk: {{ $value }}"
+
+  - name: tsar_scenario_alerts
+    rules:
+      - alert: RetailTrapDetected
+        expr: increase(tsar_scenario_retail_trap_total[15m]) > 0
+        labels:
+          severity: warning
+        annotations:
+          summary: "Retail trap scenario detected"
+          description: "Retail trap pattern detected in market data"
+
+      - alert: InstitutionalManipulationDetected
+        expr: increase(tsar_scenario_institutional_total[15m]) > 0
+        labels:
+          severity: critical
+        annotations:
+          summary: "Institutional manipulation scenario detected"
+          description: "Potential institutional manipulation pattern detected"
+
+      - alert: ScenarioPreventionTriggered
+        expr: increase(tsar_scenario_prevention_triggered_total[5m]) > 0
+        labels:
+          severity: info
+        annotations:
+          summary: "Scenario prevention system triggered"
+          description: "Scenario prevention action taken"
+
+  - name: tsar_system_alerts
+    rules:
+      - alert: HighLLMLatency
+        expr: histogram_quantile(0.95, rate(tsar_llm_latency_seconds_bucket[5m])) > 10
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "LLM latency is unusually high"
+          description: "p95 latency: {{ $value }}s"
+
+      - alert: HighErrorRate
+        expr: rate(tsar_errors_total[5m]) > 0.1
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Error rate is elevated"
+          description: "Error rate: {{ $value }}/sec"
+
+      - alert: BackendFallback
+        expr: increase(tsar_backend_fallbacks_total[5m]) > 3
+        labels:
+          severity: warning
+        annotations:
+          summary: "Multiple backend fallbacks detected"
+          description: "{{ $value }} fallbacks in the last 5 minutes"

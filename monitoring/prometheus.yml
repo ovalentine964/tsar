@@ -2,6 +2,9 @@ global:
   scrape_interval: 15s
   evaluation_interval: 15s
 
+rule_files:
+  - "alert_rules.yml"
+
 scrape_configs:
   - job_name: "tsar-app"
     metrics_path: "/metrics"
@@ -21,3 +24,51 @@ scrape_configs:
       - targets: ["app:8000"]
         labels:
           service: "tsar-health"
+
+  - job_name: "tsar-signal-quality"
+    metrics_path: "/metrics/signal-quality"
+    static_configs:
+      - targets: ["app:8000"]
+        labels:
+          service: "tsar-signal-quality"
+          component: "signal-scout"
+
+  - job_name: "tsar-news"
+    metrics_path: "/metrics/news"
+    static_configs:
+      - targets: ["app:8000"]
+        labels:
+          service: "tsar-news"
+          component: "news-classifier"
+
+  - job_name: "tsar-defi"
+    metrics_path: "/metrics/defi"
+    static_configs:
+      - targets: ["app:8000"]
+        labels:
+          service: "tsar-defi"
+          component: "defi-monitor"
+
+  - job_name: "tsar-scenario-prevention"
+    metrics_path: "/metrics/scenarios"
+    static_configs:
+      - targets: ["app:8000"]
+        labels:
+          service: "tsar-scenario-prevention"
+          component: "scenario-guard"
+
+  - job_name: "tsar-trade-manager"
+    metrics_path: "/metrics/trade-manager"
+    static_configs:
+      - targets: ["app:8000"]
+        labels:
+          service: "tsar-trade-manager"
+          component: "trade-manager"
+
+  - job_name: "tsar-education"
+    metrics_path: "/metrics/education"
+    static_configs:
+      - targets: ["app:8000"]
+        labels:
+          service: "tsar-education"
+          component: "education"
