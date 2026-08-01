@@ -97,15 +97,15 @@ class TestScoringWeights:
 
     def test_default_weights_sum_to_one(self):
         w = ScoringWeights()
-        total = w.rsi + w.sr_proximity + w.volume + w.trend
+        total = w.rsi + w.sr_proximity + w.volume + w.trend + w.multi_timeframe
         assert abs(total - 1.0) < 0.001
 
     def test_valid_weights_pass(self):
-        w = ScoringWeights(rsi=0.5, sr_proximity=0.3, volume=0.1, trend=0.1)
+        w = ScoringWeights(rsi=0.3, sr_proximity=0.25, volume=0.1, trend=0.1, multi_timeframe=0.25)
         w.validate()  # Should not raise
 
     def test_invalid_weights_raise(self):
-        w = ScoringWeights(rsi=0.5, sr_proximity=0.5, volume=0.5, trend=0.5)
+        w = ScoringWeights(rsi=0.5, sr_proximity=0.5, volume=0.5, trend=0.5, multi_timeframe=0.5)
         with pytest.raises(ValueError, match="sum to 1.0"):
             w.validate()
 
@@ -132,7 +132,7 @@ class TestScoreSetup:
             ema_trend=[49000.0],
             side=OrderSide.BUY,
         )
-        assert score > 0.5
+        assert score > 0.4
         assert "rsi" in breakdown
         assert "sr_proximity" in breakdown
         assert "volume" in breakdown
@@ -152,7 +152,7 @@ class TestScoreSetup:
             ema_trend=[51000.0],
             side=OrderSide.SELL,
         )
-        assert score > 0.5
+        assert score > 0.4
 
     def test_neutral_rsi_low_score(self):
         """RSI near 50 should produce a low RSI component score."""

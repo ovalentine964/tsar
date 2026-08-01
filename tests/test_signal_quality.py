@@ -526,7 +526,10 @@ class TestPositionTier:
     @pytest.fixture
     def sqf(self, default_config) -> SignalQualityFilter:
         with patch.object(SignalQualityFilter, '__init__', lambda self, *a, **kw: None):
+            original_abc = SignalQualityFilter.__abstractmethods__
+            SignalQualityFilter.__abstractmethods__ = frozenset()
             sqf = SignalQualityFilter.__new__(SignalQualityFilter)
+            SignalQualityFilter.__abstractmethods__ = original_abc
             sqf.run_cycle = AsyncMock()
             sqf._no_trade_threshold = 0.60
             sqf._small_threshold = 0.70
