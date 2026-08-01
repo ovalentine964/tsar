@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "tsar"
-version = "0.2.0"
+version = "0.2.2"
 description = "TSAR — self-improving autonomous trading system that compounds knowledge through use"
 requires-python = ">=3.12"
 license = { text = "MIT" }

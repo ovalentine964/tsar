@@ -7,18 +7,22 @@
 | **Python** | 3.12+ | Core runtime |
 | **Docker** | 24.0+ | Container orchestration (recommended) |
 | **Docker Compose** | 2.20+ | Multi-service deployment |
-| **Redis** | 7.0+ | State cache, regime data (auto-configured in Docker) |
+| **Redis** | 7.0+ | State cache, regime data, event bus (auto-configured in Docker) |
 | **Git** | 2.30+ | Source control |
 | **Binance Account** | — | Exchange access (testnet or live) |
 
 ### Optional
 
-| Tool | Purpose |
-|------|---------|
-| Rust 1.79+ | Performance layer (Level 2 backends) |
-| CMake + g++ | C++ specialist layer (Level 3+ backends) |
-| Flutter SDK | Mobile app development |
-| NVIDIA GPU | GPU-accelerated skills (cuFOLIO, cuOpt) |
+| Tool | Version | Purpose |
+|------|---------|---------|
+| Rust | 1.79+ | Performance layer (14 crates — MEV scanner, gas optimizer, tick processor) |
+| CMake + g++ | — | C++ specialist layer (Level 3+ backends) |
+| Flutter SDK | 3.16+ | Mobile app development |
+| NVIDIA GPU | — | GPU-accelerated skills (cuFOLIO, cuOpt) |
+| Foundry / Hardhat | — | Smart contract compilation (blockchain rules) |
+| Node.js | 18+ | Smart contract tooling |
+
+> **Note:** TSAR works without Rust or C++ — Python fallbacks exist for all backends. The system degrades gracefully.
 
 ---
 
@@ -87,7 +91,7 @@ curl http://localhost:8000/health
 Docker handles all dependencies automatically.
 
 ```bash
-# Build images
+# Build images (includes Rust compilation)
 make docker-build
 
 # Start services (TSAR + Redis)
@@ -154,6 +158,34 @@ make migrate
 python3 -m src --paper
 ```
 
+### Option D: With Rust Performance Layer
+
+```bash
+# Install Rust (if not already installed)
+curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+source ~/.cargo/env
+
+# Build Rust crates
+cd rust && cargo build --release && cd ..
+
+# Install with Rust backend
+pip install -e ".[dev,rust]"
+```
+
+### Option E: With Blockchain Rules
+
+```bash
+# Install Foundry (for Solidity contracts)
+curl -L https://foundry.paradigm.xyz | bash
+foundryup
+
+# Compile contracts
+cd blockchain/contracts && forge build && cd ../..
+
+# Deploy to testnet (requires PRIVATE_KEY in .env)
+./scripts/deploy-contracts.sh --network sepolia
+```
+
 ---
 
 ## Environment Variables
@@ -171,24 +203,39 @@ All variables are documented in `.env.example`. Here's the full reference:
 | `TSAR_API_KEY` | API authentication key (generate with `secrets.token_urlsafe(48)`) | `random-48-char-string` |
 | `REDIS_PASSWORD` | Redis authentication password | `random-32-char-string` |
 
-### Optional
+### Optional — Telegram
 
 | Variable | Description | Default |
 |----------|-------------|---------|
 | `TELEGRAM_BOT_TOKEN` | Telegram bot token from @BotFather | *(empty)* |
 | `TELEGRAM_CHAT_ID` | Your Telegram chat ID | *(empty)* |
+
+### Optional — Server
+
+| Variable | Description | Default |
+|----------|-------------|---------|
 | `TSAR_API_PORT` | API server port | `8000` |
 | `TSAR_TRADING_MODE` | `paper` or `live` | `paper` |
 | `TSAR_CORS_ORIGINS` | Comma-separated allowed origins | *(empty — denies all)* |
 | `REDIS_HOST` | Redis hostname | `redis` (Docker) / `localhost` |
 | `REDIS_PORT` | Redis port | `6379` |
 
+### Optional — Blockchain
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `ETH_RPC_URL` | Ethereum RPC endpoint | `https://sepolia.infura.io/v3/...` |
+| `POLYGON_RPC_URL` | Polygon RPC endpoint | *(empty)* |
+| `ARBITRUM_RPC_URL` | Arbitrum RPC endpoint | *(empty)* |
+| `SOLANA_RPC_URL` | Solana RPC endpoint | `https://api.devnet.solana.com` |
+| `PRIVATE_KEY` | Deployer wallet private key (testnet only!) | *(empty)* |
+
 ### Security Notes
 
 - `TSAR_API_KEY` — TSAR **refuses to start** if this is empty or uses a known weak value
 - `REDIS_PASSWORD` — Generate a strong random password; don't use defaults
-- `EXCHANGE_API_KEY` / `EXCHANGE_SECRET` — Use testnet keys until you've validated with 30+ paper trades
-- All secrets are validated at startup (see `src/__main__.py` — `_validate_secrets()`)
+- `EXCHANGE_API_KEY` / `EXCHANGE_SECRET` — Use testnet keys until you've validated with 50+ paper trades and 75% win rate
+- `PRIVATE_KEY` — **Never use a mainnet private key.** Testnet only. All secrets are validated at startup (see `src/__main__.py` — `_validate_secrets()`)
 
 ---
 
@@ -205,6 +252,7 @@ All variables are documented in `.env.example`. Here's the full reference:
 [ ] Wait for first signal — check /status endpoint
 [ ] Monitor for 24 hours
 [ ] Run for 7 days in paper mode
+[ ] Achieve 75% win rate over 50+ trades
 [ ] Only then consider switching to live mode
 ```
 
@@ -219,8 +267,10 @@ All variables are documented in `.env.example`. Here's the full reference:
 
 **Live trading requires:**
 1. An active mandate (`config/mandate.yaml` — `status: ACTIVE`)
-2. 30+ profitable paper trades
-3. Manual approval via the Mandate Gate
+2. 50+ paper trades
+3. 7+ days of paper trading
+4. 75%+ win rate
+5. Manual approval via the Mandate Gate
 
 ---
 
@@ -323,6 +373,38 @@ ollama pull qwen2.5:7b
 
 # Check LLM config
 cat config/models.yaml
+```
+
+### Rust build fails
+
+```bash
+# Check Rust version (need 1.79+)
+rustc --version
+
+# Update Rust
+rustup update stable
+
+# Build with verbose output
+cd rust && cargo build --release -vv
+
+# Fallback: TSAR works without Rust (Python backends only)
+pip install -e ".[dev]"  # without rust extras
+```
+
+### Smart contract deployment fails
+
+```bash
+# Check Foundry installation
+forge --version
+
+# Verify .env has PRIVATE_KEY set
+grep PRIVATE_KEY .env
+
+# Check RPC URL is accessible
+curl -X POST $ETH_RPC_URL -H "Content-Type: application/json" -d '{"jsonrpc":"2.0","method":"eth_blockNumber","params":[],"id":1}'
+
+# Compile contracts locally
+cd blockchain/contracts && forge build
 ```
 
 ### Tests failing

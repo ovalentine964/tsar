@@ -2,6 +2,49 @@
 
 All notable changes to TSAR are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/).
 
+## [0.2.2] — 2026-08-01
+
+### Added
+- **News Gap Implementation**: 5 new intelligence sources — Whale Alert (large on-chain transfers), SEC/CFTC (regulatory filings), Exploit Alerts (security incidents), Twitter/X (influencer sentiment), Reddit/Discord (community sentiment). Total: 43 tools.
+- **LLM News Verification**: All news signals pass through LLM verification before triggering trades. Source accuracy tracking over time.
+- **On-Chain Rules**: Solidity smart contracts for trustless risk enforcement — TSARKillSwitch, TSARMandate, TSARAuditTrail, TSARGovernance, TSARPositionLimits. Dual enforcement model: off-chain (fast, Python) + on-chain (trustless, Solidity).
+- **Rust EVM Bindings**: `rules-enforcer` crate with EVM client for on-chain kill switch, mandate verification, and position limits. Python bridge for blockchain enforcer.
+- **Blockchain Deploy Script**: `scripts/deploy-contracts.sh` for smart contract deployment to testnets.
+- **Production Dockerfile**: Multi-stage build with Rust compilation, optimized for production.
+- **Docker Compose v2**: Full production stack — TSAR app, Redis, Prometheus, Grafana.
+- **Azure Deploy Script**: `scripts/deploy-azure.sh` for Container Instances deployment.
+- **.env.template**: Production environment template with all required variables.
+- **OpenHarness Agent Loop**: Streaming tool-call cycle adapted for TSAR — LLM stream → tool execute → result merge → retry with backoff. Token counting, cost tracking, parallel tool execution.
+- **Signal Quality System**: `config/signal_quality.yaml` with signal quality thresholds and filtering.
+- **News Timing Execution Report**: Analysis of news impact timing and optimal execution windows.
+- **Entry/Exit Optimization**: Entry and exit point optimization strategies.
+- **Council Reports**: Blockchain for Rules (8.5/10), News Detection (7/10), Blockchain for Performance (3/10), Rust-Blockchain Bridge integration.
+
+### Changed
+- **CI/CD**: Updated GitHub Actions workflow with Rust build step.
+- **Dockerfile**: Multi-stage build with Rust compilation support.
+- **config/blockchain.yaml**: New configuration for blockchain rules, chain endpoints, contract addresses.
+
+## [0.2.1] — 2026-08-01
+
+### Added
+- **Scenario Prevention**: 5 new modules for institutional-grade loss prevention — Flash Crash Detector, Stop Hunt Detector, Whipsaw Detector, Liquidity Analyzer, Correlation Breaker.
+- **Paper Trading Gate**: 75% win rate requirement before live trading. Gate requires: 50 trades + 7 days + 75% win rate. Paper engine fully wired with 0 balance fix.
+- **Rust Crates (4 new)**: `mev-scanner` (mempool monitoring, sandwich detection), `gas-optimizer` (multi-chain gas comparison), `dex-aggregator` (cross-DEX route optimization), `price-feed` (aggregated price feed with staleness detection). Total: 14 crates.
+- **PyO3 Bridge**: Rust ↔ Python bridge files for seamless interop between performance layer and agent brain.
+- **Trade Education Module**: `src/education/` — structured trade education content and learning paths.
+- **DeFi Fallback**: Python fallback for Rust compilation — system works without Rust toolchain.
+- **Config Updates**: `config/risk.yaml` with scenario prevention parameters, `config/default.yaml` with new risk settings, `config/mandate.yaml` with win rate gate.
+
+### Changed
+- **Mandate Gate**: Now requires 75% win rate (previously: 30 profitable trades). Stricter but more reliable.
+- **Rust Cargo.toml**: Added 4 new crate workspaces.
+- **Risk Parameters**: Updated `risk.yaml` with scenario prevention thresholds.
+
+### Fixed
+- **Paper Trading Engine**: Engine properly wired, zero balance initialization.
+- **DeFi Backend**: Graceful degradation when Rust compilation unavailable.
+
 ## [0.2.0] — 2026-08-01
 
 ### Added
