@@ -21,7 +21,6 @@ import time
 from typing import Any
 
 from src.agents.base import BaseAgent
-from src.comms.event_bus import get_shared_bus
 from src.comms.events import CloudEvent
 
 logger = logging.getLogger(__name__)
@@ -42,7 +41,7 @@ class FlywheelOrchestrator(BaseAgent):
     ROLE = "ANALYSIS"
 
     PUBLISH_STREAM = "flywheel_events"
-    SUBSCRIBE_STREAMS = ["trades"]
+    SUBSCRIBE_STREAMS = ["trades", "fills"]
 
     # Flywheel tuning
     MIN_TRADES_FOR_EXTRACTION = 5
@@ -75,9 +74,6 @@ class FlywheelOrchestrator(BaseAgent):
         self._total_mutations_proposed = 0
         self._total_mutations_applied = 0
 
-        # Shared EventBus singleton (same instance as Orchestrator)
-        self._event_bus = get_shared_bus()
-
         # Flywheel lock to prevent concurrent runs
         self._flywheel_lock = asyncio.Lock()
 
@@ -86,10 +82,6 @@ class FlywheelOrchestrator(BaseAgent):
         logger.info("🔄 Flywheel Orchestrator initializing...")
 
         await self._init_pipeline_components()
-
-        # Subscribe to trade events on the shared EventBus
-        self._event_bus.subscribe("tsar.trade.executed.v1", self._on_trade_executed)
-        self._event_bus.subscribe("tsar.trade.recorded.v1", self._on_trade_executed)
 
         logger.info(
             "🔄 Flywheel Orchestrator ready: "
@@ -191,6 +183,17 @@ class FlywheelOrchestrator(BaseAgent):
         if batch_ready and cooldown_elapsed:
             # Run flywheel in background (don't block trade processing)
             asyncio.create_task(self._run_flywheel())
+
+    async def handle_event(self, stream: str, event: CloudEvent) -> None:
+        """Handle events from subscribed streams (trades, fills).
+
+        Routes trade execution events to the flywheel's trade handler.
+        """
+        if stream in ("trades", "fills") and event.type in (
+            "tsar.trade.executed.v1",
+            "tsar.trade.recorded.v1",
+        ):
+            await self._on_trade_executed(event.data)
 
     async def run_cycle(self) -> None:
         """Main flywheel orchestrator cycle.

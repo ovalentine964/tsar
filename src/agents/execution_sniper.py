@@ -581,35 +581,47 @@ class ExecutionSniper(BaseAgent):
             take_profit: Take-profit price.
             trace_id: Distributed trace ID.
         """
+        trade_data = {
+            "signal_id": signal_id,
+            "symbol": symbol,
+            "side": side.value,
+            "quantity": quantity,
+            "entry_price": entry_result.average_price,
+            "entry_order_id": entry_result.order_id,
+            "stop_loss": stop_loss,
+            "stop_loss_order_id": sl_order_id,
+            "take_profit": take_profit,
+            "take_profit_order_id": tp_order_id,
+            "slippage_bps": entry_result.slippage_bps,
+            "total_fee": entry_result.total_fee,
+            "fills": [
+                {
+                    "fill_id": f.fill_id,
+                    "price": f.price,
+                    "quantity": f.quantity,
+                    "fee": f.fee,
+                    "timestamp": f.timestamp.isoformat() if f.timestamp else None,
+                }
+                for f in entry_result.fills
+            ],
+            "status": entry_result.status.value,
+            "timestamp": datetime.now(UTC).isoformat(),
+        }
+
+        # Publish to both "trades" and "fills" streams
+        # (agents subscribe to one or the other)
         await self.publish_event(
             stream="trades",
             event_type="tsar.trade.executed.v1",
-            data={
-                "signal_id": signal_id,
-                "symbol": symbol,
-                "side": side.value,
-                "quantity": quantity,
-                "entry_price": entry_result.average_price,
-                "entry_order_id": entry_result.order_id,
-                "stop_loss": stop_loss,
-                "stop_loss_order_id": sl_order_id,
-                "take_profit": take_profit,
-                "take_profit_order_id": tp_order_id,
-                "slippage_bps": entry_result.slippage_bps,
-                "total_fee": entry_result.total_fee,
-                "fills": [
-                    {
-                        "fill_id": f.fill_id,
-                        "price": f.price,
-                        "quantity": f.quantity,
-                        "fee": f.fee,
-                        "timestamp": f.timestamp.isoformat() if f.timestamp else None,
-                    }
-                    for f in entry_result.fills
-                ],
-                "status": entry_result.status.value,
-                "timestamp": datetime.now(UTC).isoformat(),
-            },
+            data=trade_data,
+            priority=1,
+            risk_level="LOW",
+            trace_id=trace_id,
+        )
+        await self.publish_event(
+            stream="fills",
+            event_type="tsar.trade.executed.v1",
+            data=trade_data,
             priority=1,
             risk_level="LOW",
             trace_id=trace_id,

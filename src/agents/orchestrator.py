@@ -26,7 +26,6 @@ import time
 from typing import Any
 
 from src.agents.base import BaseAgent
-from src.comms.event_bus import get_shared_bus
 from src.comms.events import (
     TSAR_RULE_VALIDATED,
     TSAR_SHADOW_EXTRACTED,
@@ -107,13 +106,7 @@ class Orchestrator(BaseAgent):
         self._win_rate_tracker: WinRateTracker | None = None
         self._alert_generator: AlertGenerator | None = None
 
-        # Event bus for flywheel (shared singleton so all agents see the same events)
-        self._event_bus = get_shared_bus()
         self._trade_count = 0
-
-        # Wire event bus to flywheel orchestrator for trade forwarding
-        self._event_bus.subscribe("tsar.trade.executed.v1", self._forward_to_flywheel)
-        self._event_bus.subscribe("tsar.trade.recorded.v1", self._forward_to_flywheel)
 
         # Graceful shutdown
         self._shutdown_event = asyncio.Event()
@@ -510,11 +503,6 @@ class Orchestrator(BaseAgent):
                     event.data.get("entry_price"),
                     event.data.get("slippage_bps"),
                 )
-
-                # Flywheel: publish trade event to event bus
-                # The FlywheelOrchestrator subscribes to these events
-                await self._event_bus.publish("tsar.trade.executed.v1", event.data)
-                await self._event_bus.publish("tsar.trade.recorded.v1", event.data)
 
             elif event.type == "tsar.trade.failed.v1":
                 self._trades_failed += 1

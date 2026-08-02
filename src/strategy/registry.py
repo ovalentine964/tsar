@@ -8,6 +8,7 @@ Provides signal aggregation across all active strategies.
 
 from __future__ import annotations
 
+import json
 import logging
 from typing import TYPE_CHECKING, Any
 
@@ -187,6 +188,80 @@ class StrategyRegistry:
         return exits
 
     # ── Signal Aggregation ───────────────────────────────────
+
+    def apply_genome_weights(self, genome_data: dict[str, Any]) -> bool:
+        """Apply genome weights to the corresponding strategy.
+
+        Bridges the genome evolution system to the strategy registry.
+        When StrategyGeneticist evolves a genome, the updated weights
+        are applied to the live strategy via this method.
+
+        Args:
+            genome_data: Dict with 'strategy_type' (maps to strategy NAME),
+                and optional 'entry_rules', 'exit_rules', 'risk_params'
+                as JSON strings.
+
+        Returns:
+            True if a strategy was found and updated.
+        """
+        strategy_type = genome_data.get("strategy_type", "")
+        if not strategy_type:
+            return False
+
+        strategy = self._strategies.get(strategy_type)
+        if strategy is None:
+            logger.warning(
+                "No strategy registered for genome type '%s'", strategy_type
+            )
+            return False
+
+        # Update strategy parameters from genome
+        updated = False
+
+        entry_rules = genome_data.get("entry_rules")
+        if entry_rules:
+            try:
+                rules = json.loads(entry_rules) if isinstance(entry_rules, str) else entry_rules
+                if hasattr(strategy, "entry_params"):
+                    strategy.entry_params.update(rules)
+                    updated = True
+                elif hasattr(strategy, "params"):
+                    strategy.params.update(rules)
+                    updated = True
+            except (json.JSONDecodeError, TypeError):
+                logger.warning("Failed to parse entry_rules for %s", strategy_type)
+
+        exit_rules = genome_data.get("exit_rules")
+        if exit_rules:
+            try:
+                rules = json.loads(exit_rules) if isinstance(exit_rules, str) else exit_rules
+                if hasattr(strategy, "exit_params"):
+                    strategy.exit_params.update(rules)
+                    updated = True
+                elif hasattr(strategy, "params"):
+                    strategy.params.update(rules)
+                    updated = True
+            except (json.JSONDecodeError, TypeError):
+                logger.warning("Failed to parse exit_rules for %s", strategy_type)
+
+        risk_params = genome_data.get("risk_params")
+        if risk_params:
+            try:
+                params = json.loads(risk_params) if isinstance(risk_params, str) else risk_params
+                if hasattr(strategy, "risk_params"):
+                    strategy.risk_params.update(params)
+                    updated = True
+                elif hasattr(strategy, "params"):
+                    strategy.params.update(params)
+                    updated = True
+            except (json.JSONDecodeError, TypeError):
+                logger.warning("Failed to parse risk_params for %s", strategy_type)
+
+        if updated:
+            logger.info(
+                "Applied genome weights to strategy '%s'", strategy_type
+            )
+        return updated
 
     def aggregate_signals(
         self,
