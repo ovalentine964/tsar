@@ -35,7 +35,7 @@ void main() async {
         ChangeNotifierProvider(create: (_) => DashboardProvider(apiService)),
         ChangeNotifierProvider(create: (_) => TradeProvider(apiService)),
         ChangeNotifierProvider(create: (_) => PortfolioProvider(apiService)),
-        ChangeNotifierProvider(create: (_) => RiskProvider(apiService, notificationService)),
+        ChangeNotifierProvider(create: (_) => RiskProvider(apiService)),
         ChangeNotifierProvider(create: (_) => MandateProvider(apiService)),
         ChangeNotifierProvider(create: (_) => FactorProvider(apiService)),
         ChangeNotifierProvider(create: (_) => StrategyProvider(apiService)),

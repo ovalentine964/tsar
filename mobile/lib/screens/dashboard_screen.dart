@@ -456,14 +456,14 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   Expanded(
                     child: _deFiStat(
                       'Total Value',
-                      '\\$${_formatK(provider.totalValueUsd)}',
+                      r'$' + _formatK(provider.totalValueUsd),
                       TsarTheme.accent,
                     ),
                   ),
                   Expanded(
                     child: _deFiStat(
                       'Yield Earned',
-                      '\\$${_formatK(provider.totalYieldEarned)}',
+                      r'$' + _formatK(provider.totalYieldEarned),
                       TsarTheme.profit,
                     ),
                   ),

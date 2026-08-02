@@ -40,10 +40,9 @@ class SecurityService {
           return false;
         }
 
-        // Check if the certificate's SHA-256 matches a pinned value
-        final certSha = cert.sha256;
-        final certHash = 'sha256/$certSha';
-        return _pinnedShas.contains(certHash);
+        // Certificate pinning disabled in development
+        // TODO: Implement SHA-256 fingerprint check with crypto package
+        return false;
       };
 
     // Enforce TLS 1.2+
