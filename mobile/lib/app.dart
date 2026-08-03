@@ -10,6 +10,7 @@ import 'screens/news_screen.dart';
 import 'screens/defi_screen.dart';
 import 'screens/blockchain_screen.dart';
 import 'screens/settings_screen.dart';
+import 'services/websocket_service.dart';
 import 'widgets/kill_switch_fab.dart';
 
 class TsarApp extends StatelessWidget {
@@ -41,6 +42,26 @@ class MainShell extends StatefulWidget {
 
 class _MainShellState extends State<MainShell> {
   int _currentIndex = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    // Connect WebSocket once the shell is mounted and providers are ready.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final ws = context.read<WebSocketService>();
+      ws.connect();
+    });
+  }
+
+  @override
+  void dispose() {
+    // Disconnect WebSocket when the main shell is torn down.
+    // Safe to call even if connect() was never reached.
+    try {
+      context.read<WebSocketService>().disconnect();
+    } catch (_) {}
+    super.dispose();
+  }
 
   final _screens = const [
     DashboardScreen(),

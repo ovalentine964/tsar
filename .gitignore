@@ -9,6 +9,7 @@
 *.key
 *.pem
 *.p12
+key.properties
 
 # --- TLS certificates (generated, never commit) ---
 deploy/tls/certs/

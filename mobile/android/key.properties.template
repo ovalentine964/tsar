@@ -1,0 +1,16 @@
+# Release signing configuration for TSAR Mobile
+# Copy this file to key.properties and fill in real values.
+# key.properties MUST be in .gitignore — never commit real credentials.
+
+storePassword=<your-store-password>
+keyPassword=<your-key-password>
+keyAlias=<your-key-alias>
+storeFile=<path-to-keystore-file, e.g. ../keystore/tsar-release.jks>
+
+# ─── How to generate a keystore ────────────────────────────────────
+# keytool -genkey -v -keystore tsar-release.jks \
+#   -keyalg RSA -keysize 2048 -validity 10000 \
+#   -alias tsar-release
+#
+# Store the resulting .jks file outside the repo (e.g. ~/keystores/)
+# and point storeFile to the absolute path.

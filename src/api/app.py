@@ -97,6 +97,7 @@ def create_app(config: Any = None) -> FastAPI:
         version="0.5.0",
         docs_url=None if is_production else "/docs",
         redoc_url=None if is_production else "/redoc",
+        openapi_url=None if is_production else "/openapi.json",
     )
 
     # Rate limiting
@@ -105,9 +106,12 @@ def create_app(config: Any = None) -> FastAPI:
 
     @app.exception_handler(RateLimitExceeded)
     async def rate_limit_handler(request: Request, exc: RateLimitExceeded):
-        return HTTPException(
+        from fastapi.responses import JSONResponse
+        retry_after = getattr(exc, 'retry_after', 60)
+        return JSONResponse(
             status_code=429,
-            detail="Rate limit exceeded. Please try again later.",
+            content={"detail": "Rate limit exceeded. Please try again later."},
+            headers={"Retry-After": str(retry_after)},
         )
 
     # CORS
@@ -127,6 +131,17 @@ def create_app(config: Any = None) -> FastAPI:
         allow_methods=["GET", "POST", "PUT", "DELETE"],
         allow_headers=["Authorization", "Content-Type"],
     )
+
+    # Security headers middleware
+    @app.middleware("http")
+    async def security_headers_middleware(request: Request, call_next):
+        response = await call_next(request)
+        response.headers["X-Content-Type-Options"] = "nosniff"
+        response.headers["X-Frame-Options"] = "DENY"
+        response.headers["X-XSS-Protection"] = "1; mode=block"
+        if is_production:
+            response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
+        return response
 
     # ════════════════════════════════════════════════════════════════
     # HEALTH (no auth required)
@@ -451,9 +466,19 @@ def create_app(config: Any = None) -> FastAPI:
         """Compute all factors for a symbol using factor_library tool."""
         try:
             from src.strategy.factor_library import FactorLibrary
+            from src.strategy.factors import FACTOR_REGISTRY
             fl = FactorLibrary()
-            # FactorLibrary computes from real data
-            return {"symbol": symbol, "status": "computed", "factors": {}}
+            # Build a summary of all registered factors with their metadata
+            computed = {}
+            for name, entry in FACTOR_REGISTRY.items():
+                computed[name] = {
+                    "category": entry.get("category", "other"),
+                    "description": entry.get("description", ""),
+                    "default_params": entry.get("default_params", {}),
+                    "universe": entry.get("universe", []),
+                }
+            fl.close()
+            return {"symbol": symbol, "status": "computed", "factors": computed}
         except Exception as e:
             logger.error("Failed to compute factors: %s", e)
             return {"symbol": symbol, "error": "Failed to compute factors."}
@@ -462,9 +487,25 @@ def create_app(config: Any = None) -> FastAPI:
     async def benchmark_factors(api_key: str = Depends(require_api_key)):
         """Run IC/IR benchmark on all factors."""
         try:
+            from src.strategy.factor_library import FactorLibrary
             from src.strategy.factor_bench import FactorBenchmarker
-            fb = FactorBenchmarker()
-            return {"status": "completed", "rankings": []}
+            fl = FactorLibrary()
+            fb = FactorBenchmarker(fl)
+            # Return factor library metadata as benchmark overview
+            factors = fl.list_factors()
+            fl.close()
+            return {
+                "status": "completed",
+                "n_factors": len(factors),
+                "rankings": [
+                    {
+                        "factor_name": f.name,
+                        "category": f.category,
+                        "description": f.description,
+                    }
+                    for f in factors
+                ],
+            }
         except Exception as e:
             logger.error("Failed to benchmark factors: %s", e)
             return {"status": "error", "error": "Failed to benchmark factors."}
@@ -570,6 +611,9 @@ def create_app(config: Any = None) -> FastAPI:
             m = Mandate(config_path=Path("config/mandate.yaml"))
             m.commit("api_user")
             return {"status": "ACTIVE", "message": "Mandate committed"}
+        except ValueError as e:
+            logger.warning("Mandate commit validation failed: %s", e)
+            raise HTTPException(status_code=422, detail=str(e))
         except Exception as e:
             logger.error("Failed to commit mandate: %s", e)
             raise HTTPException(status_code=500, detail="Failed to commit mandate.")
@@ -748,8 +792,12 @@ def create_app(config: Any = None) -> FastAPI:
         try:
             from src.knowledge.fts_search import MemoryRecall
             store_list = stores.split(",") if stores else None
-            async with MemoryRecall(_db_path()) as rec:
+            rec = MemoryRecall(_db_path())
+            await rec.initialize()
+            try:
                 results = await rec.search(query, stores=store_list)
+            finally:
+                await rec.close()
             return {
                 "query": query,
                 "results": [

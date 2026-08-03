@@ -91,109 +91,46 @@ jobs:
     permissions:
       pages: write
       id-token: write
+      contents: write
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: gh-pages
+          fetch-depth: 0
 
       - name: Download APK
         uses: actions/download-artifact@v4
         with:
           name: tsar-mobile-apk
-          path: _site/download/
+          path: download/
 
-      - name: Generate release page
+      - name: Update index.html version info
         run: |
           COMMIT_SHA="${GITHUB_SHA::8}"
-          COMMIT_MSG=$(git log -1 --pretty=%B | head -1)
-          BUILD_DATE=$(date -u +"%Y-%m-%d %H:%M UTC")
-          APK_SIZE=$(du -h _site/download/app-release.apk | cut -f1)
+          BUILD_DATE=$(date -u +"%Y-%m-%d")
+          APK_SIZE=$(du -h download/app-release.apk | cut -f1)
+          # Update version badge and date in the existing gh-pages index.html
+          sed -i "s|v[0-9]*\.[0-9]*\.[0-9]* &middot; Alpha|v1.0.0 \&middot; Alpha|g" index.html
+          sed -i "s|Commit [a-f0-9]*|Commit ${COMMIT_SHA}|g" index.html
+          sed -i "s|Built [0-9-]*|Built ${BUILD_DATE}|g" index.html
 
-          cat > _site/index.html << 'HTMLEOF'
-          <!DOCTYPE html>
-          <html lang="en">
-          <head>
-            <meta charset="UTF-8">
-            <meta name="viewport" content="width=device-width, initial-scale=1.0">
-            <title>TSAR Mobile — Download</title>
-            <style>
-              * { margin: 0; padding: 0; box-sizing: border-box; }
-              body {
-                font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-                background: #121212; color: #E0E0E0;
-                min-height: 100vh; display: flex; align-items: center; justify-content: center;
-              }
-              .container { max-width: 480px; padding: 2rem; text-align: center; }
-              .logo { font-size: 4rem; margin-bottom: 1rem; }
-              h1 { font-size: 2rem; font-weight: 700; color: #fff; margin-bottom: 0.5rem; }
-              .subtitle { color: #888; margin-bottom: 2rem; font-size: 0.95rem; }
-              .card {
-                background: #1E1E1E; border-radius: 16px; padding: 2rem;
-                border: 1px solid #333; margin-bottom: 1.5rem;
-              }
-              .version { color: #888; font-size: 0.85rem; margin-bottom: 1rem; }
-              .download-btn {
-                display: inline-flex; align-items: center; gap: 0.75rem;
-                background: #00C853; color: #000; font-weight: 700;
-                padding: 1rem 2rem; border-radius: 12px; text-decoration: none;
-                font-size: 1.1rem; transition: all 0.2s;
-              }
-              .download-btn:hover { background: #00E676; transform: translateY(-2px); }
-              .download-btn svg { width: 24px; height: 24px; }
-              .info { color: #666; font-size: 0.8rem; margin-top: 1rem; }
-              .features {
-                text-align: left; margin-top: 2rem;
-                display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem;
-              }
-              .feature {
-                background: #1A1A1A; padding: 0.75rem 1rem; border-radius: 8px;
-                font-size: 0.85rem; color: #AAA;
-              }
-              .feature span { color: #00C853; }
-              .footer { margin-top: 2rem; color: #444; font-size: 0.75rem; }
-              .build-info { color: #555; font-size: 0.75rem; margin-top: 0.5rem; }
-            </style>
-          </head>
-          <body>
-            <div class="container">
-              <div class="logo">🏰</div>
-              <h1>TSAR Mobile</h1>
-              <p class="subtitle">Trading Super Agent for Returns</p>
+      - name: Commit updated APK to gh-pages
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add download/app-release.apk index.html
+          git diff --cached --quiet && echo "No changes" && exit 0
+          git commit -m "chore: update APK to ${GITHUB_SHA::8}"
+          git push
 
-              <div class="card">
-                <p class="version">v0.1.0 • BUILD_VERSION • BUILD_DATE</p>
-                <a href="download/app-release.apk" class="download-btn">
-                  <svg viewBox="0 0 24 24" fill="currentColor"><path d="M5 20h14v-2H5v2zm7-18v12.17l3.59-3.58L17 12l-5 5-5-5 1.41-1.41L12 14.17V2z"/></svg>
-                  Download APK (APK_SIZE)
-                </a>
-                <p class="info">Android 5.0+ • Requires TSAR backend</p>
-              </div>
-
-              <div class="features">
-                <div class="feature"><span>📊</span> Live Dashboard</div>
-                <div class="feature"><span>🔴</span> Kill Switch</div>
-                <div class="feature"><span>📈</span> Trade History</div>
-                <div class="feature"><span>🛡️</span> Risk Monitor</div>
-                <div class="feature"><span>🧬</span> 28 Factors</div>
-                <div class="feature"><span>🔍</span> Knowledge Search</div>
-                <div class="feature"><span>📋</span> Mandate Gate</div>
-                <div class="feature"><span>🌀</span> Flywheel Health</div>
-              </div>
-
-              <p class="build-info">Commit: COMMIT_SHA • COMMIT_MSG</p>
-              <p class="footer">Built with ❤️ by the TSAR Council</p>
-            </div>
-          </body>
-          </html>
-          HTMLEOF
-
-          # Replace placeholders
-          sed -i "s|BUILD_VERSION|${COMMIT_SHA}|g" _site/index.html
-          sed -i "s|BUILD_DATE|${BUILD_DATE}|g" _site/index.html
-          sed -i "s|APK_SIZE|${APK_SIZE}|g" _site/index.html
-          sed -i "s|COMMIT_SHA|${COMMIT_SHA}|g" _site/index.html
-          sed -i "s|COMMIT_MSG|${COMMIT_MSG}|g" _site/index.html
+      - name: Prepare Pages site
+        run: |
+          mkdir -p _site
+          cp -r . _site/
+          rm -rf _site/.git
 
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v3
