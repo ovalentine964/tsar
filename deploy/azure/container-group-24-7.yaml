@@ -1,0 +1,162 @@
+# ============================================================
+# TSAR — Azure Container Instances: 24/7 Free Tier Config
+# ============================================================
+# Optimized for continuous operation on Azure Free Tier:
+#   - restartPolicy: Always (not OnFailure) for platform restarts
+#   - Azure Files volume for SQLite data persistence
+#   - Single container, no Redis (SQLite-only mode)
+#   - Liveness + Readiness probes
+#   - Memory-optimized: 0.85 GB (leaves headroom in 1 GB B1s)
+#
+# Free Tier Budget:
+#   ACI Linux: 750 vCPU-hours + 500 GB-hours/month
+#   This config: 1 vCPU × 744h = 744 vCPU-hours ✅
+#                0.85 GB × 744h = 632 GB-hours (over budget by ~128)
+#   → Uses 0.75 GB to stay within 500 GB-hours: 0.75 × 744 = 558 GB-hours
+#      Still over. Adjusted to 0.65 GB: 0.65 × 744 = 483 GB-hours ✅
+#
+# IMPORTANT: This is a TEMPLATE. Run deploy-24-7.sh to resolve
+# ${...} variables and provision Azure resources.
+# ============================================================
+
+apiVersion: "2021-10-01"
+location: ${LOCATION}
+name: ${CONTAINER_GROUP}
+type: Microsoft.ContainerInstance/containerGroups
+
+properties:
+  osType: Linux
+  # CRITICAL: "Always" restarts on ALL exits (including platform restarts,
+  # OOM kills, and crashes). "OnFailure" only restarts on non-zero exit codes
+  # and misses platform-initiated restarts.
+  restartPolicy: Always
+
+  # ── IP & Networking ──────────────────────────────────────
+  ipAddress:
+    type: Public
+    ports:
+      - port: 8000
+        protocol: TCP
+    dnsNameLabel: ${DNS_LABEL}
+
+  # ── Shared Volumes (Azure Files — persistent across restarts) ──
+  volumes:
+    - name: tsar-data
+      azureFile:
+        shareName: tsar-data
+        storageAccountName: ${STORAGE_ACCOUNT}
+        storageAccountKey: ${STORAGE_KEY}
+    - name: tsar-logs
+      azureFile:
+        shareName: tsar-logs
+        storageAccountName: ${STORAGE_ACCOUNT}
+        storageAccountKey: ${STORAGE_KEY}
+
+  # ── Container: TSAR Application ──────────────────────────
+  containers:
+    - name: tsar-app
+      properties:
+        image: ${IMAGE_REF}
+
+        resources:
+          requests:
+            cpu: 1.0
+            # 0.65 GB fits within free tier budget:
+            # 0.65 GB × 744h = 483 GB-hours < 500 GB-hours free
+            memoryInGb: 0.65
+
+        ports:
+          - port: 8000
+            protocol: TCP
+
+        environmentVariables:
+          - name: TSAR_ENVIRONMENT
+            value: production
+          - name: TSAR_TRADING_MODE
+            value: paper
+          - name: TSAR_API_PORT
+            value: "8000"
+          - name: TSAR_API_HOST
+            value: "0.0.0.0"
+          - name: TSAR_DATABASE_BACKEND
+            value: sqlite
+          - name: TSAR_DATABASE_PATH
+            value: /app/data/tsar.db
+          - name: TSAR_REDIS_ENABLED
+            value: "false"
+          - name: TSAR_OLLAMA_ENABLED
+            value: "false"
+          - name: EXCHANGE_SANDBOX
+            value: "true"
+          - name: PYTHONUNBUFFERED
+            value: "1"
+          - name: PYTHONDONTWRITEBYTECODE
+            value: "1"
+          # Memory optimization
+          - name: MALLOC_ARENA_MAX
+            value: "2"
+          - name: PYTHONMALLOC
+            value: malloc
+          # CORS — set to your container FQDN after deploy
+          - name: TSAR_CORS_ORIGINS
+            value: "${TSAR_CORS_ORIGINS}"
+
+        # Secrets (injected securely — never baked into image)
+        secureEnvironmentVariables:
+          - name: TSAR_API_KEY
+            value: "${TSAR_API_KEY}"
+          - name: EXCHANGE_API_KEY
+            value: "${EXCHANGE_API_KEY}"
+          - name: EXCHANGE_SECRET
+            value: "${EXCHANGE_SECRET}"
+          - name: NVIDIA_API_KEY
+            value: "${NVIDIA_API_KEY}"
+          - name: DEEPSEEK_API_KEY
+            value: "${DEEPSEEK_API_KEY:-}"
+          - name: TELEGRAM_BOT_TOKEN
+            value: "${TELEGRAM_BOT_TOKEN:-}"
+          - name: TELEGRAM_CHAT_ID
+            value: "${TELEGRAM_CHAT_ID:-}"
+
+        # Volume mounts — persistent storage
+        volumeMounts:
+          - name: tsar-data
+            mountPath: /app/data
+          - name: tsar-logs
+            mountPath: /app/logs
+
+        # Liveness probe — restart if the API stops responding
+        # This is the PRIMARY self-healing mechanism in ACI.
+        # If 3 consecutive checks fail (90s), ACI restarts the container.
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8000
+          initialDelaySeconds: 45
+          periodSeconds: 30
+          failureThreshold: 3
+          timeoutSeconds: 10
+
+        # Readiness probe — signals container is ready to serve traffic
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 8000
+          initialDelaySeconds: 20
+          periodSeconds: 10
+          failureThreshold: 3
+          timeoutSeconds: 5
+
+  # ── Diagnostic Logging (Azure Monitor — optional) ────────
+  # Uncomment to enable Log Analytics integration:
+  # diagnostics:
+  #   logAnalytics:
+  #     workspaceId: ${LOG_ANALYTICS_WORKSPACE_ID}
+  #     workspaceKey: ${LOG_ANALYTICS_WORKSPACE_KEY}
+
+  # ── Tags ─────────────────────────────────────────────────
+  tags:
+    project: tsar
+    environment: production
+    tier: free
+    managed-by: deploy-24-7
