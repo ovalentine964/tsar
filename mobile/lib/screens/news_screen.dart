@@ -1,11 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:google_fonts/google_fonts.dart';
-import 'package:intl/intl.dart';
 import '../theme.dart';
-import '../models/news.dart';
 import '../providers/news_provider.dart';
-import '../widgets/cards.dart';
+import '../models/news.dart';
 
 class NewsScreen extends StatefulWidget {
   const NewsScreen({super.key});
@@ -14,468 +11,303 @@ class NewsScreen extends StatefulWidget {
   State<NewsScreen> createState() => _NewsScreenState();
 }
 
-class _NewsScreenState extends State<NewsScreen>
-    with SingleTickerProviderStateMixin {
-  late TabController _tabController;
+class _NewsScreenState extends State<NewsScreen> {
+  String _selectedSource = 'All';
+
+  final List<String> _sources = ['All', 'Whale Alert', 'SEC/CFTC', 'Twitter', 'Reddit', 'CryptoPanic'];
 
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 3, vsync: this);
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      context.read<NewsProvider>().refresh();
-    });
-  }
-
-  @override
-  void dispose() {
-    _tabController.dispose();
-    super.dispose();
+    context.read<NewsProvider>().refresh();
   }
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('News & Sentiment'),
-        actions: [
-          PopupMenuButton<SentimentType?>(
-            icon: Icon(
-              Icons.filter_list,
-              color: context.watch<NewsProvider>().filterSentiment != null
-                  ? TsarTheme.accent
-                  : Colors.white54,
-            ),
-            onSelected: (v) => context.read<NewsProvider>().setFilter(sentiment: v),
-            itemBuilder: (_) => [
-              const PopupMenuItem(value: null, child: Text('All Sentiment')),
-              const PopupMenuItem(value: SentimentType.bullish, child: Text('🟢 Bullish')),
-              const PopupMenuItem(value: SentimentType.bearish, child: Text('🔴 Bearish')),
-              const PopupMenuItem(value: SentimentType.neutral, child: Text('⚪ Neutral')),
+    return Consumer<NewsProvider>(
+      builder: (context, news, _) {
+        final items = news.items;
+        return Scaffold(
+          appBar: AppBar(
+            title: const Text('NEWS INTEL'),
+            actions: [
+              IconButton(icon: const Icon(Icons.refresh), onPressed: news.refresh),
             ],
           ),
-          IconButton(
-            icon: const Icon(Icons.refresh),
-            onPressed: () => context.read<NewsProvider>().refresh(),
-          ),
-        ],
-        bottom: TabBar(
-          controller: _tabController,
-          labelColor: TsarTheme.accent,
-          unselectedLabelColor: Colors.white38,
-          indicatorColor: TsarTheme.accent,
-          tabs: const [
-            Tab(text: 'Feed'),
-            Tab(text: 'Alerts'),
-            Tab(text: 'Sentiment'),
-          ],
-        ),
-      ),
-      body: Consumer<NewsProvider>(
-        builder: (context, provider, _) {
-          if (provider.loading && provider.allItems.isEmpty) {
-            return const Center(
-              child: CircularProgressIndicator(color: TsarTheme.accent),
-            );
-          }
-
-          if (provider.error != null && provider.allItems.isEmpty) {
-            return ErrorBanner(
-              message: provider.error!,
-              onRetry: () => provider.refresh(),
-            );
-          }
-
-          return TabBarView(
-            controller: _tabController,
+          body: Column(
             children: [
-              _buildFeed(provider),
-              _buildAlerts(provider),
-              _buildSentimentOverview(provider),
+              _buildSentimentBar(news),
+              _buildSourceChips(),
+              Expanded(
+                child: news.loading && items.isEmpty
+                    ? const Center(child: CircularProgressIndicator(color: TsarTheme.accent))
+                    : news.error != null && items.isEmpty
+                        ? _buildError(news)
+                        : items.isEmpty
+                            ? _buildEmpty()
+                            : RefreshIndicator(
+                                onRefresh: news.refresh,
+                                color: TsarTheme.accent,
+                                child: ListView.builder(
+                                  padding: const EdgeInsets.all(12),
+                                  itemCount: items.length,
+                                  itemBuilder: (ctx, i) => _buildNewsCard(items[i]),
+                                ),
+                              ),
+              ),
             ],
-          );
-        },
-      ),
+          ),
+        );
+      },
     );
   }
 
-  Widget _buildFeed(NewsProvider provider) {
-    return RefreshIndicator(
-      onRefresh: provider.refresh,
-      color: TsarTheme.accent,
-      child: provider.items.isEmpty
-          ? const EmptyState(
-              icon: Icons.article_outlined,
-              title: 'No news items',
-              subtitle: 'News will appear here when available',
-            )
-          : ListView.builder(
-              padding: const EdgeInsets.all(16),
-              itemCount: provider.items.length,
-              itemBuilder: (context, index) =>
-                  _NewsTile(item: provider.items[index]),
-            ),
-    );
-  }
-
-  Widget _buildAlerts(NewsProvider provider) {
-    return RefreshIndicator(
-      onRefresh: provider.refresh,
-      color: TsarTheme.accent,
-      child: provider.alerts.isEmpty
-          ? const EmptyState(
-              icon: Icons.notifications_none,
-              title: 'No alerts',
-              subtitle: 'Important news alerts will appear here',
-            )
-          : ListView.builder(
-              padding: const EdgeInsets.all(16),
-              itemCount: provider.alerts.length,
-              itemBuilder: (context, index) =>
-                  _NewsTile(item: provider.alerts[index], isAlert: true),
-            ),
-    );
-  }
-
-  Widget _buildSentimentOverview(NewsProvider provider) {
-    final items = provider.allItems;
+  Widget _buildSentimentBar(NewsProvider news) {
+    final items = news.allItems;
     if (items.isEmpty) return const SizedBox.shrink();
-
     final bullish = items.where((n) => n.sentiment == SentimentType.bullish).length;
     final bearish = items.where((n) => n.sentiment == SentimentType.bearish).length;
-    final neutral = items.where((n) => n.sentiment == SentimentType.neutral).length;
     final total = items.length;
+    final bullishPct = total > 0 ? bullish / total : 0.5;
 
-    return RefreshIndicator(
-      onRefresh: provider.refresh,
-      color: TsarTheme.accent,
-      child: ListView(
-        padding: const EdgeInsets.all(16),
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      color: TsarTheme.surfaceVariant,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          TsarCard(
-            title: 'SENTIMENT DISTRIBUTION',
-            child: Column(
-              children: [
-                Row(
-                  children: [
-                    Expanded(
-                      flex: bullish,
-                      child: Container(
-                        height: 24,
-                        decoration: BoxDecoration(
-                          color: TsarTheme.profit.withOpacity(0.7),
-                          borderRadius: const BorderRadius.horizontal(
-                              left: Radius.circular(4)),
-                        ),
-                        child: Center(
-                          child: Text(
-                            '$bullish',
-                            style: _monoStyle(11, Colors.white),
-                          ),
-                        ),
-                      ),
-                    ),
-                    Expanded(
-                      flex: neutral,
-                      child: Container(
-                        height: 24,
-                        color: Colors.white24,
-                        child: Center(
-                          child: Text('$neutral', style: _monoStyle(11, Colors.white)),
-                        ),
-                      ),
-                    ),
-                    Expanded(
-                      flex: bearish,
-                      child: Container(
-                        height: 24,
-                        decoration: BoxDecoration(
-                          color: TsarTheme.loss.withOpacity(0.7),
-                          borderRadius: const BorderRadius.horizontal(
-                              right: Radius.circular(4)),
-                        ),
-                        child: Center(
-                          child: Text(
-                            '$bearish',
-                            style: _monoStyle(11, Colors.white),
-                          ),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 12),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceAround,
-                  children: [
-                    _sentimentStat('Bullish', bullish, total, TsarTheme.profit),
-                    _sentimentStat('Neutral', neutral, total, Colors.white54),
-                    _sentimentStat('Bearish', bearish, total, TsarTheme.loss),
-                  ],
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 12),
-          TsarCard(
-            title: 'RECENT SENTIMENT',
-            child: Column(
-              children: items.take(10).map((item) {
-                return Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 6),
-                  child: Row(
-                    children: [
-                      Icon(item.sentimentIcon, size: 16, color: item.sentimentColor),
-                      const SizedBox(width: 10),
-                      Expanded(
-                        child: Text(
-                          item.title,
-                          style: const TextStyle(color: Colors.white70, fontSize: 13),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ),
-                      Text(
-                        '${item.sentimentScore >= 0 ? '+' : ''}${(item.sentimentScore * 100).toStringAsFixed(0)}%',
-                        style: _monoStyle(12, item.sentimentColor),
-                      ),
-                    ],
+          const Text('SENTIMENT', style: TextStyle(color: Colors.white54, fontSize: 11)),
+          const SizedBox(height: 6),
+          Row(
+            children: [
+              Text('${(bullishPct * 100).toStringAsFixed(0)}%', style: TsarTheme.pnlStyle(1).copyWith(fontSize: 13)),
+              const SizedBox(width: 8),
+              Expanded(
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(4),
+                  child: LinearProgressIndicator(
+                    value: bullishPct,
+                    backgroundColor: TsarTheme.loss.withOpacity(0.3),
+                    valueColor: const AlwaysStoppedAnimation(TsarTheme.profit),
+                    minHeight: 8,
                   ),
-                );
-              }).toList(),
-            ),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Text('${((1 - bullishPct) * 100).toStringAsFixed(0)}%', style: TsarTheme.pnlStyle(-1).copyWith(fontSize: 13)),
+            ],
+          ),
+          const SizedBox(height: 4),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text('$bullish bullish', style: const TextStyle(color: TsarTheme.profit, fontSize: 10)),
+              Text('$bearish bearish', style: const TextStyle(color: TsarTheme.loss, fontSize: 10)),
+            ],
           ),
         ],
       ),
     );
   }
 
-  Widget _sentimentStat(String label, int count, int total, Color color) {
-    final pct = total > 0 ? (count / total * 100).toStringAsFixed(0) : '0';
-    return Column(
-      children: [
-        Text('$count', style: TsarTheme.numberStyle.copyWith(color: color, fontSize: 18)),
-        Text('$pct%', style: _monoStyle(12, color)),
-        Text(label, style: const TextStyle(color: Colors.white38, fontSize: 11)),
-      ],
-    );
-  }
-
-  TextStyle _monoStyle(double fontSize, Color color) {
-    return TextStyle(
-      fontFamily: GoogleFonts.jetBrainsMono().fontFamily,
-      fontSize: fontSize,
-      fontWeight: FontWeight.w600,
-      color: color,
-    );
-  }
-}
-
-class _NewsTile extends StatelessWidget {
-  final NewsItem item;
-  final bool isAlert;
-
-  const _NewsTile({required this.item, this.isAlert = false});
-
-  @override
-  Widget build(BuildContext context) {
-    return Card(
-      margin: const EdgeInsets.only(bottom: 8),
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(12),
-        side: BorderSide(
-          color: isAlert
-              ? item.sentimentColor.withOpacity(0.4)
-              : TsarTheme.cardBorder,
-          width: isAlert ? 1.5 : 1,
-        ),
+  Widget _buildSourceChips() {
+    return Container(
+      height: 48,
+      padding: const EdgeInsets.symmetric(horizontal: 12),
+      child: ListView(
+        scrollDirection: Axis.horizontal,
+        children: _sources.map((source) {
+          final selected = _selectedSource == source;
+          return Padding(
+            padding: const EdgeInsets.only(right: 8),
+            child: FilterChip(
+              label: Text(source, style: TextStyle(
+                color: selected ? Colors.white : Colors.white54,
+                fontSize: 12,
+              )),
+              selected: selected,
+              onSelected: (_) => setState(() => _selectedSource = source),
+              selectedColor: TsarTheme.accent.withOpacity(0.3),
+              backgroundColor: TsarTheme.card,
+              side: BorderSide(color: selected ? TsarTheme.accent : TsarTheme.cardBorder),
+              showCheckmark: false,
+            ),
+          );
+        }).toList(),
       ),
-      child: InkWell(
+    );
+  }
+
+  Widget _buildNewsCard(NewsItem item) {
+    Color sentimentColor;
+    String sentimentLabel;
+    IconData sentimentIcon;
+    switch (item.sentiment) {
+      case SentimentType.bullish:
+        sentimentColor = TsarTheme.profit;
+        sentimentLabel = 'BULLISH';
+        sentimentIcon = Icons.trending_up;
+        break;
+      case SentimentType.bearish:
+        sentimentColor = TsarTheme.loss;
+        sentimentLabel = 'BEARISH';
+        sentimentIcon = Icons.trending_down;
+        break;
+      default:
+        sentimentColor = Colors.white38;
+        sentimentLabel = 'NEUTRAL';
+        sentimentIcon = Icons.trending_flat;
+    }
+
+    final timeAgo = _formatTimeAgo(item.publishedAt);
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 10),
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: TsarTheme.card,
         borderRadius: BorderRadius.circular(12),
-        onTap: () => _showDetail(context),
-        child: Padding(
-          padding: const EdgeInsets.all(14),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+        border: Border.all(color: TsarTheme.cardBorder),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
             children: [
-              Row(
-                children: [
-                  Icon(item.sentimentIcon, size: 16, color: item.sentimentColor),
-                  const SizedBox(width: 8),
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                    decoration: BoxDecoration(
-                      color: item.sentimentColor.withOpacity(0.15),
-                      borderRadius: BorderRadius.circular(4),
-                    ),
-                    child: Text(
-                      item.sentimentLabel,
-                      style: _monoStyle(10, item.sentimentColor),
-                    ),
-                  ),
-                  const Spacer(),
-                  Text(
-                    item.source,
-                    style: const TextStyle(color: Colors.white24, fontSize: 11),
-                  ),
-                  if (isAlert) ...[
-                    const SizedBox(width: 6),
-                    const Icon(Icons.warning_amber, size: 14, color: TsarTheme.warning),
-                  ],
-                ],
+              _buildSourceIcon(item.source),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(item.source, style: const TextStyle(color: Colors.white54, fontSize: 11)),
               ),
-              const SizedBox(height: 8),
-              Text(
-                item.title,
-                style: TsarTheme.numberStyle.copyWith(fontSize: 14),
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-              ),
-              if (item.summary.isNotEmpty) ...[
-                const SizedBox(height: 4),
-                Text(
-                  item.summary,
-                  style: const TextStyle(color: Colors.white54, fontSize: 12),
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                decoration: BoxDecoration(
+                  color: sentimentColor.withOpacity(0.15),
+                  borderRadius: BorderRadius.circular(8),
                 ),
-              ],
-              const SizedBox(height: 8),
-              Row(
-                children: [
-                  if (item.symbols.isNotEmpty) ...[
-                    ...item.symbols.take(3).map((s) => Container(
-                      margin: const EdgeInsets.only(right: 4),
-                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                      decoration: BoxDecoration(
-                        color: TsarTheme.accent.withOpacity(0.12),
-                        borderRadius: BorderRadius.circular(4),
-                      ),
-                      child: Text(s, style: _monoStyle(10, TsarTheme.accent)),
-                    )),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(sentimentIcon, color: sentimentColor, size: 12),
+                    const SizedBox(width: 4),
+                    Text(sentimentLabel, style: TextStyle(color: sentimentColor, fontSize: 10, fontWeight: FontWeight.w600)),
                   ],
-                  const Spacer(),
-                  Text(
-                    _formatTime(item.publishedAt),
-                    style: const TextStyle(color: Colors.white24, fontSize: 11),
-                  ),
-                ],
+                ),
               ),
             ],
           ),
-        ),
+          const SizedBox(height: 10),
+          Text(item.title, style: const TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.w600)),
+          if (item.summary.isNotEmpty) ...[
+            const SizedBox(height: 6),
+            Text(item.summary, style: const TextStyle(color: Colors.white54, fontSize: 12), maxLines: 2, overflow: TextOverflow.ellipsis),
+          ],
+          const SizedBox(height: 10),
+          Row(
+            children: [
+              Icon(Icons.access_time, color: Colors.white24, size: 14),
+              const SizedBox(width: 4),
+              Text(timeAgo, style: const TextStyle(color: Colors.white38, fontSize: 11)),
+              const Spacer(),
+              if (item.isAlert)
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                  decoration: BoxDecoration(
+                    color: TsarTheme.warning.withOpacity(0.15),
+                    borderRadius: BorderRadius.circular(6),
+                  ),
+                  child: const Text('ALERT', style: TextStyle(color: TsarTheme.warning, fontSize: 9, fontWeight: FontWeight.w700)),
+                ),
+              if (item.symbols.isNotEmpty) ...[
+                const SizedBox(width: 6),
+                ...item.symbols.take(3).map((s) => Container(
+                  margin: const EdgeInsets.only(left: 4),
+                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                  decoration: BoxDecoration(
+                    color: TsarTheme.accent.withOpacity(0.15),
+                    borderRadius: BorderRadius.circular(6),
+                  ),
+                  child: Text(s, style: const TextStyle(color: TsarTheme.accent, fontSize: 9, fontWeight: FontWeight.w600)),
+                )),
+              ],
+            ],
+          ),
+        ],
       ),
     );
   }
 
-  TextStyle _monoStyle(double fontSize, Color color) {
-    return TextStyle(
-      fontFamily: GoogleFonts.jetBrainsMono().fontFamily,
-      fontSize: fontSize,
-      fontWeight: FontWeight.w600,
-      color: color,
+  Widget _buildSourceIcon(String source) {
+    IconData icon;
+    Color color;
+    switch (source.toLowerCase()) {
+      case 'whale alert':
+        icon = Icons.water_drop;
+        color = Colors.blue;
+        break;
+      case 'sec':
+      case 'cftc':
+        icon = Icons.gavel;
+        color = Colors.amber;
+        break;
+      case 'twitter':
+      case 'x':
+        icon = Icons.alternate_email;
+        color = Colors.lightBlue;
+        break;
+      case 'reddit':
+        icon = Icons.forum;
+        color = Colors.orange;
+        break;
+      default:
+        icon = Icons.article;
+        color = TsarTheme.accent;
+    }
+    return Container(
+      padding: const EdgeInsets.all(6),
+      decoration: BoxDecoration(
+        color: color.withOpacity(0.15),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Icon(icon, color: color, size: 16),
     );
   }
 
-  String _formatTime(DateTime dt) {
-    final now = DateTime.now();
-    final diff = now.difference(dt);
+  Widget _buildError(NewsProvider news) {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          const Icon(Icons.cloud_off, size: 48, color: TsarTheme.loss),
+          const SizedBox(height: 12),
+          Text(news.error!, style: const TextStyle(color: Colors.white54), textAlign: TextAlign.center),
+          const SizedBox(height: 16),
+          ElevatedButton(onPressed: news.refresh, child: const Text('RETRY')),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildEmpty() {
+    return const Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(Icons.article_outlined, size: 48, color: Colors.white24),
+          SizedBox(height: 12),
+          Text('No news alerts', style: TextStyle(color: Colors.white38, fontSize: 16)),
+          SizedBox(height: 4),
+          Text('Pull to refresh', style: TextStyle(color: Colors.white24, fontSize: 12)),
+        ],
+      ),
+    );
+  }
+
+  String _formatTimeAgo(DateTime dt) {
+    final diff = DateTime.now().difference(dt);
     if (diff.inMinutes < 1) return 'just now';
     if (diff.inMinutes < 60) return '${diff.inMinutes}m ago';
     if (diff.inHours < 24) return '${diff.inHours}h ago';
-    return DateFormat('MMM dd').format(dt);
-  }
-
-  void _showDetail(BuildContext context) {
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: TsarTheme.surfaceVariant,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
-      ),
-      builder: (ctx) => DraggableScrollableSheet(
-        initialChildSize: 0.7,
-        maxChildSize: 0.9,
-        minChildSize: 0.3,
-        expand: false,
-        builder: (ctx, sc) => ListView(
-          controller: sc,
-          padding: const EdgeInsets.all(24),
-          children: [
-            Center(
-              child: Container(
-                width: 40,
-                height: 4,
-                decoration: BoxDecoration(
-                  color: Colors.white24,
-                  borderRadius: BorderRadius.circular(2),
-                ),
-              ),
-            ),
-            const SizedBox(height: 20),
-            Row(
-              children: [
-                Icon(item.sentimentIcon, size: 24, color: item.sentimentColor),
-                const SizedBox(width: 12),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                  decoration: BoxDecoration(
-                    color: item.sentimentColor.withOpacity(0.15),
-                    borderRadius: BorderRadius.circular(6),
-                  ),
-                  child: Text(
-                    item.sentimentLabel,
-                    style: _monoStyle(12, item.sentimentColor),
-                  ),
-                ),
-                const Spacer(),
-                Text(
-                  'Score: ${(item.sentimentScore * 100).toStringAsFixed(0)}%',
-                  style: TsarTheme.numberStyle.copyWith(
-                    fontSize: 12,
-                    color: item.sentimentColor,
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 16),
-            Text(item.title, style: TsarTheme.numberLarge.copyWith(fontSize: 20)),
-            const SizedBox(height: 12),
-            if (item.summary.isNotEmpty)
-              Text(
-                item.summary,
-                style: const TextStyle(color: Colors.white70, fontSize: 15, height: 1.5),
-              ),
-            const Divider(height: 32),
-            _detailRow('Source', item.source),
-            _detailRow('Published', DateFormat('yyyy-MM-dd HH:mm').format(item.publishedAt)),
-            if (item.symbols.isNotEmpty)
-              _detailRow('Symbols', item.symbols.join(', ')),
-            if (item.tags.isNotEmpty)
-              _detailRow('Tags', item.tags.join(', ')),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _detailRow(String label, String value) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 4),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Text(label, style: const TextStyle(color: Colors.white38, fontSize: 13)),
-          Flexible(
-            child: Text(
-              value,
-              style: TsarTheme.numberStyle.copyWith(fontSize: 13),
-              textAlign: TextAlign.right,
-            ),
-          ),
-        ],
-      ),
-    );
+    return '${diff.inDays}d ago';
   }
 }

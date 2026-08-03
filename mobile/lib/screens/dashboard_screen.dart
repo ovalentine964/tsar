@@ -1,19 +1,9 @@
-import 'package:google_fonts/google_fonts.dart';
-import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:fl_chart/fl_chart.dart';
 import '../theme.dart';
 import '../providers/dashboard_provider.dart';
 import '../providers/settings_provider.dart';
-import '../providers/news_provider.dart';
-import '../providers/signal_quality_provider.dart';
-import '../providers/defi_provider.dart';
 import '../widgets/cards.dart';
-import '../widgets/charts.dart';
-import '../models/news.dart';
-import '../models/signal_quality.dart';
-import '../models/defi_position.dart';
 
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key});
@@ -23,141 +13,135 @@ class DashboardScreen extends StatefulWidget {
 }
 
 class _DashboardScreenState extends State<DashboardScreen> {
-  Timer? _autoRefreshTimer;
-
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      context.read<DashboardProvider>().refresh();
-      context.read<NewsProvider>().refresh();
-      context.read<SignalQualityProvider>().refresh();
-      context.read<DeFiProvider>().refresh();
-      _setupAutoRefresh();
-    });
-  }
-
-  void _setupAutoRefresh() {
-    final settings = context.read<SettingsProvider>();
-    if (settings.autoRefresh) {
-      _autoRefreshTimer = Timer.periodic(
-        Duration(seconds: settings.refreshIntervalSeconds),
-        (_) => context.read<DashboardProvider>().refresh(),
-      );
-    }
-  }
-
-  @override
-  void dispose() {
-    _autoRefreshTimer?.cancel();
-    super.dispose();
+    context.read<DashboardProvider>().refresh();
   }
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('TSAR'),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.refresh),
-            onPressed: () => context.read<DashboardProvider>().refresh(),
-          ),
-        ],
-      ),
-      body: Consumer<DashboardProvider>(
-        builder: (context, dash, _) {
-          if (dash.loading && dash.stats == null) {
-            return const Center(
-              child: CircularProgressIndicator(color: TsarTheme.accent),
-            );
-          }
-
-          if (dash.error != null && dash.stats == null) {
-            return ErrorBanner(
-              message: dash.error!,
-              onRetry: () => dash.refresh(),
-            );
-          }
-
-          return RefreshIndicator(
-            onRefresh: dash.refresh,
-            color: TsarTheme.accent,
-            child: ListView(
-              padding: const EdgeInsets.all(16),
-              children: [
-                _buildKillSwitchBanner(dash),
-                const SizedBox(height: 16),
-                _buildPnlCard(dash),
-                const SizedBox(height: 12),
-                _buildStatsGrid(dash),
-                const SizedBox(height: 12),
-                _buildEquityCurve(dash),
-                const SizedBox(height: 12),
-                _buildRegimeCard(dash),
-                const SizedBox(height: 12),
-                _buildFlywheelCard(dash),
-                const SizedBox(height: 12),
-                _buildNewsAlertsSection(),
-                const SizedBox(height: 12),
-                _buildSignalQualitySection(),
-                const SizedBox(height: 12),
-                _buildDeFiSection(),
-                const SizedBox(height: 80), // FAB clearance
-              ],
-            ),
-          );
-        },
-      ),
-    );
-  }
-
-  Widget _buildKillSwitchBanner(DashboardProvider dash) {
-    if (!dash.killSwitchActive) return const SizedBox.shrink();
-    return Container(
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: TsarTheme.killSwitch.withOpacity(0.15),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: TsarTheme.killSwitch.withOpacity(0.4)),
-      ),
-      child: Row(
-        children: [
-          const Icon(Icons.warning_amber_rounded, color: TsarTheme.killSwitch),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Text(
-              'KILL SWITCH ACTIVE — Trading halted',
-              style: TextStyle(
-                fontFamily: GoogleFonts.jetBrainsMono().fontFamily,
-                fontWeight: FontWeight.w700,
-                color: TsarTheme.killSwitch,
-                fontSize: 13,
+    return Consumer<DashboardProvider>(
+      builder: (context, dash, _) {
+        return Scaffold(
+          appBar: AppBar(
+            title: const Text('COMMAND CENTER'),
+            actions: [
+              IconButton(
+                icon: const Icon(Icons.refresh),
+                onPressed: dash.refresh,
               ),
-            ),
+            ],
+          ),
+          body: dash.loading && dash.stats == null
+              ? const Center(child: CircularProgressIndicator(color: TsarTheme.accent))
+              : dash.error != null && dash.stats == null
+                  ? _buildError(dash)
+                  : RefreshIndicator(
+                      onRefresh: dash.refresh,
+                      color: TsarTheme.accent,
+                      child: ListView(
+                        padding: const EdgeInsets.all(16),
+                        children: [
+                          _buildPnlHero(dash),
+                          const SizedBox(height: 16),
+                          _buildStatsGrid(dash),
+                          const SizedBox(height: 16),
+                          _buildRegimeCard(dash),
+                          const SizedBox(height: 16),
+                          _buildFlywheelCard(dash),
+                          const SizedBox(height: 16),
+                          _buildKillSwitchBadge(dash),
+                          const SizedBox(height: 80),
+                        ],
+                      ),
+                    ),
+        );
+      },
+    );
+  }
+
+  Widget _buildError(DashboardProvider dash) {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          const Icon(Icons.cloud_off, size: 64, color: TsarTheme.loss),
+          const SizedBox(height: 16),
+          Text('Connection Error', style: TsarTheme.darkTheme.textTheme.titleLarge),
+          const SizedBox(height: 8),
+          Text(dash.error!, style: const TextStyle(color: Colors.white54), textAlign: TextAlign.center),
+          const SizedBox(height: 24),
+          ElevatedButton.icon(
+            onPressed: dash.refresh,
+            icon: const Icon(Icons.refresh),
+            label: const Text('RETRY'),
+            style: ElevatedButton.styleFrom(backgroundColor: TsarTheme.accent),
           ),
         ],
       ),
     );
   }
 
-  Widget _buildPnlCard(DashboardProvider dash) {
+  Widget _buildPnlHero(DashboardProvider dash) {
     final pnl = dash.pnl;
-    return TsarCard(
-      title: 'P&L SUMMARY',
+    final dailyPnl = pnl?.dailyPnl ?? 0;
+    final totalPnl = pnl?.totalPnl ?? 0;
+    final isPositive = dailyPnl >= 0;
+
+    return Container(
+      padding: const EdgeInsets.all(24),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            TsarTheme.card,
+            isPositive
+                ? TsarTheme.profit.withOpacity(0.08)
+                : TsarTheme.loss.withOpacity(0.08),
+          ],
+        ),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: isPositive
+              ? TsarTheme.profit.withOpacity(0.3)
+              : TsarTheme.loss.withOpacity(0.3),
+        ),
+      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            _formatPnl(pnl?.totalPnl ?? 0),
-            style: TsarTheme.pnlLarge(pnl?.totalPnl ?? 0),
-          ),
-          const SizedBox(height: 16),
           Row(
             children: [
-              Expanded(child: _pnlStat('Daily', pnl?.dailyPnl ?? 0)),
-              Expanded(child: _pnlStat('Weekly', pnl?.weeklyPnl ?? 0)),
-              Expanded(child: _pnlStat('Monthly', pnl?.monthlyPnl ?? 0)),
+              Text('DAILY P&L', style: TextStyle(color: Colors.white54, fontSize: 12, fontFamily: 'JetBrains Mono')),
+              const Spacer(),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                decoration: BoxDecoration(
+                  color: isPositive ? TsarTheme.profit.withOpacity(0.15) : TsarTheme.loss.withOpacity(0.15),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Text(
+                  '${isPositive ? '+' : ''}${(pnl?.dailyReturn ?? 0).toStringAsFixed(2)}%',
+                  style: TsarTheme.pnlStyle(dailyPnl).copyWith(fontSize: 13),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Text(
+            '${isPositive ? '+' : ''}\$${dailyPnl.toStringAsFixed(2)}',
+            style: TsarTheme.pnlLarge(dailyPnl).copyWith(fontSize: 36),
+          ),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              _buildMiniPnl('Weekly', pnl?.weeklyPnl ?? 0),
+              const SizedBox(width: 24),
+              _buildMiniPnl('Monthly', pnl?.monthlyPnl ?? 0),
+              const Spacer(),
+              _buildMiniPnl('Total', totalPnl),
             ],
           ),
         ],
@@ -165,112 +149,130 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
   }
 
-  Widget _pnlStat(String label, double value) {
+  Widget _buildMiniPnl(String label, double value) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(label, style: const TextStyle(fontSize: 11, color: Colors.white38)),
-        const SizedBox(height: 4),
-        Text(_formatPnl(value), style: TsarTheme.pnlStyle(value)),
+        Text(label, style: const TextStyle(color: Colors.white38, fontSize: 10)),
+        const SizedBox(height: 2),
+        Text(
+          '${value >= 0 ? '+' : ''}\$${value.toStringAsFixed(2)}',
+          style: TsarTheme.pnlStyle(value).copyWith(fontSize: 14),
+        ),
       ],
     );
   }
 
   Widget _buildStatsGrid(DashboardProvider dash) {
     final stats = dash.stats;
-    return Row(
+    return GridView.count(
+      crossAxisCount: 2,
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      childAspectRatio: 2.2,
+      mainAxisSpacing: 10,
+      crossAxisSpacing: 10,
       children: [
-        Expanded(
-          child: TsarCard(
-            child: StatTile(
-              label: 'WIN RATE',
-              value: '${(stats?.winRate ?? 0).toStringAsFixed(1)}%',
-              icon: Icons.percent,
-              iconColor: TsarTheme.profit,
-            ),
-          ),
-        ),
-        const SizedBox(width: 8),
-        Expanded(
-          child: TsarCard(
-            child: StatTile(
-              label: 'TRADES',
-              value: '${stats?.totalTrades ?? 0}',
-              icon: Icons.swap_horiz,
-              iconColor: TsarTheme.info,
-            ),
-          ),
-        ),
-        const SizedBox(width: 8),
-        Expanded(
-          child: TsarCard(
-            child: StatTile(
-              label: 'POSITIONS',
-              value: '${dash.openPositions}',
-              icon: Icons.layers_outlined,
-              iconColor: TsarTheme.accent,
-            ),
-          ),
-        ),
-        const SizedBox(width: 8),
-        Expanded(
-          child: TsarCard(
-            child: StatTile(
-              label: 'P. FACTOR',
-              value: (stats?.profitFactor ?? 0).toStringAsFixed(2),
-              icon: Icons.trending_up,
-              iconColor: TsarTheme.warning,
-            ),
-          ),
-        ),
+        _buildStatCard('Win Rate', '${((stats?.winRate ?? 0) * 100).toStringAsFixed(1)}%', TsarTheme.profit, Icons.trending_up),
+        _buildStatCard('Trades', '${stats?.totalTrades ?? 0}', TsarTheme.info, Icons.swap_horiz),
+        _buildStatCard('Open Pos', '${dash.openPositions}', TsarTheme.warning, Icons.account_balance),
+        _buildStatCard('Profit Factor', (stats?.profitFactor ?? 0).toStringAsFixed(2), TsarTheme.accent, Icons.analytics),
       ],
     );
   }
 
-  Widget _buildEquityCurve(DashboardProvider dash) {
-    final points = dash.pnl?.equityCurve ?? [];
-    final spots = points
-        .asMap()
-        .entries
-        .map((e) => FlSpot(e.key.toDouble(), e.value.value))
-        .toList();
-
-    return TsarCard(
-      title: 'EQUITY CURVE',
-      child: PnlLineChart(spots: spots, height: 180),
+  Widget _buildStatCard(String label, String value, Color color, IconData icon) {
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: TsarTheme.card,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: TsarTheme.cardBorder),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Row(
+            children: [
+              Text(label, style: const TextStyle(color: Colors.white54, fontSize: 11)),
+              const Spacer(),
+              Icon(icon, color: color.withOpacity(0.6), size: 16),
+            ],
+          ),
+          const SizedBox(height: 4),
+          Text(value, style: TsarTheme.numberStyle.copyWith(fontSize: 20, color: color)),
+        ],
+      ),
     );
   }
 
   Widget _buildRegimeCard(DashboardProvider dash) {
     final regime = dash.regime;
-    return TsarCard(
-      title: 'MARKET REGIME',
-      trailing: StatusDot(status: regime?.currentRegime ?? 'unknown'),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+    final regimeName = regime?.currentRegime ?? 'unknown';
+    final confidence = regime?.confidence ?? 0;
+    Color regimeColor;
+    IconData regimeIcon;
+    switch (regimeName.toLowerCase()) {
+      case 'bull':
+      case 'bullish':
+        regimeColor = TsarTheme.profit;
+        regimeIcon = Icons.trending_up;
+        break;
+      case 'bear':
+      case 'bearish':
+        regimeColor = TsarTheme.loss;
+        regimeIcon = Icons.trending_down;
+        break;
+      default:
+        regimeColor = TsarTheme.warning;
+        regimeIcon = Icons.trending_flat;
+    }
+
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: TsarTheme.card,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: TsarTheme.cardBorder),
+      ),
+      child: Row(
         children: [
-          Text(
-            (regime?.currentRegime ?? 'Unknown').toUpperCase(),
-            style: TsarTheme.numberStyle.copyWith(fontSize: 20),
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: regimeColor.withOpacity(0.15),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Icon(regimeIcon, color: regimeColor, size: 28),
           ),
-          const SizedBox(height: 4),
-          Text(
-            regime?.description ?? '',
-            style: const TextStyle(color: Colors.white54, fontSize: 13),
-          ),
-          if (regime != null) ...[
-            const SizedBox(height: 12),
-            Row(
+          const SizedBox(width: 16),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text('Confidence: ',
-                    style: TextStyle(color: Colors.white38, fontSize: 12)),
+                const Text('MARKET REGIME', style: TextStyle(color: Colors.white54, fontSize: 11)),
+                const SizedBox(height: 4),
                 Text(
-                  '${(regime.confidence * 100).toStringAsFixed(0)}%',
-                  style: TsarTheme.numberStyle.copyWith(fontSize: 12),
+                  regimeName.toUpperCase(),
+                  style: TsarTheme.numberStyle.copyWith(fontSize: 22, color: regimeColor),
                 ),
+                if (regime?.description.isNotEmpty == true)
+                  Text(regime!.description, style: const TextStyle(color: Colors.white38, fontSize: 11)),
               ],
             ),
-          ],
+          ),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              const Text('Confidence', style: TextStyle(color: Colors.white38, fontSize: 10)),
+              const SizedBox(height: 4),
+              Text(
+                '${(confidence * 100).toStringAsFixed(0)}%',
+                style: TsarTheme.numberStyle.copyWith(fontSize: 18, color: regimeColor),
+              ),
+            ],
+          ),
         ],
       ),
     );
@@ -278,252 +280,106 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
   Widget _buildFlywheelCard(DashboardProvider dash) {
     final fw = dash.flywheel;
-    return TsarCard(
-      title: 'FLYWHEEL HEALTH',
-      child: Row(
+    final status = fw?.status ?? 'unknown';
+    final score = fw?.score ?? 0;
+    final Color statusColor = status == 'ok' || status == 'healthy'
+        ? TsarTheme.profit
+        : status == 'warning'
+            ? TsarTheme.warning
+            : TsarTheme.loss;
+
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: TsarTheme.card,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: TsarTheme.cardBorder),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          RiskGauge(
-            value: (fw?.score ?? 0) / 100,
-            label: 'Score',
-            size: 80,
-          ),
-          const SizedBox(width: 16),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    StatusDot(status: fw?.status ?? 'unknown'),
-                    const SizedBox(width: 8),
-                    Text(
-                      (fw?.status ?? 'Unknown').toUpperCase(),
-                      style: TsarTheme.numberStyle.copyWith(fontSize: 14),
-                    ),
-                  ],
+          Row(
+            children: [
+              const Icon(Icons.sync, color: TsarTheme.accent, size: 20),
+              const SizedBox(width: 8),
+              const Text('FLYWHEEL HEALTH', style: TextStyle(color: Colors.white54, fontSize: 11)),
+              const Spacer(),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                decoration: BoxDecoration(
+                  color: statusColor.withOpacity(0.15),
+                  borderRadius: BorderRadius.circular(8),
                 ),
-                if (fw != null && fw.issues.isNotEmpty) ...[
-                  const SizedBox(height: 8),
-                  ...fw.issues.take(3).map((issue) => Padding(
-                        padding: const EdgeInsets.only(top: 4),
-                        child: Row(
-                          children: [
-                            const Icon(Icons.warning_amber,
-                                size: 12, color: TsarTheme.warning),
-                            const SizedBox(width: 4),
-                            Expanded(
-                              child: Text(
-                                issue,
-                                style: const TextStyle(
-                                    color: Colors.white54, fontSize: 11),
-                              ),
-                            ),
-                          ],
-                        ),
-                      )),
-                ],
-              ],
-            ),
+                child: Text(status.toUpperCase(), style: TextStyle(color: statusColor, fontSize: 11, fontWeight: FontWeight.w600)),
+              ),
+            ],
           ),
+          const SizedBox(height: 12),
+          LinearProgressIndicator(
+            value: score.clamp(0, 1),
+            backgroundColor: Colors.white10,
+            valueColor: AlwaysStoppedAnimation(statusColor),
+            minHeight: 6,
+            borderRadius: BorderRadius.circular(3),
+          ),
+          const SizedBox(height: 8),
+          Text('${(score * 100).toStringAsFixed(0)}% — TRADE → OBSERVE → REFLECT → EXTRACT → ADAPT',
+              style: const TextStyle(color: Colors.white38, fontSize: 11)),
         ],
       ),
     );
   }
 
-  Widget _buildNewsAlertsSection() {
-    return Consumer<NewsProvider>(
-      builder: (context, news, _) {
-        final alerts = news.alerts;
-        if (alerts.isEmpty) return const SizedBox.shrink();
-
-        return TsarCard(
-          title: '📰 NEWS ALERTS',
-          trailing: Text(
-            '${alerts.length} alerts',
-            style: TextStyle(
-              fontFamily: GoogleFonts.jetBrainsMono().fontFamily,
-              fontSize: 11,
-              color: TsarTheme.warning,
+  Widget _buildKillSwitchBadge(DashboardProvider dash) {
+    final isActive = dash.killSwitchActive;
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: isActive ? TsarTheme.loss.withOpacity(0.1) : TsarTheme.card,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: isActive ? TsarTheme.loss.withOpacity(0.5) : TsarTheme.cardBorder,
+        ),
+      ),
+      child: Row(
+        children: [
+          Icon(
+            isActive ? Icons.warning_amber : Icons.shield_outlined,
+            color: isActive ? TsarTheme.loss : TsarTheme.profit,
+            size: 24,
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text('KILL SWITCH', style: TextStyle(color: Colors.white54, fontSize: 11)),
+                const SizedBox(height: 2),
+                Text(
+                  isActive ? 'ACTIVE — TRADING HALTED' : 'INACTIVE — SYSTEM NORMAL',
+                  style: TextStyle(
+                    color: isActive ? TsarTheme.loss : TsarTheme.profit,
+                    fontSize: 14,
+                    fontWeight: FontWeight.w700,
+                    fontFamily: 'JetBrains Mono',
+                  ),
+                ),
+              ],
             ),
           ),
-          child: Column(
-            children: alerts.take(3).map((item) {
-              return Padding(
-                padding: const EdgeInsets.symmetric(vertical: 4),
-                child: Row(
-                  children: [
-                    Icon(item.sentimentIcon, size: 14, color: item.sentimentColor),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: Text(
-                        item.title,
-                        style: const TextStyle(color: Colors.white70, fontSize: 12),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ),
-                    if (item.symbols.isNotEmpty)
-                      Text(
-                        item.symbols.first,
-                        style: TsarTheme.numberStyle.copyWith(
-                          fontSize: 10,
-                          color: TsarTheme.accent,
-                        ),
-                      ),
-                  ],
-                ),
-              );
-            }).toList(),
-          ),
-        );
-      },
-    );
-  }
-
-  Widget _buildSignalQualitySection() {
-    return Consumer<SignalQualityProvider>(
-      builder: (context, provider, _) {
-        final signal = provider.latest;
-        if (signal == null) return const SizedBox.shrink();
-
-        return TsarCard(
-          title: '📡 SIGNAL QUALITY',
-          trailing: Text(
-            signal.statusEmoji,
-            style: const TextStyle(fontSize: 16),
-          ),
-          child: Row(
-            children: [
-              Container(
-                width: 48,
-                height: 48,
-                decoration: BoxDecoration(
-                  color: signal.gradeColor.withOpacity(0.15),
-                  shape: BoxShape.circle,
-                  border: Border.all(color: signal.gradeColor, width: 2),
-                ),
-                child: Center(
-                  child: Text(
-                    signal.grade,
-                    style: TsarTheme.numberStyle.copyWith(
-                      fontSize: 20,
-                      color: signal.gradeColor,
-                    ),
-                  ),
-                ),
-              ),
-              const SizedBox(width: 16),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      signal.symbol,
-                      style: TsarTheme.numberStyle.copyWith(fontSize: 16),
-                    ),
-                    Text(
-                      '${(signal.overallScore * 100).toStringAsFixed(0)}% quality · ${(signal.confidence * 100).toStringAsFixed(0)}% confidence',
-                      style: const TextStyle(color: Colors.white54, fontSize: 12),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-        );
-      },
-    );
-  }
-
-  Widget _buildDeFiSection() {
-    return Consumer<DeFiProvider>(
-      builder: (context, provider, _) {
-        if (provider.positions.isEmpty) return const SizedBox.shrink();
-
-        return TsarCard(
-          title: '🏦 DeFi POSITIONS',
-          trailing: Text(
-            '${provider.activePositions.length} active',
-            style: TsarTheme.numberStyle.copyWith(
-              fontSize: 11,
-              color: TsarTheme.accent,
+          Container(
+            width: 12,
+            height: 12,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: isActive ? TsarTheme.loss : TsarTheme.profit,
+              boxShadow: isActive
+                  ? [BoxShadow(color: TsarTheme.loss.withOpacity(0.6), blurRadius: 8)]
+                  : null,
             ),
           ),
-          child: Column(
-            children: [
-              Row(
-                children: [
-                  Expanded(
-                    child: _deFiStat(
-                      'Total Value',
-                      r'$' + _formatK(provider.totalValueUsd),
-                      TsarTheme.accent,
-                    ),
-                  ),
-                  Expanded(
-                    child: _deFiStat(
-                      'Yield Earned',
-                      r'$' + _formatK(provider.totalYieldEarned),
-                      TsarTheme.profit,
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 8),
-              ...provider.positions.take(3).map((pos) => Padding(
-                padding: const EdgeInsets.symmetric(vertical: 3),
-                child: Row(
-                  children: [
-                    Container(
-                      width: 8,
-                      height: 8,
-                      decoration: BoxDecoration(
-                        color: pos.chainColor,
-                        shape: BoxShape.circle,
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: Text(
-                        '${pos.protocol} · ${pos.asset}',
-                        style: const TextStyle(color: Colors.white70, fontSize: 12),
-                      ),
-                    ),
-                    Text(
-                      '${pos.apy.toStringAsFixed(1)}% APY',
-                      style: TsarTheme.numberStyle.copyWith(
-                        fontSize: 11,
-                        color: TsarTheme.profit,
-                      ),
-                    ),
-                  ],
-                ),
-              )),
-            ],
-          ),
-        );
-      },
+        ],
+      ),
     );
-  }
-
-  Widget _deFiStat(String label, String value, Color color) {
-    return Column(
-      children: [
-        Text(label, style: const TextStyle(color: Colors.white38, fontSize: 11)),
-        const SizedBox(height: 4),
-        Text(value, style: TsarTheme.numberStyle.copyWith(color: color, fontSize: 14)),
-      ],
-    );
-  }
-
-  String _formatK(double v) {
-    if (v >= 1000000) return '${(v / 1000000).toStringAsFixed(1)}M';
-    if (v >= 1000) return '${(v / 1000).toStringAsFixed(1)}K';
-    return v.toStringAsFixed(0);
-  }
-
-  String _formatPnl(double value) {
-    final prefix = value >= 0 ? '+' : '';
-    return '$prefix\$${value.toStringAsFixed(2)}';
   }
 }
