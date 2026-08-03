@@ -106,7 +106,7 @@ jobs:
         run: |
           COMMIT_SHA="${GITHUB_SHA::8}"
           BUILD_DATE=$(date -u +"%Y-%m-%d")
-          sed -i "s|v[0-9]*\.[0-9]*\.[0-9]* &middot; Alpha|v1.0.0 \&middot; Alpha|g" index.html
+          sed -i "s|v[0-9]*\.[0-9]*\.[0-9]* &middot; Alpha|v0.1.0 \&middot; Alpha|g" index.html
           sed -i "s|Commit [a-f0-9]*|Commit ${COMMIT_SHA}|g" index.html
           sed -i "s|Built [0-9-]*|Built ${BUILD_DATE}|g" index.html
 
