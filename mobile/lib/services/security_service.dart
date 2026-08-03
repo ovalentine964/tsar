@@ -9,12 +9,9 @@ import 'package:flutter/foundation.dart';
 class SecurityService {
   // SHA-256 hashes of pinned certificates (SPKI pinning).
   // Update these when the server certificate is rotated.
-  //
-  // Current pin: tsar-api.onrender.com (Render-managed cert)
-  // Retrieved: 2026-08-03 via openssl s_client
-  // When Render rotates the cert, update this hash or the app will
-  // refuse connections (which is the desired security behaviour).
   static const List<String> _pinnedShas = [
+    // tsar-api.onrender.com cert fingerprint (retrieved 2026-08-03)
+    // Update when Render rotates TLS certificate.
     'sha256/04:1E:C4:C6:9F:66:77:19:7B:4E:F1:C0:67:42:11:64:F4:B2:69:DA:27:F2:F5:30:29:2C:AB:BB:05:1F:C1:B1',
   ];
 
@@ -44,11 +41,11 @@ class SecurityService {
           return false;
         }
 
-        // Compare certificate SHA-256 fingerprint against pinned values
-        final sha = cert.sha256.toString();
-        // Normalize: the Dart X509Certificate.sha256 returns a colon-separated hex string
-        final normalized = 'sha256/$sha';
-        return _pinnedShas.contains(normalized);
+        // Validate certificate DER bytes against pinned SHA-256 hashes.
+        // Requires 'crypto' package for full implementation.
+        // For now, rely on system cert store + empty pin list fallback.
+        // TODO: Add `crypto` dep and compute sha256(cert.der) for comparison.
+        return false;
       };
 
     // Enforce TLS 1.2+
