@@ -44,6 +44,7 @@ void main() async {
         ChangeNotifierProvider(create: (_) => SignalQualityProvider(apiService)),
         ChangeNotifierProvider(create: (_) => DeFiProvider(apiService)),
         ChangeNotifierProvider(create: (_) => BlockchainProvider(apiService)),
+        Provider.value(value: apiService),
         Provider.value(value: wsService),
         Provider.value(value: notificationService),
       ],

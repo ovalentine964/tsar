@@ -147,7 +147,7 @@ micro_capital:
   # Relaxed single position cap
   max_single_position_pct: 0.30    # 30% of equity (vs 15% normal)
   # Minimum notional to place on exchange (Binance: ~$5-10)
-  min_notional_usd: 5.0            # Exchange minimum order value
+  min_notional_usd: 1.0            # Exchange minimum order value (Binance spot ~$1)
   # Minimum quantity step (Binance: varies by pair, use conservative default)
   min_quantity_step: 0.00001       # Minimum order quantity increment
   # Bypass certain guards that are meaningless at micro scale

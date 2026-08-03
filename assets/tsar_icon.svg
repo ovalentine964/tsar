@@ -1,0 +1,115 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <!-- Gold gradient for crown -->
+    <linearGradient id="goldGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#FFD700"/>
+      <stop offset="50%" stop-color="#F5A623"/>
+      <stop offset="100%" stop-color="#D4920B"/>
+    </linearGradient>
+    <!-- Background gradient (deep navy) -->
+    <radialGradient id="bgGrad" cx="50%" cy="45%" r="55%">
+      <stop offset="0%" stop-color="#1A2744"/>
+      <stop offset="100%" stop-color="#0B1628"/>
+    </radialGradient>
+    <!-- Glow effect for circuit nodes -->
+    <radialGradient id="nodeGlow" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#FFD700" stop-opacity="0.9"/>
+      <stop offset="100%" stop-color="#FFD700" stop-opacity="0"/>
+    </radialGradient>
+    <filter id="softGlow">
+      <feGaussianBlur stdDeviation="2" result="blur"/>
+      <feMerge>
+        <feMergeNode in="blur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+  </defs>
+
+  <!-- Background circle -->
+  <circle cx="256" cy="256" r="256" fill="url(#bgGrad)"/>
+  <!-- Subtle border ring -->
+  <circle cx="256" cy="256" r="248" fill="none" stroke="#2A3F6A" stroke-width="2"/>
+
+  <!-- ===== CIRCUIT TRACES (below crown) ===== -->
+  <!-- Left circuit branch -->
+  <path d="M120 380 L120 340 L160 300 L160 270" fill="none" stroke="#3D5A99" stroke-width="3" stroke-linecap="round"/>
+  <path d="M160 270 L190 270" fill="none" stroke="#3D5A99" stroke-width="3" stroke-linecap="round"/>
+  <!-- Right circuit branch -->
+  <path d="M392 380 L392 340 L352 300 L352 270" fill="none" stroke="#3D5A99" stroke-width="3" stroke-linecap="round"/>
+  <path d="M352 270 L322 270" fill="none" stroke="#3D5A99" stroke-width="3" stroke-linecap="round"/>
+  <!-- Bottom center circuits -->
+  <path d="M200 400 L200 360 L230 330" fill="none" stroke="#3D5A99" stroke-width="3" stroke-linecap="round"/>
+  <path d="M312 400 L312 360 L282 330" fill="none" stroke="#3D5A99" stroke-width="3" stroke-linecap="round"/>
+  <!-- Horizontal connection -->
+  <path d="M230 330 L282 330" fill="none" stroke="#3D5A99" stroke-width="3" stroke-linecap="round"/>
+  <!-- Diagonal traces from crown base -->
+  <path d="M185 310 L140 355" fill="none" stroke="#3D5A99" stroke-width="2.5" stroke-linecap="round"/>
+  <path d="M327 310 L372 355" fill="none" stroke="#3D5A99" stroke-width="2.5" stroke-linecap="round"/>
+
+  <!-- Circuit nodes (neural network dots) -->
+  <circle cx="120" cy="380" r="6" fill="#3D5A99"/>
+  <circle cx="120" cy="380" r="3" fill="#FFD700" filter="url(#softGlow)"/>
+  <circle cx="392" cy="380" r="6" fill="#3D5A99"/>
+  <circle cx="392" cy="380" r="3" fill="#FFD700" filter="url(#softGlow)"/>
+  <circle cx="200" cy="400" r="6" fill="#3D5A99"/>
+  <circle cx="200" cy="400" r="3" fill="#FFD700" filter="url(#softGlow)"/>
+  <circle cx="312" cy="400" r="6" fill="#3D5A99"/>
+  <circle cx="312" cy="400" r="3" fill="#FFD700" filter="url(#softGlow)"/>
+  <circle cx="160" cy="270" r="5" fill="#3D5A99"/>
+  <circle cx="352" cy="270" r="5" fill="#3D5A99"/>
+  <circle cx="256" cy="310" r="5" fill="#FFD700" filter="url(#softGlow)"/>
+
+  <!-- ===== CROWN BODY ===== -->
+  <!-- Crown base (band) -->
+  <path d="M148 300 L364 300 L372 340 L140 340 Z" fill="url(#goldGrad)" stroke="#D4920B" stroke-width="1.5"/>
+
+  <!-- Crown jewel accents on base band -->
+  <rect x="200" y="312" width="8" height="16" rx="2" fill="#0B1628" opacity="0.4"/>
+  <rect x="252" y="312" width="8" height="16" rx="2" fill="#0B1628" opacity="0.4"/>
+  <rect x="304" y="312" width="8" height="16" rx="2" fill="#0B1628" opacity="0.4"/>
+
+  <!-- Crown 5-point structure -->
+  <!-- Left outer point -->
+  <path d="M148 300 L108 180 L175 240 Z" fill="url(#goldGrad)" stroke="#D4920B" stroke-width="1"/>
+  <!-- Left inner point -->
+  <path d="M175 240 L178 140 L220 230 Z" fill="url(#goldGrad)" stroke="#D4920B" stroke-width="1"/>
+  <!-- Center point (tallest) -->
+  <path d="M220 230 L256 100 L292 230 Z" fill="url(#goldGrad)" stroke="#D4920B" stroke-width="1"/>
+  <!-- Right inner point -->
+  <path d="M292 230 L334 140 L337 240 Z" fill="url(#goldGrad)" stroke="#D4920B" stroke-width="1"/>
+  <!-- Right outer point -->
+  <path d="M337 240 L404 180 L364 300 Z" fill="url(#goldGrad)" stroke="#D4920B" stroke-width="1"/>
+
+  <!-- Crown point tips (small circles — orbs) -->
+  <circle cx="108" cy="180" r="10" fill="url(#goldGrad)" stroke="#D4920B" stroke-width="1"/>
+  <circle cx="178" cy="140" r="10" fill="url(#goldGrad)" stroke="#D4920B" stroke-width="1"/>
+  <circle cx="256" cy="100" r="12" fill="url(#goldGrad)" stroke="#D4920B" stroke-width="1"/>
+  <circle cx="334" cy="140" r="10" fill="url(#goldGrad)" stroke="#D4920B" stroke-width="1"/>
+  <circle cx="404" cy="180" r="10" fill="url(#goldGrad)" stroke="#D4920B" stroke-width="1"/>
+
+  <!-- Center orb jewel (emerald accent — AI/growth) -->
+  <circle cx="256" cy="100" r="6" fill="#50C878"/>
+
+  <!-- Small jewels on other orbs -->
+  <circle cx="108" cy="180" r="4" fill="#50C878"/>
+  <circle cx="178" cy="140" r="4" fill="#50C878"/>
+  <circle cx="334" cy="140" r="4" fill="#50C878"/>
+  <circle cx="404" cy="180" r="4" fill="#50C878"/>
+
+  <!-- ===== "TSAR" LETTERFORM (subtle, integrated) ===== -->
+  <text x="256" y="328" font-family="'Georgia', 'Times New Roman', serif" font-size="28" font-weight="bold" fill="#0B1628" text-anchor="middle" letter-spacing="6" opacity="0.5">TSAR</text>
+
+  <!-- ===== NEURAL NETWORK OVERLAY (AI indicator) ===== -->
+  <!-- Connecting lines forming a subtle neural net across crown -->
+  <path d="M160 260 L256 200 L352 260" fill="none" stroke="#FFD700" stroke-width="1.5" opacity="0.3"/>
+  <path d="M180 280 L256 230 L332 280" fill="none" stroke="#FFD700" stroke-width="1" opacity="0.25"/>
+  <path d="M256 200 L256 270" fill="none" stroke="#FFD700" stroke-width="1" opacity="0.3"/>
+
+  <!-- Neural nodes on crown -->
+  <circle cx="160" cy="260" r="4" fill="#FFD700" opacity="0.5" filter="url(#softGlow)"/>
+  <circle cx="256" cy="200" r="5" fill="#FFD700" opacity="0.5" filter="url(#softGlow)"/>
+  <circle cx="352" cy="260" r="4" fill="#FFD700" opacity="0.5" filter="url(#softGlow)"/>
+  <circle cx="180" cy="280" r="3" fill="#FFD700" opacity="0.4"/>
+  <circle cx="332" cy="280" r="3" fill="#FFD700" opacity="0.4"/>
+</svg>

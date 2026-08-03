@@ -1,0 +1,77 @@
+# ============================================================
+# TSAR — Azure Free Tier Docker Compose
+# ============================================================
+# Stripped-down config for Azure Free Tier (1 vCPU, 1 GB RAM):
+#   - TSAR API ONLY (no Redis, no monitoring, no ChromaDB)
+#   - SQLite only (no external databases)
+#   - Rust build disabled
+#   - Ollama disabled (cloud LLMs only: NVIDIA NIM + DeepSeek)
+#   - 512MB RAM limit
+#   - Paper trading mode
+#
+# Usage:
+#   cp deploy/azure/.env.free-tier .env
+#   docker compose -f docker-compose.free-tier.yml build
+#   docker compose -f docker-compose.free-tier.yml up -d
+#   docker compose -f docker-compose.free-tier.yml logs -f
+# ============================================================
+
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: production
+      args:
+        TSAR_RUST_BUILD: "0"
+    container_name: tsar-free-tier
+    ports:
+      - "${TSAR_API_PORT:-8000}:8000"
+    env_file:
+      - .env
+    environment:
+      # Force SQLite — no Redis
+      - TSAR_DATABASE_BACKEND=sqlite
+      - TSAR_DATABASE_PATH=/app/data/tsar.db
+      # Disable Redis explicitly
+      - TSAR_REDIS_ENABLED=false
+      # Disable Ollama (cloud LLMs only)
+      - TSAR_OLLAMA_ENABLED=false
+      # Paper trading
+      - TSAR_TRADING_MODE=paper
+      - EXCHANGE_SANDBOX=true
+      # Memory optimization
+      - MALLOC_ARENA_MAX=2
+      - PYTHONMALLOC=malloc
+      - PYTHONDONTWRITEBYTECODE=1
+      - PYTHONUNBUFFERED=1
+    volumes:
+      - tsar-data:/app/data
+      - tsar-logs:/app/logs
+      - ./config:/app/config:ro
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 25s
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 512M
+        reservations:
+          cpus: "0.25"
+          memory: 128M
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+volumes:
+  tsar-data:
+    driver: local
+  tsar-logs:
+    driver: local

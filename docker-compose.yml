@@ -19,24 +19,31 @@ services:
   redis:
     image: redis:7-alpine
     container_name: tsar-redis
-    ports:
-      - "${REDIS_PORT:-6379}:6379"
-    volumes:
-      - redis-data:/data
+    # SECURITY: Redis is NOT exposed to host — only accessible via tsar-net
+    # Remove the ports mapping to prevent external access.
+    # ports:
+    #   - "${REDIS_PORT:-6379}:6379"  # DANGEROUS — do not expose in production
     command: >
       redis-server
       --appendonly yes
       --maxmemory 256mb
       --maxmemory-policy allkeys-lru
-      --requirepass ${REDIS_PASSWORD:-tsar_dev_password}
+      --requirepass ${REDIS_PASSWORD:?REDIS_PASSWORD is required}
       --loglevel warning
+      --protected-mode yes
+      --bind 0.0.0.0
     healthcheck:
-      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD:-tsar_dev_password}", "ping"]
+      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD:?}", "ping"]
       interval: 10s
       timeout: 5s
       retries: 5
       start_period: 5s
     restart: unless-stopped
+    read_only: true
+    tmpfs:
+      - /tmp
+    security_opt:
+      - no-new-privileges:true
     deploy:
       resources:
         limits:
@@ -59,8 +66,10 @@ services:
       dockerfile: Dockerfile
       target: production
     container_name: tsar-app
+    # App port only exposed to localhost for nginx reverse proxy
+    # External traffic goes through nginx (port 443/TLS)
     ports:
-      - "${TSAR_API_PORT:-8000}:8000"
+      - "127.0.0.1:${TSAR_API_PORT:-8000}:8000"
     env_file:
       - .env
     environment:
@@ -81,6 +90,11 @@ services:
       retries: 3
       start_period: 25s
     restart: unless-stopped
+    read_only: true
+    tmpfs:
+      - /tmp
+    security_opt:
+      - no-new-privileges:true
     deploy:
       resources:
         limits:
@@ -94,6 +108,48 @@ services:
       options:
         max-size: "20m"
         max-file: "5"
+    networks:
+      - tsar-net
+
+  # ── TLS Termination Proxy (Nginx) ───────────────────────
+  nginx:
+    image: nginx:1.25-alpine
+    container_name: tsar-nginx
+    ports:
+      - "${TSAR_HTTPS_PORT:-443}:443"
+      - "${TSAR_HTTP_PORT:-80}:80"
+    volumes:
+      - ./deploy/tls/nginx-tls.conf:/etc/nginx/nginx.conf:ro
+      - ./deploy/tls/certs:/etc/nginx/certs:ro
+    depends_on:
+      app:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "--no-check-certificate", "https://localhost:443/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+    restart: unless-stopped
+    read_only: true
+    tmpfs:
+      - /tmp
+      - /var/cache/nginx
+      - /var/run
+    security_opt:
+      - no-new-privileges:true
+    deploy:
+      resources:
+        limits:
+          cpus: "0.25"
+          memory: 64M
+        reservations:
+          cpus: "0.05"
+          memory: 32M
+    logging:
+      driver: json-file
+      options:
+        max-size: "5m"
+        max-file: "3"
     networks:
       - tsar-net
 
@@ -138,11 +194,12 @@ services:
     profiles:
       - monitoring
     ports:
-      - "3000:3000"
+      - "127.0.0.1:3000:3000"
     environment:
       - GF_SECURITY_ADMIN_USER=admin
-      - GF_SECURITY_ADMIN_PASSWORD=tsar_grafana
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD:?GRAFANA_ADMIN_PASSWORD is required}
       - GF_USERS_ALLOW_SIGN_UP=false
+      - GF_SECURITY_COOKIE_SECURE=true
     volumes:
       - grafana-data:/var/lib/grafana
       - ./grafana/provisioning:/etc/grafana/provisioning:ro

@@ -61,8 +61,8 @@ class OpenAIProvider(LLMProvider):
         "gpt-3.5-turbo": {"input": 0.0005, "output": 0.0015},
         # NVIDIA NIM free-tier models
         "deepseek-ai/deepseek-r1": {"input": 0.0, "output": 0.0},
-        "nvidia/nemotron-3-ultra": {"input": 0.0, "output": 0.0},
-        "nvidia/nv-embed-v2": {"input": 0.0, "output": 0.0},
+        "nvidia/nemotron-3-ultra-550b-a55b": {"input": 0.0, "output": 0.0},
+        "nvidia/nv-embedqa-e5-v5": {"input": 0.0, "output": 0.0},
         "minimaxai/minimax-m3": {"input": 0.0, "output": 0.0},
     }
 

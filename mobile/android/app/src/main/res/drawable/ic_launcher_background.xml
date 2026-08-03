@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+
+    <!-- Deep navy background -->
+    <path
+        android:pathData="M0 0 L108 0 L108 108 L0 108 Z"
+        android:fillColor="#0B1628"/>
+
+    <!-- Subtle radial lighter center -->
+    <path
+        android:pathData="M54 48 m-40 0 a40 40 0 1 1 80 0 a40 40 0 1 1 -80 0"
+        android:fillColor="#1A2744"/>
+</vector>

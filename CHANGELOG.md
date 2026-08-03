@@ -2,6 +2,34 @@
 
 All notable changes to TSAR are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/).
 
+## [0.3.0] — 2026-08-03
+
+### Added
+- **Azure Free Tier Deployment**: One-command deployment to Azure Container Instances ($0/month for first 12 months). Includes `deploy/azure/deploy-free-tier.sh`, `.env.free-tier` template, `FREE_TIER_GUIDE.md`, and `health-check.sh`.
+- **TLS Termination**: Nginx reverse proxy with TLS support in `docker-compose.yml`. Self-signed cert generation script in `deploy/tls/`. Uvicorn TLS via `TSAR_SSL_CERTFILE`/`TSAR_SSL_KEYFILE` env vars.
+- **App Icon**: Custom TSAR crown + circuit board icon. Android adaptive icon (API 26+) with vector foreground/background. Master SVG in `assets/tsar_icon.svg`. Full branding guide in `docs/BRANDING.md`.
+- **Lightweight Vector Store**: Numpy-only vector store with 3-gram character hashing (`src/knowledge/lightweight_vector_store.py`). Drop-in replacement for ChromaDB — no external dependencies. Auto-fallback when ChromaDB unavailable.
+- **Quantum-Inspired Annealing Optimizer**: Simulated quantum annealing method in `CuOptStrategyOptimizer`. Uses tunneling heuristics and thermal fluctuations for better global optimization. Always available (pure Python + numpy).
+- **Agent Loop Integration**: `BaseAgent.init_agent_loop()` and `run_with_agent_loop()` methods for LLM-driven tool-calling agents via OpenHarness.
+- **Secret Validation**: Refuses to start with weak/default secrets (H-010). Validates `TSAR_API_KEY`, `REDIS_PASSWORD`, exchange credentials.
+- **Credential Setup Guide**: Three setup paths — Telegram bot `/setup`, manual `.env`, or Flutter mobile app.
+
+### Changed
+- **ChromaDB Store**: Now auto-falls back to `LightweightVectorStore` when ChromaDB unavailable.
+- **Rust Backends**: `TSAR_RUST_BUILD=0` env var forces pure-Python fallback. Consistent across `__init__.py` and `defi_fallback.py`.
+- **Docker Compose**: Full production stack now includes nginx TLS proxy with resource limits and security hardening.
+- **Backend Registry**: Improved registration with better error handling.
+- **LLM Router**: Enhanced model routing with fallback chains.
+- **Risk Governor**: Additional guard conditions and improved logging.
+- **CI/CD**: Updated workflow with Flutter APK build and Rust build steps.
+
+### Fixed
+- **CCXT Gateway**: Connection stability improvements and error handling.
+- **CCXT Exec Engine**: Order execution reliability and retry logic.
+- **DeFi Executor**: Fallback paths for missing dependencies.
+- **OpenAI Provider**: Token counting and cost tracking fixes.
+- **Blockchain Rules Enforcer**: Consistent force-python mode.
+
 ## [0.2.2] — 2026-08-01
 
 ### Added

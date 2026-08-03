@@ -233,11 +233,19 @@ contract TSARKillSwitch is AccessControl, Pausable, ReentrancyGuard {
         }
 
         // Calculate drawdown in basis points
+        // FIX: Use signed arithmetic to prevent uint256 underflow when
+        // _equity < highWaterMark. The old code cast (uint256 * 10000) to
+        // int256 which underflows before the cast, producing garbage.
         int256 drawdownBps = 0;
         if (highWaterMark > 0) {
-            drawdownBps = int256(
-                ((_equity - highWaterMark) * 10000) / highWaterMark
-            );
+            if (_equity < highWaterMark) {
+                uint256 loss = highWaterMark - _equity;
+                drawdownBps = -int256((loss * 10000) / highWaterMark);
+            } else if (_equity > highWaterMark) {
+                uint256 gain = _equity - highWaterMark;
+                drawdownBps = int256((gain * 10000) / highWaterMark);
+            }
+            // else: drawdownBps stays 0 (no change)
         }
 
         // Determine circuit breaker level
@@ -374,9 +382,13 @@ contract TSARKillSwitch is AccessControl, Pausable, ReentrancyGuard {
     {
         int256 drawdown = 0;
         if (highWaterMark > 0) {
-            drawdown = int256(
-                ((currentEquity - highWaterMark) * 10000) / highWaterMark
-            );
+            if (currentEquity < highWaterMark) {
+                uint256 loss = highWaterMark - currentEquity;
+                drawdown = -int256((loss * 10000) / highWaterMark);
+            } else if (currentEquity > highWaterMark) {
+                uint256 gain = currentEquity - highWaterMark;
+                drawdown = int256((gain * 10000) / highWaterMark);
+            }
         }
 
         return (

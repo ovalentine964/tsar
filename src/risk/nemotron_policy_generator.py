@@ -163,7 +163,7 @@ class NemotronPolicyGenerator:
 
         # Generation config
         gen_cfg = self._config.get("generation", {})
-        self._model = gen_cfg.get("model", "nvidia/nemotron-3-ultra")
+        self._model = gen_cfg.get("model", "nvidia/nemotron-3-ultra-550b-a55b")
         self._max_policies = gen_cfg.get("max_policies", 20)
         self._confidence_threshold = gen_cfg.get("confidence_threshold", 0.8)
 

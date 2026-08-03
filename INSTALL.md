@@ -186,6 +186,32 @@ cd blockchain/contracts && forge build && cd ../..
 ./scripts/deploy-contracts.sh --network sepolia
 ```
 
+### Option F: Azure Free Tier ($0/month)
+
+Deploy to Azure Container Instances for free (first 12 months):
+
+```bash
+# Prerequisites: Azure CLI + Docker
+az login
+
+# Configure environment
+cp deploy/azure/.env.free-tier .env
+nano .env  # Fill in API keys
+
+# Deploy (builds image, provisions Azure, runs health checks)
+./deploy/azure/deploy-free-tier.sh
+
+# View logs
+az container logs -g tsar-free-rg -n tsar-free-tier
+
+# Tear down
+./deploy/azure/deploy-free-tier.sh --teardown
+```
+
+**Spec:** 1 vCPU, 512 MB RAM, SQLite, paper mode, no Redis, no Rust.
+
+See [deploy/azure/FREE_TIER_GUIDE.md](deploy/azure/FREE_TIER_GUIDE.md) for the complete guide.
+
 ---
 
 ## Environment Variables

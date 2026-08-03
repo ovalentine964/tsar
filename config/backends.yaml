@@ -42,12 +42,14 @@ risk_engine:
     config_path: "config/risk.yaml"
 
 llm_provider:
-  primary: "src.backends.python.ollama_provider.OllamaProvider"
+  # NVIDIA NIM primary (free tier, cloud-hosted)
+  # Ollama disabled by default — set TSAR_ENABLE_OLLAMA=1 to re-enable
+  primary: "src.backends.python.openai_provider.OpenAIProvider"
   fallback:
-    - path: "src.backends.python.openai_provider.OpenAIProvider"
-      priority: 200
     - path: "src.backends.python.deepseek_provider.DeepSeekProvider"
-      priority: 300
+      priority: 200
+    - path: "src.backends.python.ollama_provider.OllamaProvider"
+      priority: 400
   config:
     config_path: "config/models.yaml"
 

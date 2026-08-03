@@ -10,6 +10,9 @@
 *.pem
 *.p12
 
+# --- TLS certificates (generated, never commit) ---
+deploy/tls/certs/
+
 # --- Python ---
 __pycache__/
 *.py[cod]
@@ -94,6 +97,23 @@ Vibe-Trading/
 # --- TSAR Runtime ---
 /tmp/tsar_kill_switch
 *.pid
+
+# --- Council Reports (generated, not source) ---
+COUNCIL_*.md
+SECURITY_*.md
+INTEGRATION_*.md
+analysis/
+council_reviews/
+
+# --- Test artifacts ---
+test_risk_validation.py
+
+# --- Flutter ---
+mobile/.dart_tool/
+mobile/.flutter-plugins
+mobile/.flutter-plugins-dependencies
+mobile/android/local.properties
+mobile/MOBILE_VALIDATION_REPORT.md
 
 # --- Jupyter ---
 .ipynb_checkpoints/

@@ -5,12 +5,15 @@
 # See TSAR_ARCHITECTURE.md §8
 
 # --- Provider Definitions ---
+# NOTE: Ollama is disabled by default (requires too much RAM for free-tier).
+# Set TSAR_ENABLE_OLLAMA=1 to re-enable local LLM.
 providers:
-  ollama:
-    type: "ollama"
-    base_url: "http://localhost:11434"
-    timeout_s: 30
-    max_concurrent: 4
+  nvidia_nim:
+    type: "openai_compatible"
+    api_key: "${NVIDIA_API_KEY}"
+    base_url: "https://integrate.api.nvidia.com/v1"
+    timeout_s: 60
+    max_concurrent: 2
 
   deepseek:
     type: "openai_compatible"
@@ -26,12 +29,13 @@ providers:
     timeout_s: 60
     max_concurrent: 2
 
-  nvidia_nim:
-    type: "openai_compatible"
-    api_key: "${NVIDIA_API_KEY}"
-    base_url: "https://integrate.api.nvidia.com/v1"
-    timeout_s: 60
-    max_concurrent: 2
+  # Ollama disabled by default — enable with TSAR_ENABLE_OLLAMA=1
+  ollama:
+    type: "ollama"
+    base_url: "http://localhost:11434"
+    timeout_s: 30
+    max_concurrent: 4
+    enabled: false
 
 # --- Model Definitions ---
 models:
@@ -110,8 +114,8 @@ models:
     cost_per_1k_input_tokens: 0.0
     cost_per_1k_output_tokens: 0.0
 
-  nvidia_nim/nvidia/nemotron-3-ultra:
-    display_name: "Nemotron 3 Ultra via NVIDIA NIM"
+  nvidia_nim/nvidia/nemotron-3-ultra-550b-a55b:
+    display_name: "Nemotron 3 Ultra 550B via NVIDIA NIM"
     provider: "nvidia_nim"
     capabilities:
       - text_generation
@@ -123,7 +127,7 @@ models:
     max_output_tokens: 8192
     cost_per_1k_input_tokens: 0.0
     cost_per_1k_output_tokens: 0.0
-    notes: "Free-tier NIM model; strong reasoning for complex tasks"
+    notes: "Free-tier NIM model; 550B MoE strong reasoning for complex tasks"
 
   nvidia_nim/minimaxai/minimax-m3:
     display_name: "MiniMax M3 via NVIDIA NIM"
@@ -141,15 +145,15 @@ models:
     cost_per_1k_output_tokens: 0.0
     notes: "Multimodal MoE model; free-tier NIM; strong for complex analysis"
 
-  nvidia_nim/nvidia/nv-embed-v2:
-    display_name: "NV-Embed-v2 (Embeddings)"
+  nvidia_nim/nvidia/nv-embedqa-e5-v5:
+    display_name: "NV-EmbedQA-E5-v5 (Embeddings)"
     provider: "nvidia_nim"
     capabilities:
       - embeddings
     max_context_tokens: 32768
     cost_per_1k_input_tokens: 0.0
     cost_per_1k_output_tokens: 0.0
-    notes: "State-of-the-art embedding model; free via NIM API"
+    notes: "NVIDIA embedding model; free via NIM API; 1024-dim"
 
   openai/gpt-4o-mini:
     display_name: "GPT-4o Mini"
@@ -169,87 +173,85 @@ models:
 # No model names in agent code.
 
 routing:
-  # --- Tier 1: Embeddings (local only) ---
+  # --- Tier 1: Embeddings ---
   t1_pattern_embedding:
-    primary: "ollama/all-minilm-l6-v2"
+    primary: "nvidia_nim/nvidia/nv-embedqa-e5-v5"
     fallback:
-      - "nvidia_nim/nvidia/nv-embed-v2"
+      - "deepseek/deepseek-reasoner"  # Text fallback if embed endpoint unavailable
     params: {}
 
-  # --- Tier 2: Routine tasks (local preferred) ---
+  # --- Tier 2: Routine tasks (NVIDIA NIM primary, DeepSeek fallback) ---
   t2_regime_explanation:
-    primary: "ollama/qwen2.5:7b"
+    primary: "nvidia_nim/nvidia/nemotron-3-ultra-550b-a55b"
     fallback:
-      - "ollama/llama3.1:8b"
+      - "deepseek/deepseek-reasoner"
     params:
       max_tokens: 1024
       temperature: 0.3
 
   t2_signal_narrative:
-    primary: "ollama/qwen2.5:7b"
+    primary: "nvidia_nim/nvidia/nemotron-3-ultra-550b-a55b"
     fallback:
-      - "ollama/llama3.1:8b"
+      - "deepseek/deepseek-reasoner"
     params:
       max_tokens: 1024
       temperature: 0.3
 
   t2_risk_explanation:
-    primary: "ollama/qwen2.5:7b"
+    primary: "nvidia_nim/nvidia/nemotron-3-ultra-550b-a55b"
     fallback:
-      - "ollama/llama3.1:8b"
+      - "deepseek/deepseek-reasoner"
     params:
       max_tokens: 512
       temperature: 0.2
 
   t2_trade_summary:
-    primary: "ollama/qwen2.5:7b"
+    primary: "nvidia_nim/nvidia/nemotron-3-ultra-550b-a55b"
     fallback:
-      - "ollama/llama3.1:8b"
+      - "deepseek/deepseek-reasoner"
     params:
       max_tokens: 1024
       temperature: 0.3
 
   t2_news_sentiment:
-    primary: "ollama/qwen2.5:7b"
+    primary: "nvidia_nim/nvidia/nemotron-3-ultra-550b-a55b"
     fallback:
-      - "ollama/llama3.1:8b"
+      - "deepseek/deepseek-reasoner"
     params:
       max_tokens: 512
       temperature: 0.1
 
   t2_daily_summary:
-    primary: "ollama/qwen2.5:7b"
+    primary: "nvidia_nim/nvidia/nemotron-3-ultra-550b-a55b"
     fallback:
-      - "ollama/llama3.1:8b"
+      - "deepseek/deepseek-reasoner"
     params:
       max_tokens: 2048
       temperature: 0.3
 
   t2_anomaly_explanation:
-    primary: "ollama/qwen2.5:7b"
+    primary: "nvidia_nim/nvidia/nemotron-3-ultra-550b-a55b"
     fallback:
-      - "ollama/llama3.1:8b"
+      - "deepseek/deepseek-reasoner"
     params:
       max_tokens: 1024
       temperature: 0.3
 
   t2_strategy_evaluation:
-    primary: "ollama/qwen2.5:7b"
+    primary: "nvidia_nim/nvidia/nemotron-3-ultra-550b-a55b"
     fallback:
-      - "ollama/llama3.1:8b"
+      - "deepseek/deepseek-reasoner"
     params:
       max_tokens: 2048
       temperature: 0.3
 
-  # --- Tier 3: Complex reasoning (cloud preferred) ---
+  # --- Tier 3: Complex reasoning (NVIDIA NIM DeepSeek R1 primary) ---
   t3_trade_narrative:
     primary: "nvidia_nim/deepseek-ai/deepseek-r1"
     fallback:
-      - "deepseek/deepseek-reasoner"
-      - "nvidia_nim/nvidia/nemotron-3-ultra"
+      - "nvidia_nim/nvidia/nemotron-3-ultra-550b-a55b"
       - "nvidia_nim/minimaxai/minimax-m3"
-      - "ollama/qwen2.5:32b"
-      - "ollama/qwen2.5:7b"  # Final local fallback (H-004)
+      - "deepseek/deepseek-reasoner"
     params:
       max_tokens: 4096
       temperature: 0.3
@@ -257,11 +259,9 @@ routing:
   t3_strategy_synthesis:
     primary: "nvidia_nim/deepseek-ai/deepseek-r1"
     fallback:
-      - "deepseek/deepseek-reasoner"
-      - "nvidia_nim/nvidia/nemotron-3-ultra"
+      - "nvidia_nim/nvidia/nemotron-3-ultra-550b-a55b"
       - "nvidia_nim/minimaxai/minimax-m3"
-      - "ollama/qwen2.5:32b"
-      - "ollama/qwen2.5:7b"  # Final local fallback (H-004)
+      - "deepseek/deepseek-reasoner"
     params:
       max_tokens: 4096
       temperature: 0.5
@@ -269,11 +269,9 @@ routing:
   t3_risk_scenario:
     primary: "nvidia_nim/deepseek-ai/deepseek-r1"
     fallback:
-      - "deepseek/deepseek-reasoner"
-      - "nvidia_nim/nvidia/nemotron-3-ultra"
+      - "nvidia_nim/nvidia/nemotron-3-ultra-550b-a55b"
       - "nvidia_nim/minimaxai/minimax-m3"
-      - "ollama/qwen2.5:32b"
-      - "ollama/qwen2.5:7b"  # Final local fallback (H-004)
+      - "deepseek/deepseek-reasoner"
     params:
       max_tokens: 4096
       temperature: 0.2
@@ -281,11 +279,9 @@ routing:
   t3_bias_detection:
     primary: "nvidia_nim/deepseek-ai/deepseek-r1"
     fallback:
-      - "deepseek/deepseek-reasoner"
-      - "nvidia_nim/nvidia/nemotron-3-ultra"
+      - "nvidia_nim/nvidia/nemotron-3-ultra-550b-a55b"
       - "nvidia_nim/minimaxai/minimax-m3"
-      - "ollama/qwen2.5:32b"
-      - "ollama/qwen2.5:7b"  # Final local fallback (H-004)
+      - "deepseek/deepseek-reasoner"
     params:
       max_tokens: 2048
       temperature: 0.3

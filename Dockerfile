@@ -58,7 +58,7 @@ FROM python:3.12-slim AS production
 
 LABEL maintainer="TSAR Team"
 LABEL description="TSAR — Trading Super Agent Regime"
-LABEL version="0.5.0"
+LABEL version="0.3.0"
 LABEL org.opencontainers.image.source="https://github.com/tsar/trading-system"
 
 # Runtime system dependencies — minimal footprint

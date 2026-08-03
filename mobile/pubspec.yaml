@@ -16,9 +16,6 @@ dependencies:
   flutter_secure_storage: ^9.0.0
   local_auth: ^2.1.8
   shared_preferences: ^2.2.2
-  pull_to_refresh: ^2.0.0
-  shimmer: ^3.0.0
-  flutter_slidable: ^3.0.1
   web_socket_channel: ^2.4.0
   cupertino_icons: ^1.0.6
   google_fonts: ^6.0.0

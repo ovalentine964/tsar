@@ -22,6 +22,29 @@ from src.backends.python.deepseek_provider import DeepSeekProvider
 from src.backends.python.ollama_provider import OllamaProvider
 from src.backends.python.openai_provider import OpenAIProvider
 
+# ═══════════════════════════════════════════════════════════════════════
+# Budget Exceptions
+# ═══════════════════════════════════════════════════════════════════════
+
+
+class BudgetExceededError(Exception):
+    """Raised when LLM budget limits are exceeded.
+
+    Attributes:
+        period: 'daily' or 'monthly'.
+        limit_usd: The budget limit that was exceeded.
+        spent_usd: Amount already spent in the period.
+    """
+
+    def __init__(self, period: str, limit_usd: float, spent_usd: float) -> None:
+        self.period = period
+        self.limit_usd = limit_usd
+        self.spent_usd = spent_usd
+        super().__init__(
+            f"LLM {period} budget exceeded: ${spent_usd:.4f} spent "
+            f"of ${limit_usd:.4f} limit. Halting LLM calls."
+        )
+
 if TYPE_CHECKING:
     from collections.abc import AsyncIterator
 
@@ -130,6 +153,109 @@ class CostTracker:
         }
 
 
+@dataclass
+class BudgetGuard:
+    """Enforces daily and monthly LLM spending limits.
+
+    Tracks spending per UTC day and per UTC month. Raises
+    BudgetExceededError when a call would exceed the limit.
+    Resets automatically when the period rolls over.
+
+    Attributes:
+        daily_limit_usd: Maximum daily spend (0 = disabled).
+        monthly_limit_usd: Maximum monthly spend (0 = disabled).
+    """
+
+    daily_limit_usd: float = 10.0
+    monthly_limit_usd: float = 100.0
+
+    # Internal tracking (reset on period rollover)
+    _daily_spent: float = field(default=0.0, repr=False)
+    _daily_date: str = field(default="", repr=False)  # YYYY-MM-DD
+    _monthly_spent: float = field(default=0.0, repr=False)
+    _monthly_period: str = field(default="", repr=False)  # YYYY-MM
+
+    def check_and_record(self, cost_usd: float) -> None:
+        """Check budget before recording cost. Raises if exceeded.
+
+        Args:
+            cost_usd: Cost of the upcoming LLM call.
+
+        Raises:
+            BudgetExceededError: If the call would exceed a budget limit.
+        """
+        import datetime as _dt
+        now = _dt.datetime.now(_dt.timezone.utc)
+        today = now.strftime("%Y-%m-%d")
+        month = now.strftime("%Y-%m")
+
+        # Reset daily counter on new day
+        if today != self._daily_date:
+            self._daily_spent = 0.0
+            self._daily_date = today
+
+        # Reset monthly counter on new month
+        if month != self._monthly_period:
+            self._monthly_spent = 0.0
+            self._monthly_period = month
+
+        # Check daily limit
+        if self.daily_limit_usd > 0:
+            projected = self._daily_spent + cost_usd
+            if projected > self.daily_limit_usd:
+                raise BudgetExceededError("daily", self.daily_limit_usd, self._daily_spent)
+
+        # Check monthly limit
+        if self.monthly_limit_usd > 0:
+            projected = self._monthly_spent + cost_usd
+            if projected > self.monthly_limit_usd:
+                raise BudgetExceededError("monthly", self.monthly_limit_usd, self._monthly_spent)
+
+        # Record the cost
+        self._daily_spent += cost_usd
+        self._monthly_spent += cost_usd
+
+    def check_budget_available(self) -> None:
+        """Check if budget is already exceeded (without recording cost).
+
+        Call this BEFORE making an LLM request to prevent calls
+        when the budget is already blown.
+
+        Raises:
+            BudgetExceededError: If budget is already exceeded.
+        """
+        import datetime as _dt
+        now = _dt.datetime.now(_dt.timezone.utc)
+        today = now.strftime("%Y-%m-%d")
+        month = now.strftime("%Y-%m")
+
+        # Reset counters if period rolled over
+        if today != self._daily_date:
+            self._daily_spent = 0.0
+            self._daily_date = today
+        if month != self._monthly_period:
+            self._monthly_spent = 0.0
+            self._monthly_period = month
+
+        if self.daily_limit_usd > 0 and self._daily_spent >= self.daily_limit_usd:
+            raise BudgetExceededError("daily", self.daily_limit_usd, self._daily_spent)
+        if self.monthly_limit_usd > 0 and self._monthly_spent >= self.monthly_limit_usd:
+            raise BudgetExceededError("monthly", self.monthly_limit_usd, self._monthly_spent)
+
+    def get_status(self) -> dict[str, Any]:
+        """Return current budget status."""
+        return {
+            "daily_limit_usd": self.daily_limit_usd,
+            "daily_spent_usd": round(self._daily_spent, 6),
+            "daily_remaining_usd": round(max(0, self.daily_limit_usd - self._daily_spent), 6),
+            "daily_date": self._daily_date,
+            "monthly_limit_usd": self.monthly_limit_usd,
+            "monthly_spent_usd": round(self._monthly_spent, 6),
+            "monthly_remaining_usd": round(max(0, self.monthly_limit_usd - self._monthly_spent), 6),
+            "monthly_period": self._monthly_period,
+        }
+
+
 # ═══════════════════════════════════════════════════════════════════════
 # Model Router
 # ═══════════════════════════════════════════════════════════════════════
@@ -150,10 +276,22 @@ def _create_provider(name: str, provider_cfg: dict[str, Any]) -> LLMProvider:
 
     Returns:
         An initialized LLMProvider instance.
+
+    Raises:
+        ValueError: Unknown provider.
+        RuntimeError: Ollama disabled by config.
     """
+    import os
     ptype = provider_cfg.get("type", name)
 
     if name == "ollama" or ptype == "ollama":
+        # Check if Ollama is enabled via config or env var
+        ollama_enabled = provider_cfg.get("enabled", True)
+        if not ollama_enabled and os.environ.get("TSAR_ENABLE_OLLAMA", "").strip() not in ("1", "true", "yes"):
+            raise RuntimeError(
+                "Ollama is disabled (requires too much RAM for free-tier). "
+                "Set TSAR_ENABLE_OLLAMA=1 to enable."
+            )
         return OllamaProvider(
             base_url=provider_cfg.get("base_url", "http://localhost:11434"),
             timeout_s=provider_cfg.get("timeout_s", 30),
@@ -217,6 +355,13 @@ class ModelRouter:
         # Cost tracking
         self.cost_tracker = CostTracker()
 
+        # Budget enforcement (daily/monthly limits)
+        budget_cfg = config.get("budget", {})
+        self.budget_guard = BudgetGuard(
+            daily_limit_usd=budget_cfg.get("daily_limit_usd", 10.0),
+            monthly_limit_usd=budget_cfg.get("monthly_limit_usd", 100.0),
+        )
+
         # Ollama fallback tracking (H-004)
         self._ollama_fallback_count: int = 0
 
@@ -246,9 +391,13 @@ class ModelRouter:
             LLMResponse from the first successful provider.
 
         Raises:
+            BudgetExceededError: Daily or monthly budget already exceeded.
             RuntimeError: All providers in the fallback chain failed.
             ValueError: Unknown task_type.
         """
+        # Pre-check: prevent ANY LLM call if budget is already exceeded
+        self.budget_guard.check_budget_available()
+
         route = self._resolve_route(task_type)
         chain = [route["primary"]] + route.get("fallback", [])
         params = route.get("params", {})
@@ -271,13 +420,17 @@ class ModelRouter:
 
                 response = await provider.generate(prompt, **merged)
 
-                # Track cost
+                # Track cost and enforce budget
                 cost = response.metadata.get("cost_usd", 0.0)
+                self.budget_guard.check_and_record(cost)
                 self.cost_tracker.record(provider_name, cost)
 
                 breaker.record_success()
                 return response
 
+            except BudgetExceededError:
+                # Budget exceeded — do NOT try fallback, re-raise immediately
+                raise
             except Exception as exc:
                 last_error = exc
                 breaker.record_failure()
@@ -309,7 +462,13 @@ class ModelRouter:
 
         Yields:
             LLMChunk objects from the provider.
+
+        Raises:
+            BudgetExceededError: Daily or monthly budget already exceeded.
         """
+        # Pre-check: prevent ANY LLM call if budget is already exceeded
+        self.budget_guard.check_budget_available()
+
         route = self._resolve_route(task_type)
         chain = [route["primary"]] + route.get("fallback", [])
         params = route.get("params", {})
@@ -337,6 +496,9 @@ class ModelRouter:
                 breaker.record_success()
                 return  # Successfully streamed
 
+            except BudgetExceededError:
+                # Budget exceeded — do NOT try fallback, re-raise immediately
+                raise
             except Exception as exc:
                 breaker.record_failure()
                 logger.warning(
@@ -427,7 +589,7 @@ class ModelRouter:
 
         Returns:
             Dict with provider health, circuit breaker states,
-            and fallback chain status.
+            budget status, and fallback chain status.
         """
         breaker_states = {}
         for name, breaker in self._breakers.items():
@@ -440,6 +602,7 @@ class ModelRouter:
             "initialized_providers": list(self._providers.keys()),
             "circuit_breakers": breaker_states,
             "cost_tracker": self.cost_tracker.summary(),
+            "budget": self.budget_guard.get_status(),
             "ollama_fallback_count": self._ollama_fallback_count,
         }
 

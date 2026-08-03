@@ -21,19 +21,7 @@ import contextlib
 import logging
 import uuid
 from datetime import UTC, datetime
-from typing import Any
-
-import ccxt.async_support as ccxt
-from ccxt import (
-    DECIMAL_PLACES,
-    ROUND,
-    ROUND_DOWN,
-    ROUND_UP,
-    SIGNIFICANT_DIGITS,
-    TICK_SIZE,
-    TRUNCATE,
-    decimal_to_precision,
-)
+from typing import TYPE_CHECKING, Any
 
 from src.interfaces.execution_engine import ExecutionEngine
 from src.interfaces.types import (
@@ -45,6 +33,59 @@ from src.interfaces.types import (
     OrderStatus,
     OrderType,
 )
+
+if TYPE_CHECKING:
+    import ccxt.async_support as ccxt
+    from ccxt import (
+        DECIMAL_PLACES,
+        ROUND,
+        ROUND_DOWN,
+        ROUND_UP,
+        SIGNIFICANT_DIGITS,
+        TICK_SIZE,
+        TRUNCATE,
+        decimal_to_precision,
+    )
+
+# ── Lazy ccxt loader (cold-start fix: defers 8.1s import) ──────
+_ccxt = None  # type: ignore[assignment]
+_ccxt_utils = None  # type: ignore[assignment]
+
+
+def _get_ccxt() -> Any:
+    """Lazy-import ccxt.async_support. Called once on first use."""
+    global _ccxt
+    if _ccxt is None:
+        import ccxt.async_support as _ccxt_mod
+        _ccxt = _ccxt_mod
+    return _ccxt
+
+
+def _get_ccxt_utils() -> dict[str, Any]:
+    """Lazy-import ccxt utility constants. Called once on first use."""
+    global _ccxt_utils
+    if _ccxt_utils is None:
+        from ccxt import (
+            DECIMAL_PLACES as _dp,
+            ROUND as _r,
+            ROUND_DOWN as _rd,
+            ROUND_UP as _ru,
+            SIGNIFICANT_DIGITS as _sd,
+            TICK_SIZE as _ts,
+            TRUNCATE as _tr,
+            decimal_to_precision as _dtp,
+        )
+        _ccxt_utils = {
+            "DECIMAL_PLACES": _dp,
+            "ROUND": _r,
+            "ROUND_DOWN": _rd,
+            "ROUND_UP": _ru,
+            "SIGNIFICANT_DIGITS": _sd,
+            "TICK_SIZE": _ts,
+            "TRUNCATE": _tr,
+            "decimal_to_precision": _dtp,
+        }
+    return _ccxt_utils
 
 logger = logging.getLogger(__name__)
 
@@ -95,7 +136,7 @@ class CcxtExecEngine(ExecutionEngine):
         self._api_secret: str = cfg.get("api_secret", api_secret)
         self._max_slippage_bps: float = cfg.get("max_slippage_bps", max_slippage_bps)
 
-        self._exchange: ccxt.Exchange | None = None
+        self._exchange: Any = None
         self._connected: bool = False
         self._markets_loaded: bool = False
 
@@ -109,11 +150,12 @@ class CcxtExecEngine(ExecutionEngine):
     # ═══════════════════════════════════════════════════════════════
     # CONNECTION MANAGEMENT
 
-    async def _ensure_exchange(self) -> ccxt.Exchange:
+    async def _ensure_exchange(self) -> Any:
         """Lazy-init the ccxt exchange connection."""
         if self._exchange is not None and self._connected:
             return self._exchange
 
+        ccxt = _get_ccxt()
         exchange_class = getattr(ccxt, self._exchange_id, None)
         if exchange_class is None:
             raise ConnectionError(f"Exchange '{self._exchange_id}' not found in ccxt")
@@ -266,6 +308,7 @@ class CcxtExecEngine(ExecutionEngine):
         if market is None:
             return order
 
+        utils = _get_ccxt_utils()
         precision = market.get("precision", {})
         amount_prec = precision.get("amount")
         price_prec = precision.get("price")
@@ -274,19 +317,19 @@ class CcxtExecEngine(ExecutionEngine):
         # Apply amount precision (truncate)
         new_quantity = order.quantity
         if amount_prec is not None and prec_mode is not None:
-            prec = int(amount_prec) if prec_mode != TICK_SIZE else amount_prec
+            prec = int(amount_prec) if prec_mode != utils["TICK_SIZE"] else amount_prec
             new_quantity = float(
-                decimal_to_precision(order.quantity, TRUNCATE, prec, prec_mode)
+                utils["decimal_to_precision"](order.quantity, utils["TRUNCATE"], prec, prec_mode)
             )
 
         # Apply price precision (round)
         new_price = order.price
         if order.price is not None and price_prec is not None and prec_mode is not None:
             new_price = float(
-                decimal_to_precision(
+                utils["decimal_to_precision"](
                     order.price,
-                    ROUND,
-                    int(price_prec) if prec_mode != TICK_SIZE else price_prec,
+                    utils["ROUND"],
+                    int(price_prec) if prec_mode != utils["TICK_SIZE"] else price_prec,
                     prec_mode,
                 )
             )
@@ -295,10 +338,10 @@ class CcxtExecEngine(ExecutionEngine):
         new_stop_price = order.stop_price
         if order.stop_price is not None and price_prec is not None and prec_mode is not None:
             new_stop_price = float(
-                decimal_to_precision(
+                utils["decimal_to_precision"](
                     order.stop_price,
-                    ROUND,
-                    int(price_prec) if prec_mode != TICK_SIZE else price_prec,
+                    utils["ROUND"],
+                    int(price_prec) if prec_mode != utils["TICK_SIZE"] else price_prec,
                     prec_mode,
                 )
             )
@@ -382,6 +425,7 @@ class CcxtExecEngine(ExecutionEngine):
         )
 
         try:
+            ccxt = _get_ccxt()
             raw = await exchange.create_order(
                 symbol=order.symbol,
                 type=ccxt_type,
@@ -390,13 +434,13 @@ class CcxtExecEngine(ExecutionEngine):
                 price=order.price if ccxt_type == "limit" else None,
                 params=params,
             )
-        except ccxt.InsufficientFunds as exc:
+        except _get_ccxt().InsufficientFunds as exc:
             logger.error("Insufficient funds for %s order: %s", order.symbol, exc)
             raise
-        except ccxt.InvalidOrder as exc:
+        except _get_ccxt().InvalidOrder as exc:
             logger.error("Invalid order rejected by exchange: %s", exc)
             raise
-        except ccxt.NetworkError as exc:
+        except _get_ccxt().NetworkError as exc:
             logger.error("Network error placing order: %s", exc)
             raise ConnectionError(f"Network error: {exc}") from exc
 
@@ -486,13 +530,14 @@ class CcxtExecEngine(ExecutionEngine):
                 return False
 
         try:
+            ccxt = _get_ccxt()
             await exchange.cancel_order(order_id, symbol=symbol)
             logger.info("Order %s cancelled", order_id)
             return True
-        except ccxt.OrderNotFound as exc:
+        except _get_ccxt().OrderNotFound as exc:
             logger.error("Order %s not found: %s", order_id, exc)
             raise LookupError(f"Order not found: {order_id}") from exc
-        except ccxt.NetworkError as exc:
+        except _get_ccxt().NetworkError as exc:
             logger.error("Network error cancelling order %s: %s", order_id, exc)
             return False
         except Exception as exc:
@@ -518,9 +563,9 @@ class CcxtExecEngine(ExecutionEngine):
             # Try fetching open orders first to find the symbol.
             raw = await exchange.fetch_order(order_id, symbol=None)
             return self._map_order_status(raw.get("status", ""))
-        except ccxt.OrderNotFound as exc:
+        except _get_ccxt().OrderNotFound as exc:
             raise LookupError(f"Order not found: {order_id}") from exc
-        except ccxt.NetworkError as exc:
+        except _get_ccxt().NetworkError as exc:
             raise ConnectionError(f"Network error: {exc}") from exc
 
     async def get_open_orders(self, symbol: str) -> list[Order]:
@@ -536,9 +581,9 @@ class CcxtExecEngine(ExecutionEngine):
 
         try:
             raw_orders = await exchange.fetch_open_orders(symbol)
-        except ccxt.BadSymbol as exc:
+        except _get_ccxt().BadSymbol as exc:
             raise LookupError(f"Symbol not found: {symbol}") from exc
-        except ccxt.NetworkError as exc:
+        except _get_ccxt().NetworkError as exc:
             raise ConnectionError(f"Network error: {exc}") from exc
 
         orders: list[Order] = []
@@ -585,9 +630,9 @@ class CcxtExecEngine(ExecutionEngine):
         try:
             # Fetch the order to get fill details
             raw = await exchange.fetch_order(order_id, symbol=None)
-        except ccxt.OrderNotFound as exc:
+        except _get_ccxt().OrderNotFound as exc:
             raise LookupError(f"Order not found: {order_id}") from exc
-        except ccxt.NetworkError as exc:
+        except _get_ccxt().NetworkError as exc:
             raise ConnectionError(f"Network error: {exc}") from exc
 
         symbol = raw.get("symbol", "")

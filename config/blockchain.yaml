@@ -15,20 +15,20 @@
 
 # ── Network ──────────────────────────────────────────────────────
 network:
-  name: mumbai                    # mumbai | mainnet
-  chain_id: 80001                 # 80001 (Mumbai) | 137 (Polygon mainnet)
-  explorer_url: https://mumbai.polygonscan.com
+  name: amoy                      # amoy | mainnet
+  chain_id: 80002                 # 80002 (Amoy) | 137 (Polygon mainnet)
+  explorer_url: https://amoy.polygonscan.com
 
 # ── RPC Endpoints ────────────────────────────────────────────────
 rpc:
   # Primary WebSocket endpoint (for event listening)
-  ws_url: wss://polygon-mumbai.g.alchemy.com/v2/${ALCHEMY_API_KEY}
+  ws_url: wss://polygon-amoy.g.alchemy.com/v2/${ALCHEMY_API_KEY}
 
   # Fallback HTTP endpoint (for contract calls)
-  http_url: https://polygon-mumbai.g.alchemy.com/v2/${ALCHEMY_API_KEY}
+  http_url: https://polygon-amoy.g.alchemy.com/v2/${ALCHEMY_API_KEY}
 
   # Public fallback (rate-limited, for emergencies only)
-  public_http: https://rpc-mumbai.maticvigil.com
+  public_http: https://rpc-amoy.polygon.technology
 
   # Connection settings
   timeout_ms: 30000

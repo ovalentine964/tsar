@@ -28,13 +28,17 @@ risk:
   max_daily_trades: 30
 
 llm:
-  default_provider: ollama
-  ollama_base_url: http://localhost:11434
-  ollama_model: qwen2.5:7b
+  # NVIDIA NIM is primary (free tier, cloud-hosted, no local RAM needed)
+  # DeepSeek is fallback. Ollama disabled by default.
+  # Set TSAR_ENABLE_OLLAMA=1 to re-enable local LLM.
+  default_provider: nvidia_nim
+  nvidia_nim_base_url: https://integrate.api.nvidia.com/v1
   deepseek_api_key: null
   deepseek_base_url: https://api.deepseek.com
-  nvidia_nim_base_url: https://integrate.api.nvidia.com/v1
-  request_timeout_s: 30.0
+  ollama_base_url: http://localhost:11434
+  ollama_model: qwen2.5:7b
+  ollama_enabled: false
+  request_timeout_s: 60.0
   # See config/models.yaml for full model routing and fallbacks
 
 strategy:

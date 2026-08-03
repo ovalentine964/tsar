@@ -665,6 +665,9 @@ class RiskGovernor(RiskEngine):
 
     def _build_guards_config(self) -> GuardsConfig:
         """Build AntiBehavioralGuards config from loaded YAML."""
+        micro_cfg = self._config.get("micro_capital", {})
+        relax_cfg = micro_cfg.get("relax_guards", {})
+
         return GuardsConfig(
             anti_revenge_cooldown_minutes=self._config.get(
                 "anti_revenge_cooldown_minutes", 60
@@ -684,6 +687,9 @@ class RiskGovernor(RiskEngine):
             anti_overconfidence_win_streak=self._config.get(
                 "anti_overconfidence_win_streak", 5
             ),
+            # Micro-capital guard relaxation (H-005)
+            relax_anti_greed=relax_cfg.get("anti_greed", False),
+            relax_anti_overconfidence=relax_cfg.get("anti_overconfidence", False),
         )
 
     # ═══════════════════════════════════════════════════════════════

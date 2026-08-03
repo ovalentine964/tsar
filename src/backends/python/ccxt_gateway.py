@@ -18,18 +18,11 @@ import time
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 
-import aiohttp
-import ccxt.async_support as ccxt
-from ccxt import (
-    DECIMAL_PLACES,
-    ROUND,
-    ROUND_DOWN,
-    ROUND_UP,
-    SIGNIFICANT_DIGITS,
-    TICK_SIZE,
-    TRUNCATE,
-    decimal_to_precision,
-)
+try:
+    import aiohttp
+except ImportError:
+    aiohttp = None  # type: ignore[assignment]
+
 try:
     import redis.asyncio as aioredis
 except ImportError:
@@ -51,21 +44,63 @@ from src.interfaces.types import (
 
 if TYPE_CHECKING:
     from collections.abc import Callable
+    import ccxt.async_support as ccxt
 
 logger = logging.getLogger(__name__)
 
-# ccxt exception hierarchy for structured error handling
-_CCXT_NETWORK_ERRORS = (
-    ccxt.NetworkError,
-    ccxt.ExchangeNotAvailable,
-    ccxt.RequestTimeout,
-)
-_CCXT_AUTH_ERRORS = (
-    ccxt.AuthenticationError,
-    ccxt.PermissionDenied,
-)
-_CCXT_RATE_LIMIT_ERRORS = (ccxt.RateLimitExceeded,)
-_CCXT_NOT_FOUND_ERRORS = (ccxt.ExchangeError,)
+# ── Lazy ccxt loader (cold-start fix: defers 8.1s import) ──────
+_ccxt = None  # type: ignore[assignment]
+_ccxt_utils = None  # type: ignore[assignment]
+
+
+def _get_ccxt() -> Any:
+    """Lazy-import ccxt.async_support. Called once on first use."""
+    global _ccxt
+    if _ccxt is None:
+        import ccxt.async_support as _ccxt_mod
+        _ccxt = _ccxt_mod
+    return _ccxt
+
+
+def _get_ccxt_utils() -> dict[str, Any]:
+    """Lazy-import ccxt utility constants. Called once on first use."""
+    global _ccxt_utils
+    if _ccxt_utils is None:
+        from ccxt import (
+            DECIMAL_PLACES as _dp,
+            ROUND as _r,
+            ROUND_DOWN as _rd,
+            ROUND_UP as _ru,
+            SIGNIFICANT_DIGITS as _sd,
+            TICK_SIZE as _ts,
+            TRUNCATE as _tr,
+            decimal_to_precision as _dtp,
+        )
+        _ccxt_utils = {
+            "DECIMAL_PLACES": _dp,
+            "ROUND": _r,
+            "ROUND_DOWN": _rd,
+            "ROUND_UP": _ru,
+            "SIGNIFICANT_DIGITS": _sd,
+            "TICK_SIZE": _ts,
+            "TRUNCATE": _tr,
+            "decimal_to_precision": _dtp,
+        }
+    return _ccxt_utils
+
+
+# ccxt exception hierarchy for structured error handling (lazily resolved)
+def _ccxt_network_errors() -> tuple[type, ...]:
+    ccxt = _get_ccxt()
+    return (ccxt.NetworkError, ccxt.ExchangeNotAvailable, ccxt.RequestTimeout)
+
+def _ccxt_auth_errors() -> tuple[type, ...]:
+    ccxt = _get_ccxt()
+    return (ccxt.AuthenticationError, ccxt.PermissionDenied)
+
+def _ccxt_rate_limit_errors() -> tuple[type, ...]:
+    ccxt = _get_ccxt()
+    return (ccxt.RateLimitExceeded,)
 
 # Freqtrade-inspired retry constants
 API_RETRY_COUNT = 4  # Max retries (called RETRY_COUNT + 1 times total)
@@ -96,11 +131,12 @@ def _amount_to_precision(
     Uses ccxt's decimal_to_precision with TRUNCATE mode.
     """
     if amount_precision is not None and precision_mode is not None:
-        precision = int(amount_precision) if precision_mode != TICK_SIZE else amount_precision
+        utils = _get_ccxt_utils()
+        precision = int(amount_precision) if precision_mode != utils["TICK_SIZE"] else amount_precision
         amount = float(
-            decimal_to_precision(
+            utils["decimal_to_precision"](
                 amount,
-                TRUNCATE,
+                utils["TRUNCATE"],
                 precision,
                 precision_mode,
             )
@@ -113,43 +149,46 @@ def _price_to_precision(
     price_precision: float | None,
     precision_mode: int | None,
     *,
-    rounding_mode: int = ROUND,
+    rounding_mode: int | None = None,
 ) -> float:
     """Round price to exchange-accepted precision.
 
     Mirrors Freqtrade's price_to_precision() from exchange_utils.py.
     Supports ROUND_UP/ROUND_DOWN for stoploss calculations.
     """
+    utils = _get_ccxt_utils()
+    if rounding_mode is None:
+        rounding_mode = utils["ROUND"]
     if price_precision is not None and precision_mode is not None:
-        if rounding_mode not in (ROUND_UP, ROUND_DOWN):
+        if rounding_mode not in (utils["ROUND_UP"], utils["ROUND_DOWN"]):
             return float(
-                decimal_to_precision(
+                utils["decimal_to_precision"](
                     price,
                     rounding_mode,
-                    int(price_precision) if precision_mode != TICK_SIZE else price_precision,
+                    int(price_precision) if precision_mode != utils["TICK_SIZE"] else price_precision,
                     precision_mode,
                 )
             )
 
-        if precision_mode == TICK_SIZE:
+        if precision_mode == utils["TICK_SIZE"]:
             from decimal import Decimal
             prec = Decimal(str(price_precision))
             dec = Decimal(str(price))
             missing = dec % prec
             if missing != Decimal('0'):
-                if rounding_mode == ROUND_UP:
+                if rounding_mode == utils["ROUND_UP"]:
                     res = dec - missing + prec
                 else:
                     res = dec - missing
                 return round(float(str(res)), 14)
             return price
-        elif precision_mode == DECIMAL_PLACES:
+        elif precision_mode == utils["DECIMAL_PLACES"]:
             from math import ceil, floor
             ndigits = round(price_precision)
             ticks = price * (10 ** ndigits)
-            if rounding_mode == ROUND_UP:
+            if rounding_mode == utils["ROUND_UP"]:
                 return ceil(ticks) / (10 ** ndigits)
-            if rounding_mode == ROUND_DOWN:
+            if rounding_mode == utils["ROUND_DOWN"]:
                 return floor(ticks) / (10 ** ndigits)
 
     return price
@@ -405,7 +444,7 @@ class CcxtGateway(ExchangeGateway):
         self._api_key: str = cfg.get("api_key", api_key)
         self._api_secret: str = cfg.get("api_secret", api_secret)
 
-        self._exchange: ccxt.Exchange | None = None
+        self._exchange: Any = None
         self._status: ConnectionStatus = ConnectionStatus.DISCONNECTED
         self._markets_loaded: bool = False
 
@@ -469,11 +508,11 @@ class CcxtGateway(ExchangeGateway):
 
         try:
             # Build ccxt exchange instance
-            exchange_class = getattr(ccxt, self._exchange_id, None)
+            exchange_class = getattr(_get_ccxt(), self._exchange_id, None)
             if exchange_class is None:
                 raise ConnectionError(
                     f"Exchange '{self._exchange_id}' not found in ccxt. "
-                    f"Available: {', '.join(ccxt.exchanges[:10])}..."
+                    f"Available: {', '.join(_get_ccxt().exchanges[:10])}..."
                 )
 
             config: dict[str, Any] = {
@@ -508,11 +547,11 @@ class CcxtGateway(ExchangeGateway):
             if self._ws_session is None or self._ws_session.closed:
                 self._ws_session = aiohttp.ClientSession()
 
-        except ccxt.AuthenticationError as exc:
+        except _get_ccxt().AuthenticationError as exc:
             self._status = ConnectionStatus.ERROR
             logger.error("Authentication failed: %s", exc)
             raise ConnectionError(f"Authentication failed: {exc}") from exc
-        except (_CCXT_NETWORK_ERRORS, OSError) as exc:
+        except (_ccxt_network_errors(), OSError) as exc:
             self._status = ConnectionStatus.ERROR
             logger.error("Network error connecting to %s: %s", self._exchange_id, exc)
             raise ConnectionError(f"Cannot reach {self._exchange_id}: {exc}") from exc
@@ -619,7 +658,7 @@ class CcxtGateway(ExchangeGateway):
             )
             await self._cache.set_ticker(price)
             return price
-        except ccxt.BadSymbol as exc:
+        except _get_ccxt().BadSymbol as exc:
             raise LookupError(f"Symbol not found: {symbol}") from exc
 
     async def get_ohlcv(
@@ -670,7 +709,7 @@ class CcxtGateway(ExchangeGateway):
             ]
             await self._cache.set_ohlcv(symbol, timeframe.value, limit, candles)
             return candles
-        except ccxt.BadSymbol as exc:
+        except _get_ccxt().BadSymbol as exc:
             raise LookupError(f"Symbol not found: {symbol}") from exc
 
     async def get_orderbook(self, symbol: str, depth: int = 20) -> OrderBook:
@@ -713,7 +752,7 @@ class CcxtGateway(ExchangeGateway):
             )
             await self._cache.set_orderbook(book, depth)
             return book
-        except ccxt.BadSymbol as exc:
+        except _get_ccxt().BadSymbol as exc:
             raise LookupError(f"Symbol not found: {symbol}") from exc
 
     # ═══════════════════════════════════════════════════════════════
@@ -831,7 +870,7 @@ class CcxtGateway(ExchangeGateway):
             raw_trades = await self._retry_on_transient(
                 self._exchange.fetch_trades, symbol, limit=limit
             )
-        except ccxt.BadSymbol as exc:
+        except _get_ccxt().BadSymbol as exc:
             raise LookupError(f"Symbol not found: {symbol}") from exc
 
         trades: list[Trade] = []
@@ -871,7 +910,7 @@ class CcxtGateway(ExchangeGateway):
             )
             logger.info("Order %%s cancelled on %%s", order_id, symbol)
             return True
-        except ccxt.OrderNotFound as exc:
+        except _get_ccxt().OrderNotFound as exc:
             raise LookupError(f"Order not found: {order_id}") from exc
 
     # STREAMING (REAL-TIME)
@@ -1180,7 +1219,7 @@ class CcxtGateway(ExchangeGateway):
         return _amount_to_precision(amount, self.get_precision_amount(symbol), self.precision_mode)
 
     def price_to_precision(
-        self, symbol: str, price: float, *, rounding_mode: int = ROUND
+        self, symbol: str, price: float, *, rounding_mode: int | None = None
     ) -> float:
         """Round price to exchange-accepted precision.
 
@@ -1279,7 +1318,7 @@ class CcxtGateway(ExchangeGateway):
                     self._request_timestamps.append(time.monotonic())
                 return await coro_func(*args, **kwargs)
 
-            except _CCXT_RATE_LIMIT_ERRORS as exc:
+            except _ccxt_rate_limit_errors() as exc:
                 last_exc = exc
                 retry_after = getattr(exc, "retry_after", None)
                 if retry_after:
@@ -1297,7 +1336,7 @@ class CcxtGateway(ExchangeGateway):
                 )
                 await asyncio.sleep(wait_s)
 
-            except _CCXT_NETWORK_ERRORS as exc:
+            except _ccxt_network_errors() as exc:
                 last_exc = exc
                 if attempt < self._max_retries:
                     # Freqtrade-style quadratic backoff
@@ -1318,7 +1357,7 @@ class CcxtGateway(ExchangeGateway):
                         exc,
                     )
 
-            except (ccxt.AuthenticationError, ccxt.BadSymbol, ccxt.InvalidOrder):
+            except (_get_ccxt().AuthenticationError, _get_ccxt().BadSymbol, _get_ccxt().InvalidOrder):
                 raise
 
         assert last_exc is not None

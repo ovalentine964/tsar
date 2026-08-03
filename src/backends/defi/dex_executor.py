@@ -549,12 +549,14 @@ class DexExecutor:
             gas_info = await self.get_gas_estimate(chain)
             logger.info("Gas estimate: %.6f %s ($%.2f)", gas_info.gas_cost_native, NATIVE_TOKEN.get(chain, "ETH"), gas_info.gas_cost_usd)
 
-            # 3. Check/token approval (EVM only)
+            # 3. Check/token approval (EVM only) — exact amount only, never unlimited
             if chain != "solana":
                 from_addr = self._resolve_token(chain, from_token)
                 native_symbol = NATIVE_TOKEN.get(chain, "ETH")
                 if from_token.upper() != native_symbol and from_addr != "0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE":
-                    await self.approve_token(wallet_name, chain, from_addr)
+                    # Approve exact trade amount +5% buffer for slippage (not unlimited)
+                    approval_amount = int(amount * 1.05 * (10 ** quote.get("from_decimals", 18)))
+                    await self.approve_token(wallet_name, chain, from_addr, amount=approval_amount)
 
             # 4. Build and sign transaction
             if chain == "solana":
@@ -780,22 +782,36 @@ class DexExecutor:
         wallet_name: str,
         chain: str,
         token_address: str,
-        amount: int | None = None,
+        amount: int,
         spender: str | None = None,
     ) -> str:
         """Approve a token for spending by the DEX router.
+
+        SECURITY: Always approve exact amounts, never unlimited.
+        Callers must provide the exact amount needed for the trade.
 
         Args:
             wallet_name: Wallet label.
             chain: Chain identifier.
             token_address: Token contract address.
-            amount: Amount to approve (None = unlimited).
+            amount: Exact amount to approve (in wei). REQUIRED — no unlimited approvals.
             spender: Spender address (None = 1inch router).
 
         Returns:
             Transaction hash of the approval.
         """
         chain = chain.lower()
+
+        # Security: reject unlimited or excessively large approvals
+        _MAX_REASONABLE_APPROVAL = 2**128  # ~3.4e38 — still huge, but not 2^256
+        if amount <= 0:
+            raise ValueError(f"Approval amount must be positive, got {amount}")
+        if amount > _MAX_REASONABLE_APPROVAL:
+            raise ValueError(
+                f"Approval amount {amount} exceeds maximum reasonable value {_MAX_REASONABLE_APPROVAL}. "
+                f"Use exact trade amounts, not unlimited approvals."
+            )
+
         w3 = self._wallet_manager._get_web3(chain)
         address = self._wallet_manager.get_address(wallet_name, chain)
 
@@ -824,9 +840,10 @@ class DexExecutor:
             }
             spender = routers.get(chain, routers["ethereum"])
 
-        # Unlimited approval if not specified
-        if amount is None:
-            amount = 2**256 - 1
+        logger.info(
+            "Approving %s wei of %s for spender %s on %s",
+            amount, token_address, spender, chain,
+        )
 
         contract = w3.eth.contract(
             address=w3.to_checksum_address(token_address),

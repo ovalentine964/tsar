@@ -145,6 +145,8 @@ properties:
           - "${REDIS_PASSWORD}"
           - --loglevel
           - warning
+          - --protected-mode
+          - "yes"
 
         # Liveness — restart if Redis can't respond
         livenessProbe:

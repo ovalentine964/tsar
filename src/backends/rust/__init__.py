@@ -28,18 +28,28 @@ from typing import Any
 
 logger = logging.getLogger(__name__)
 
-# Try to import the Rust extension module
-try:
-    import trading_rs
-    RUST_AVAILABLE = True
-    logger.info("trading_rs v%s loaded — Rust backends available", trading_rs.version())
-except ImportError:
+import os
+
+# TSAR_RUST_BUILD=0 forces pure-Python fallback (e.g. free-tier / no Rust toolchain)
+_force_python = os.environ.get("TSAR_RUST_BUILD", "1").strip() in ("0", "false", "no")
+
+if _force_python:
     RUST_AVAILABLE = False
     trading_rs = None  # type: ignore[assignment]
-    logger.warning(
-        "trading_rs not available — Rust backends disabled. "
-        "Build with: cd rust && maturin develop --release"
-    )
+    logger.info("TSAR_RUST_BUILD=0 — Rust backends disabled by config, using pure Python")
+else:
+    # Try to import the Rust extension module
+    try:
+        import trading_rs
+        RUST_AVAILABLE = True
+        logger.info("trading_rs v%s loaded — Rust backends available", trading_rs.version())
+    except ImportError:
+        RUST_AVAILABLE = False
+        trading_rs = None  # type: ignore[assignment]
+        logger.warning(
+            "trading_rs not available — Rust backends disabled. "
+            "Build with: cd rust && maturin develop --release"
+        )
 
 
 # ═══════════════════════════════════════════════════════════════════════

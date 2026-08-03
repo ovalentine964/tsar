@@ -236,16 +236,38 @@ class RulesEnforcer:
         """
         Check if trading is allowed by the kill switch.
 
+        FAIL-SAFE: Returns False (block trading) if:
+          - Not connected
+          - Rust unavailable AND web3 not functional
+          - Any unexpected error
+
         Returns:
-            True if trading is allowed, False if kill switch is active.
+            True if trading is allowed, False if kill switch is active
+            or if the check cannot be performed.
         """
-        self._ensure_connected()
+        try:
+            self._ensure_connected()
+        except RuntimeError:
+            # Not connected — fail-safe: block trading
+            logger.error("is_trading_allowed: not connected — FAIL-SAFE: blocking trading")
+            return False
 
         if self._rust_available:
-            return self._rust_client.is_trading_allowed()
+            try:
+                return self._rust_client.is_trading_allowed()
+            except Exception as exc:
+                logger.error("is_trading_allowed: Rust call failed — FAIL-SAFE: blocking trading: %s", exc)
+                return False
 
         # Pure Python: call contract view function
-        return self._web3_call("kill_switch", "isTradingAllowed")
+        try:
+            return self._web3_call("kill_switch", "isTradingAllowed")
+        except (NotImplementedError, Exception) as exc:
+            # FAIL-SAFE: If we can't verify kill switch status, assume trading is BLOCKED
+            logger.error(
+                "is_trading_allowed: web3 call failed — FAIL-SAFE: blocking trading: %s", exc,
+            )
+            return False
 
     def get_kill_switch_status(self) -> KillSwitchStatus:
         """
@@ -346,7 +368,10 @@ class RulesEnforcer:
         leverage_bps: int,
         daily_trade_count: int,
     ) -> RuleCheckResult:
-        """Check order via web3.py."""
+        """Check order via web3.py.
+
+        FAIL-SAFE: Returns allowed=False on any error.
+        """
         symbol_hash = self._hash_symbol(symbol)
 
         try:
@@ -364,6 +389,14 @@ class RulesEnforcer:
                 allowed=result[0],
                 reason=result[1] if not result[0] else "",
                 rule_id="mandate",
+            )
+        except NotImplementedError:
+            # FAIL-SAFE: web3 not implemented — REJECT trade
+            logger.error("Mandate check: web3 not implemented — FAIL-SAFE: rejecting order")
+            return RuleCheckResult(
+                allowed=False,
+                reason="On-chain enforcement unavailable (web3 not implemented) — trade rejected for safety",
+                rule_id="mandate_unavailable",
             )
         except Exception as e:
             logger.error("Mandate check failed: %s", e)
@@ -606,24 +639,38 @@ class RulesEnforcer:
         """
         Check if a position size is within limits.
 
+        FAIL-SAFE: Returns False (reject) if check cannot be performed.
+
         Args:
             notional_bps: Trade notional as basis points of equity.
             max_position_bps: Maximum allowed position in bps (default: 1500 = 15%).
 
         Returns:
-            True if within limits.
+            True if within limits, False if exceeded or check fails.
         """
-        self._ensure_connected()
+        try:
+            self._ensure_connected()
+        except RuntimeError:
+            logger.error("check_position_limit: not connected — FAIL-SAFE: rejecting")
+            return False
 
         if not self.is_trading_allowed():
             return False
 
         if self._rust_available:
-            return self._rust_client.check_position_limit(notional_bps, max_position_bps)
+            try:
+                return self._rust_client.check_position_limit(notional_bps, max_position_bps)
+            except Exception as exc:
+                logger.error("check_position_limit: Rust failed — FAIL-SAFE: rejecting: %s", exc)
+                return False
 
-        return self._web3_call(
-            "kill_switch", "checkPositionLimit", notional_bps, max_position_bps
-        )
+        try:
+            return self._web3_call(
+                "kill_switch", "checkPositionLimit", notional_bps, max_position_bps
+            )
+        except (NotImplementedError, Exception) as exc:
+            logger.error("check_position_limit: web3 failed — FAIL-SAFE: rejecting: %s", exc)
+            return False
 
     # ═══════════════════════════════════════════════════════════
     # HELPERS

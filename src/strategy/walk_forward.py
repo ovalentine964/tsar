@@ -66,7 +66,7 @@ class WalkForwardConfig:
     anchored: bool = False
     min_train_bars: int = 50
     min_test_bars: int = 20
-    overfit_threshold: float = 3.0
+    overfit_threshold: float = 1.75
     backtest_config: BacktestConfig = field(default_factory=BacktestConfig)
 
 

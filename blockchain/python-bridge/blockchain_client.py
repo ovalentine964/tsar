@@ -508,55 +508,60 @@ class MockRustClient:
     """
     Mock Rust client for development and testing.
 
-    Simulates on-chain behavior without actual blockchain interaction.
-    Useful for unit tests and local development.
+    FAIL-SAFE: When Rust backend is unavailable, ALL trades are REJECTED.
+    This prevents accidental live trading without proper risk enforcement.
+
+    Previously this mock allowed all trades (fail-open), which is dangerous.
+    Now it rejects all trades with a clear error message (fail-safe).
     """
 
+    _UNAVAILABLE_MSG = "Rust backend unavailable, trade rejected for safety"
+
     def __init__(self):
-        self._trading_allowed = True
+        self._trading_allowed = False  # FAIL-SAFE: default to halted
         self._daily_pnl_bps = 0
-        self._circuit_breaker_level = 0
+        self._circuit_breaker_level = 3  # RED — assume worst case
         self._trades: list[dict] = []
         self._risk_checks: list[dict] = []
+        logger.critical(
+            "MockRustClient initialized — Rust backend is UNAVAILABLE. "
+            "ALL trades will be REJECTED for safety. "
+            "Deploy the Rust blockchain bindings to enable trading."
+        )
 
     def is_trading_allowed(self) -> bool:
-        return self._trading_allowed
+        logger.warning("MockRustClient: %s", self._UNAVAILABLE_MSG)
+        return False  # FAIL-SAFE: always reject
 
     def get_kill_switch_status(self) -> dict:
         return {
-            "active": not self._trading_allowed,
-            "reason": "Mock: normal operation",
+            "active": True,
+            "reason": self._UNAVAILABLE_MSG,
             "activated_at": 0,
-            "daily_pnl_bps": self._daily_pnl_bps,
-            "circuit_breaker_level": self._circuit_breaker_level,
+            "daily_pnl_bps": 0,
+            "circuit_breaker_level": 3,  # RED
             "drawdown_bps": 0,
         }
 
     def update_daily_pnl(self, daily_pnl_bps: int):
-        self._daily_pnl_bps = daily_pnl_bps
-        # Auto-activate kill switch if loss exceeds -2%
-        if daily_pnl_bps <= -200:
-            self._trading_allowed = False
-            logger.warning(f"MOCK: Kill switch activated — daily P&L {daily_pnl_bps} bps")
+        logger.error("MockRustClient: Cannot update P&L — %s", self._UNAVAILABLE_MSG)
 
     def update_equity(self, equity_wei: int):
-        pass  # Mock: no-op
+        logger.error("MockRustClient: Cannot update equity — %s", self._UNAVAILABLE_MSG)
 
     def check_order(self, **kwargs) -> dict:
-        # Mock: always allow
-        return {"allowed": True, "reason": ""}
+        logger.error("MockRustClient: Order REJECTED — %s", self._UNAVAILABLE_MSG)
+        return {"allowed": False, "reason": self._UNAVAILABLE_MSG}
 
     def check_position_limit(self, **kwargs) -> dict:
-        # Mock: always pass
-        return {"passed": True, "reason": ""}
+        logger.error("MockRustClient: Position check REJECTED — %s", self._UNAVAILABLE_MSG)
+        return {"passed": False, "reason": self._UNAVAILABLE_MSG}
 
     def record_trade(self, **kwargs):
-        self._trades.append(kwargs)
-        logger.info(f"MOCK: Trade recorded: {kwargs.get('trade_hash', 'unknown')[:16]}...")
+        logger.error("MockRustClient: Cannot record trade — %s", self._UNAVAILABLE_MSG)
 
     def log_risk_check(self, **kwargs):
-        self._risk_checks.append(kwargs)
-        logger.info(f"MOCK: Risk check logged: {kwargs.get('check_hash', 'unknown')[:16]}...")
+        logger.error("MockRustClient: Cannot log risk check — %s", self._UNAVAILABLE_MSG)
 
     def log_rule_enforcement(self, **kwargs):
-        logger.info(f"MOCK: Rule enforcement logged: {kwargs.get('rule_hash', 'unknown')[:16]}...")
+        logger.error("MockRustClient: Cannot log enforcement — %s", self._UNAVAILABLE_MSG)

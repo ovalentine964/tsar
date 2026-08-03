@@ -25,13 +25,22 @@ import httpx
 
 logger = logging.getLogger(__name__)
 
-# Try to import the Rust extension module
-try:
-    import trading_rs
-    RUST_DEFI_AVAILABLE = hasattr(trading_rs, 'MEVScanner')
-except ImportError:
+import os
+
+# TSAR_RUST_BUILD=0 forces pure-Python fallback
+_force_python = os.environ.get("TSAR_RUST_BUILD", "1").strip() in ("0", "false", "no")
+
+if _force_python:
     RUST_DEFI_AVAILABLE = False
     trading_rs = None
+else:
+    # Try to import the Rust extension module
+    try:
+        import trading_rs
+        RUST_DEFI_AVAILABLE = hasattr(trading_rs, 'MEVScanner')
+    except ImportError:
+        RUST_DEFI_AVAILABLE = False
+        trading_rs = None
 
 
 # ═══════════════════════════════════════════════════════════════════════

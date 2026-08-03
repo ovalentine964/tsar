@@ -16,13 +16,19 @@ from src.knowledge.regime_state import (
 from src.knowledge.strategy_genomes import StrategyGenomes
 from src.knowledge.trade_memory import TradeMemory
 
-# ChromaDB optional import
+# ChromaDB optional import (with numpy fallback)
 try:
     from src.knowledge.chromadb_store import ChromaVectorStore, VectorSearchResult, is_chromadb_available
 except ImportError:
     ChromaVectorStore = None  # type: ignore[assignment,misc]
     VectorSearchResult = None  # type: ignore[assignment,misc]
     is_chromadb_available = None  # type: ignore[assignment]
+
+# Lightweight vector store (always available with numpy)
+try:
+    from src.knowledge.lightweight_vector_store import LightweightVectorStore
+except ImportError:
+    LightweightVectorStore = None  # type: ignore[assignment,misc]
 
 # Knowledge graph
 try:
@@ -66,6 +72,7 @@ __all__ = [
     "ChromaVectorStore",
     "VectorSearchResult",
     "is_chromadb_available",
+    "LightweightVectorStore",
     "KnowledgeGraph",
     "GraphNode",
     "GraphEdge",

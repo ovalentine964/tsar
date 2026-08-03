@@ -457,7 +457,35 @@ async def start_api(host: str, port: int, config) -> None:
     from src.api.app import create_app
 
     app = create_app(config)
-    uconfig = uvicorn.Config(app, host=host, port=port, log_level="warning")
+
+    # TLS support — set TSAR_SSL_CERTFILE and TSAR_SSL_KEYFILE env vars
+    ssl_certfile = os.environ.get("TSAR_SSL_CERTFILE")
+    ssl_keyfile = os.environ.get("TSAR_SSL_KEYFILE")
+
+    uconfig_kwargs = dict(
+        app=app,
+        host=host,
+        port=port,
+        log_level="warning",
+    )
+
+    if ssl_certfile and ssl_keyfile:
+        if not Path(ssl_certfile).is_file():
+            logger.error(f"SSL cert file not found: {ssl_certfile}")
+            sys.exit(1)
+        if not Path(ssl_keyfile).is_file():
+            logger.error(f"SSL key file not found: {ssl_keyfile}")
+            sys.exit(1)
+        uconfig_kwargs["ssl_certfile"] = ssl_certfile
+        uconfig_kwargs["ssl_keyfile"] = ssl_keyfile
+        logger.info(f"🔒 TLS enabled — listening on https://{host}:{port}")
+    else:
+        logger.warning(
+            "⚠️  TLS not configured — listening on http. "
+            "Set TSAR_SSL_CERTFILE and TSAR_SSL_KEYFILE for production."
+        )
+
+    uconfig = uvicorn.Config(**uconfig_kwargs)
     server = uvicorn.Server(uconfig)
     await server.serve()
 

@@ -554,7 +554,7 @@ def create_app(config: Any = None) -> FastAPI:
             m = Mandate(config_path=Path("config/mandate.yaml"))
             return {
                 "status": m.status.value if hasattr(m.status, "value") else str(m.status),
-                "rules_count": len(m.rules) if hasattr(m, "rules") else 0,
+                "rules_count": len(type(m.rules).model_fields) if hasattr(m, "rules") else 0,
             }
         except Exception as e:
             logger.error("Failed to fetch mandate: %s", e)

@@ -331,10 +331,10 @@ class BackendRegistry:
 
     def _register_defaults(self) -> None:
         """Register all default Python backends."""
+        import os
         from src.backends.python.ccxt_exec_engine import CcxtExecEngine
         from src.backends.python.ccxt_gateway import CcxtGateway
         from src.backends.python.deepseek_provider import DeepSeekProvider
-        from src.backends.python.ollama_provider import OllamaProvider
         from src.backends.python.openai_provider import OpenAIProvider
         from src.backends.python.pandas_ta_engine import PandasTAEngine
         from src.backends.python.paper_execution_engine import PaperExecutionEngine
@@ -345,9 +345,17 @@ class BackendRegistry:
         self.register("execution_engine", PaperExecutionEngine.__name__, PaperExecutionEngine)
         self.register("pricing_engine", PandasTAEngine.__name__, PandasTAEngine)
         self.register("risk_engine", PythonRiskEngine.__name__, PythonRiskEngine)
-        self.register("llm_provider", OllamaProvider.__name__, OllamaProvider)
-        self.register("llm_provider_openai", OpenAIProvider.__name__, OpenAIProvider)
+        # LLM: NVIDIA NIM primary (via OpenAI-compatible), DeepSeek fallback
+        self.register("llm_provider", OpenAIProvider.__name__, OpenAIProvider)
         self.register("llm_provider_deepseek", DeepSeekProvider.__name__, DeepSeekProvider)
+
+        # Ollama only registered if explicitly enabled
+        ollama_enabled = os.environ.get("TSAR_ENABLE_OLLAMA", "").strip() in ("1", "true", "yes")
+        if ollama_enabled:
+            from src.backends.python.ollama_provider import OllamaProvider
+            self.register("llm_provider", OllamaProvider.__name__, OllamaProvider)
+        else:
+            logger.info("Ollama disabled (TSAR_ENABLE_OLLAMA not set) — using cloud LLM only")
 
     def create_for_mode(
         self,

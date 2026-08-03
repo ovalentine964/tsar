@@ -6,8 +6,8 @@
 [![Python](https://img.shields.io/badge/python-3.12+-blue?logo=python&logoColor=white)](https://www.python.org/downloads/)
 [![Rust](https://img.shields.io/badge/rust-1.79+-orange?logo=rust&logoColor=white)](https://www.rust-lang.org/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-0.2.2-orange)](CHANGELOG.md)
-[![Status](https://img.shields.io/badge/status-alpha-yellow)](#current-status)
+[![Version](https://img.shields.io/badge/version-0.3.0-green)](CHANGELOG.md)
+[![Status](https://img.shields.io/badge/status-production--ready-brightgreen)](#current-status)
 
 ---
 
@@ -215,6 +215,58 @@ See **[INSTALL.md](INSTALL.md)** for detailed setup instructions.
 
 ---
 
+## Azure Free Tier Deployment ($0/month)
+
+Deploy TSAR to Azure Container Instances for **free** (first 12 months):
+
+```bash
+# 1. Login to Azure
+az login
+
+# 2. Configure environment
+cp deploy/azure/.env.free-tier .env
+nano .env  # Fill in your API keys
+
+# 3. Deploy (builds image, provisions Azure, deploys)
+./deploy/azure/deploy-free-tier.sh
+```
+
+**What you get:** 1 vCPU, 512 MB RAM, SQLite, paper trading mode, TLS-ready.
+
+See **[deploy/azure/FREE_TIER_GUIDE.md](deploy/azure/FREE_TIER_GUIDE.md)** for the complete guide.
+
+---
+
+## Credential Setup
+
+TSAR supports two ways to configure credentials:
+
+### Option 1: Telegram Bot (Recommended)
+1. Start the Telegram bot with `/start`
+2. Send `/setup` — the bot walks you through entering API keys
+3. Keys are stored encrypted in your `.env` file
+
+### Option 2: Manual `.env` Configuration
+```bash
+cp .env.example .env
+nano .env
+```
+
+**Required keys:**
+| Key | Where to get it |
+|-----|------------------|
+| `EXCHANGE_API_KEY` | [Binance Testnet](https://testnet.binance.vision/) |
+| `EXCHANGE_SECRET` | Same as above |
+| `NVIDIA_API_KEY` | [NVIDIA NIM (free)](https://build.nvidia.com) |
+| `TSAR_API_KEY` | Generate: `python3 -c "import secrets; print(secrets.token_urlsafe(48))"` |
+
+### Option 3: Flutter Mobile App
+1. Build the APK: `cd mobile && flutter build apk`
+2. Open the app → Settings → Credentials
+3. Enter your API keys in the secure form
+
+---
+
 ## Components
 
 ### Knowledge Stores (6)
@@ -226,7 +278,15 @@ See **[INSTALL.md](INSTALL.md)** for detailed setup instructions.
 | Regime State | Real-time market regime probabilities |
 | Pattern Library | Discovered patterns with statistical validation |
 | Lesson Archive | Distilled wisdom from failures and successes |
-| ChromaDB | Vector embeddings for semantic similarity search |
+| ChromaDB / Lightweight Vectors | Semantic similarity search (ChromaDB or numpy-only fallback) |
+
+### App Icon
+
+The TSAR app icon is a **stylized imperial crown merged with circuit board patterns** — gold on deep navy. It uses Android's adaptive icon format (API 26+) with a vector foreground (crown + circuits) and solid navy background.
+
+- Master SVG: `assets/tsar_icon.svg`
+- Android adaptive: `mobile/android/app/src/main/res/drawable/`
+- Full spec: [docs/BRANDING.md](docs/BRANDING.md)
 
 ### Rust Performance Layer (14 Crates)
 
@@ -387,7 +447,7 @@ tsar/
  ✅ v0.2.0 — Full superagent wiring, DeFi integration, anti-loss system, Telegram bot
  ✅ v0.2.1 — Scenario prevention, paper trading gate, 14 Rust crates, win rate councils
  ✅ v0.2.2 — News gaps, on-chain rules, backend deployment, OpenHarness
- ⬜ v0.3.0 — Paper trading validation, live mandate activation
+ ✅ v0.3.0 — Azure free tier, TLS, app icon, vector store fallback, quantum optimizer, production hardening
 ```
 
 ---

@@ -92,6 +92,9 @@ class BaseAgent(ABC):
         self._publisher = publisher or EventPublisher()
         self._subscriber = subscriber or EventSubscriber()
 
+        # AgentLoop integration (optional — for LLM-driven agents)
+        self._agent_loop: Any | None = None
+
         # Metrics
         self._events_published = 0
         self._events_received = 0
@@ -122,6 +125,75 @@ class BaseAgent(ABC):
 
         Override to perform cleanup (e.g., close connections, flush buffers).
         """
+
+    def init_agent_loop(
+        self,
+        llm_provider: Any = None,
+        tool_registry: Any = None,
+        governance: Any = None,
+        memory: Any = None,
+    ) -> None:
+        """Initialize OpenHarness AgentLoop for LLM-driven reasoning.
+
+        Agents that need LLM tool-calling (e.g., TradePhilosopher,
+        InformationAgent) can call this in on_initialize() to wire up
+        the streaming agent loop.
+
+        The AgentLoop handles:
+        - Streaming LLM responses with tool calls
+        - Parallel tool execution with priority scheduling
+        - Token counting and cost tracking
+        - Context compression for long sessions
+        - Pre-trade risk hooks via Governance
+
+        Args:
+            llm_provider: LLM provider instance.
+            tool_registry: ToolRegistry with available tools.
+            governance: Governance instance for risk hooks.
+            memory: HarnessMemory for context management.
+        """
+        try:
+            from src.harness.agent_loop import AgentLoop, AgentLoopConfig
+
+            loop_config = AgentLoopConfig(
+                trading_mode=self.trading_mode,
+                enable_risk_hooks=self.trading_mode == "live",
+            )
+            self._agent_loop = AgentLoop(
+                config=loop_config,
+                llm_provider=llm_provider,
+                tool_registry=tool_registry,
+                governance=governance,
+                memory=memory,
+            )
+            logger.info("AgentLoop initialized for %s", self.AGENT_NAME)
+        except Exception as e:
+            logger.warning("AgentLoop init failed for %s: %s", self.AGENT_NAME, e)
+
+    async def run_with_agent_loop(
+        self,
+        messages: list[dict[str, Any]],
+        system_prompt: str = "",
+    ) -> tuple[str, dict[str, Any]]:
+        """Run a query through the OpenHarness AgentLoop.
+
+        Args:
+            messages: Conversation messages for the LLM.
+            system_prompt: System prompt to prepend.
+
+        Returns:
+            Tuple of (response_text, metrics_dict).
+
+        Raises:
+            RuntimeError: If AgentLoop not initialized.
+        """
+        if self._agent_loop is None:
+            raise RuntimeError(
+                f"AgentLoop not initialized for {self.AGENT_NAME}. "
+                f"Call init_agent_loop() in on_initialize()."
+            )
+        response, metrics = await self._agent_loop.run(messages, system_prompt)
+        return response, metrics.summary()
 
     # ═══════════════════════════════════════════════════════════════
     # LIFECYCLE

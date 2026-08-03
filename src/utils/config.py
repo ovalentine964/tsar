@@ -132,14 +132,16 @@ class RiskConfig(BaseModel):
 
 
 class LLMConfig(BaseModel):
-    default_provider: str = Field(default="ollama")
+    default_provider: str = Field(default="nvidia_nim")
+    nvidia_nim_base_url: str = Field(default="https://integrate.api.nvidia.com/v1")
     ollama_base_url: str = Field(default="http://localhost:11434")
     ollama_model: str = Field(default="qwen2.5:7b")
+    ollama_enabled: bool = Field(default=False)
     deepseek_api_key: str | None = Field(default=None)
     deepseek_base_url: str = Field(default="https://api.deepseek.com")
     daily_budget_usd: float = Field(default=0.0)
     monthly_budget_usd: float = Field(default=0.0)
-    request_timeout_s: float = Field(default=30.0)
+    request_timeout_s: float = Field(default=60.0)
 
 
 class LoggingConfig(BaseModel):

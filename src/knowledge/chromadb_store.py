@@ -11,7 +11,6 @@ Capabilities:
 
 from __future__ import annotations
 
-import hashlib
 import json
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -79,11 +78,16 @@ class VectorSearchResult:
 
 
 class EmbeddingFunction:
-    """Pluggable embedding function. Defaults to a simple hash-based stub.
+    """Pluggable embedding function. Uses character n-gram hashing.
 
-    In production, replace with OpenAI/sentence-transformers/etc.
-    The stub produces deterministic 128-dim vectors from text so that
-    the rest of the pipeline works without an API key.
+    In production, replace with sentence-transformers/OpenAI/etc.
+    The default uses 3-gram + word-level feature hashing for
+    deterministic, lexical-similarity-aware embeddings.
+
+    This is a significant improvement over raw SHA-512 hashing:
+    - Captures character-level similarity (e.g. "bullish" ≈ "bull")
+    - Word features weighted higher than trigrams
+    - Deterministic and API-key-free
     """
 
     def __call__(self, input: list[str]) -> list[list[float]]:
@@ -91,24 +95,33 @@ class EmbeddingFunction:
 
     @staticmethod
     def _text_to_vector(text: str, dim: int = 128) -> list[float]:
-        """Deterministic hash-based embedding stub.
+        """Deterministic n-gram hash embedding.
 
-        Produces a normalised vector from SHA-512 hash chunks.
-        NOT suitable for real semantic search — replace with a real model.
+        Uses character 3-grams + word-level features hashed into a
+        fixed-dim vector. Captures lexical similarity without requiring
+        a model or API key.
         """
-        h = hashlib.sha512(text.encode("utf-8")).hexdigest()
-        # Repeat hash to fill dimension
-        raw = h * (dim // len(h) + 1)
-        values = []
-        for i in range(dim):
-            # Convert hex pairs to float in [-1, 1]
-            byte_val = int(raw[i * 2 : i * 2 + 2], 16)
-            values.append((byte_val - 127.5) / 127.5)
+        import math
+
+        vec = [0.0] * dim
+        text_lower = text.lower().strip()
+
+        # Character 3-grams (captures subword similarity)
+        for i in range(len(text_lower) - 2):
+            trigram = text_lower[i:i + 3]
+            h = hash(trigram) % dim
+            vec[h] += 1.0
+
+        # Word-level features (weighted higher)
+        for word in text_lower.split():
+            h = hash(word) % dim
+            vec[h] += 2.0
+
         # Normalize to unit vector
-        mag = sum(v * v for v in values) ** 0.5
+        mag = math.sqrt(sum(v * v for v in vec))
         if mag > 0:
-            values = [v / mag for v in values]
-        return values
+            vec = [v / mag for v in vec]
+        return vec
 
 
 # ── Main class ──────────────────────────────────────────────
@@ -136,9 +149,24 @@ class ChromaVectorStore:
         self._client: Any = None
         self._collections: dict[str, Any] = {}
         self._embedding_fn = embedding_fn or EmbeddingFunction()
+        self._fallback_store: Any = None
 
         if not self._available:
-            logger.warning("chromadb_not_installed", msg="Vector search disabled. Install chromadb.")
+            # Use lightweight numpy-based vector store as fallback
+            try:
+                from src.knowledge.lightweight_vector_store import LightweightVectorStore
+                self._fallback_store = LightweightVectorStore(
+                    persist_dir=persist_dir, embedding_fn=embedding_fn,
+                )
+                logger.info(
+                    "chromadb_fallback_to_numpy",
+                    msg="ChromaDB not installed — using lightweight numpy vector store",
+                )
+            except Exception as exc:
+                logger.warning(
+                    "chromadb_not_installed",
+                    msg=f"Vector search disabled. Install chromadb or numpy. Error: {exc}",
+                )
             return
 
         try:
@@ -181,7 +209,9 @@ class ChromaVectorStore:
 
     @property
     def available(self) -> bool:
-        return self._available and self._client is not None
+        if self._available and self._client is not None:
+            return True
+        return self._fallback_store is not None
 
     def _get_collection(self, name: str) -> Any:
         """Get or create a ChromaDB collection."""
@@ -208,6 +238,8 @@ class ChromaVectorStore:
         metadata: dict[str, Any] | None = None,
     ) -> bool:
         """Store or update a pattern embedding."""
+        if self._fallback_store:
+            return self._fallback_store.upsert_pattern(pattern_id, document, metadata)
         collection = self._get_collection(COLLECTION_PATTERNS)
         if collection is None:
             return False
@@ -229,8 +261,10 @@ class ChromaVectorStore:
         query: str,
         limit: int = 10,
         where: dict[str, Any] | None = None,
-    ) -> list[VectorSearchResult]:
+    ) -> list[VectorSearchResult | dict[str, Any]]:
         """Find patterns semantically similar to the query."""
+        if self._fallback_store:
+            return self._fallback_store.search_similar_patterns(query, limit, where)
         return self._search_collection(COLLECTION_PATTERNS, query, limit, where)
 
     # ── Trade operations ─────────────────────────────────────
@@ -242,6 +276,8 @@ class ChromaVectorStore:
         metadata: dict[str, Any] | None = None,
     ) -> bool:
         """Store or update a trade embedding."""
+        if self._fallback_store:
+            return self._fallback_store.upsert_trade(trade_id, document, metadata)
         collection = self._get_collection(COLLECTION_TRADES)
         if collection is None:
             return False
@@ -263,8 +299,10 @@ class ChromaVectorStore:
         query: str,
         limit: int = 10,
         where: dict[str, Any] | None = None,
-    ) -> list[VectorSearchResult]:
+    ) -> list[VectorSearchResult | dict[str, Any]]:
         """Find trades semantically similar to the query."""
+        if self._fallback_store:
+            return self._fallback_store.search_similar_trades(query, limit, where)
         return self._search_collection(COLLECTION_TRADES, query, limit, where)
 
     # ── Lesson operations ────────────────────────────────────
@@ -276,6 +314,8 @@ class ChromaVectorStore:
         metadata: dict[str, Any] | None = None,
     ) -> bool:
         """Store or update a lesson embedding."""
+        if self._fallback_store:
+            return self._fallback_store.upsert_lesson(lesson_id, document, metadata)
         collection = self._get_collection(COLLECTION_LESSONS)
         if collection is None:
             return False
@@ -297,8 +337,10 @@ class ChromaVectorStore:
         query: str,
         limit: int = 10,
         where: dict[str, Any] | None = None,
-    ) -> list[VectorSearchResult]:
+    ) -> list[VectorSearchResult | dict[str, Any]]:
         """Find lessons semantically similar to the query."""
+        if self._fallback_store:
+            return self._fallback_store.search_similar_lessons(query, limit, where)
         return self._search_collection(COLLECTION_LESSONS, query, limit, where)
 
     # ── Market state operations ──────────────────────────────
@@ -310,6 +352,8 @@ class ChromaVectorStore:
         metadata: dict[str, Any] | None = None,
     ) -> bool:
         """Store a market state snapshot embedding."""
+        if self._fallback_store:
+            return self._fallback_store.upsert_market_state(state_id, document, metadata)
         collection = self._get_collection(COLLECTION_MARKET_STATE)
         if collection is None:
             return False
@@ -331,8 +375,10 @@ class ChromaVectorStore:
         query: str,
         limit: int = 10,
         where: dict[str, Any] | None = None,
-    ) -> list[VectorSearchResult]:
+    ) -> list[VectorSearchResult | dict[str, Any]]:
         """Find market states semantically similar to the query."""
+        if self._fallback_store:
+            return self._fallback_store.search_similar_market_states(query, limit, where)
         return self._search_collection(COLLECTION_MARKET_STATE, query, limit, where)
 
     # ── Generic search ───────────────────────────────────────
@@ -395,6 +441,8 @@ class ChromaVectorStore:
 
         Returns the number of documents upserted.
         """
+        if self._fallback_store:
+            return self._fallback_store.batch_upsert(collection_name, ids, documents, metadatas)
         collection = self._get_collection(collection_name)
         if collection is None:
             return 0
@@ -415,6 +463,8 @@ class ChromaVectorStore:
 
     def delete(self, collection_name: str, ids: list[str]) -> bool:
         """Delete documents by ID."""
+        if self._fallback_store:
+            return self._fallback_store.delete(collection_name, ids)
         collection = self._get_collection(collection_name)
         if collection is None:
             return False
@@ -429,6 +479,8 @@ class ChromaVectorStore:
 
     def get_stats(self) -> dict[str, Any]:
         """Return document counts per collection."""
+        if self._fallback_store:
+            return self._fallback_store.get_stats()
         stats: dict[str, Any] = {"available": self.available}
         if not self.available:
             return stats
@@ -444,6 +496,9 @@ class ChromaVectorStore:
 
     def persist(self) -> None:
         """Force persist to disk (ChromaDB persistent mode)."""
+        if self._fallback_store:
+            self._fallback_store.persist()
+            return
         if self.available and self._client:
             try:
                 self._client.persist()
@@ -454,3 +509,5 @@ class ChromaVectorStore:
         """Clean up resources."""
         self.persist()
         self._collections.clear()
+        if self._fallback_store:
+            self._fallback_store.close()

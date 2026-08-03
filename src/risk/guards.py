@@ -60,6 +60,11 @@ class GuardsConfig:
     anti_fomo_min_signal_score: float = 0.6
     anti_overconfidence_win_streak: int = 5
 
+    # Micro-capital guard relaxation (H-005)
+    # When True, the corresponding guard is skipped entirely.
+    relax_anti_greed: bool = False
+    relax_anti_overconfidence: bool = False
+
 
 @dataclass
 class GuardState:
@@ -135,18 +140,20 @@ class AntiBehavioralGuards:
             )
 
         # --- 3. Anti-Greed ---
-        greed_mult, greed_warn = self._check_greed()
-        if greed_mult < 1.0:
-            size_multiplier = min(size_multiplier, greed_mult)
-            if greed_warn:
-                warnings.append(greed_warn)
+        if not self._config.relax_anti_greed:
+            greed_mult, greed_warn = self._check_greed()
+            if greed_mult < 1.0:
+                size_multiplier = min(size_multiplier, greed_mult)
+                if greed_warn:
+                    warnings.append(greed_warn)
 
         # --- 4. Anti-Overconfidence ---
-        oc_mult, oc_warn = self._check_overconfidence()
-        if oc_mult < 1.0:
-            size_multiplier = min(size_multiplier, oc_mult)
-            if oc_warn:
-                warnings.append(oc_warn)
+        if not self._config.relax_anti_overconfidence:
+            oc_mult, oc_warn = self._check_overconfidence()
+            if oc_mult < 1.0:
+                size_multiplier = min(size_multiplier, oc_mult)
+                if oc_warn:
+                    warnings.append(oc_warn)
 
         return GuardDecision(
             approved=True,

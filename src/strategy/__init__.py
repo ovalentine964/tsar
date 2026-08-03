@@ -43,6 +43,12 @@ from src.strategy.walk_forward import (
     WalkForwardValidator,
     WindowResult,
 )
+from src.strategy.cuopt_optimizer import (
+    CuOptStrategyOptimizer,
+    OptimizationObjective,
+    OptimizationResult,
+    ParameterRange,
+)
 
 __all__: list[str] = [
     "MLScorer",
@@ -67,4 +73,8 @@ __all__: list[str] = [
     "WalkForwardResult",
     "WalkForwardValidator",
     "WindowResult",
+    "CuOptStrategyOptimizer",
+    "OptimizationObjective",
+    "OptimizationResult",
+    "ParameterRange",
 ]

@@ -177,7 +177,96 @@ class TradeMemory:
         else:
             self._pool = None
             # Pool can also be auto-created by importing get_pool
+
+        # Auto-create schema on first access
+        self._ensure_schema()
             # but we keep it opt-in for backward compatibility
+
+    def _ensure_schema(self) -> None:
+        """Create tables if they don't exist (idempotent)."""
+        try:
+            conn = sqlite3.connect(self._db_path, timeout=10)
+            conn.execute("PRAGMA journal_mode=WAL")
+            conn.execute("PRAGMA foreign_keys=ON")
+
+            # Check if trade_records exists
+            row = conn.execute(
+                "SELECT name FROM sqlite_master WHERE type='table' AND name='trade_records'",
+            ).fetchone()
+            if row:
+                conn.close()
+                return  # Schema already exists
+
+            # Run initial migration
+            migration_path = Path(__file__).parent.parent.parent / "migrations" / "001_initial_schema.sql"
+            if migration_path.exists():
+                migration_sql = migration_path.read_text()
+                conn.executescript(migration_sql)
+                logger.info("schema_migrated", migration="001_initial_schema")
+            else:
+                # Fallback: create minimal trade_records table
+                conn.executescript("""
+                    CREATE TABLE IF NOT EXISTS trade_records (
+                        trade_id TEXT PRIMARY KEY,
+                        symbol TEXT NOT NULL,
+                        asset_class TEXT NOT NULL DEFAULT 'crypto',
+                        exchange TEXT,
+                        strategy_id TEXT NOT NULL DEFAULT '',
+                        signal_type TEXT NOT NULL DEFAULT 'entry',
+                        signal_score REAL,
+                        signal_source TEXT,
+                        side TEXT NOT NULL DEFAULT 'buy',
+                        order_type TEXT NOT NULL DEFAULT 'market',
+                        quantity REAL NOT NULL DEFAULT 0,
+                        limit_price REAL,
+                        stop_price REAL,
+                        entry_price REAL,
+                        exit_price REAL,
+                        fill_quantity REAL,
+                        slippage_bps REAL,
+                        commission REAL DEFAULT 0.0,
+                        fill_timestamp TEXT,
+                        latency_ms INTEGER,
+                        position_size_before REAL DEFAULT 0.0,
+                        position_size_after REAL DEFAULT 0.0,
+                        portfolio_heat_before REAL,
+                        portfolio_heat_after REAL,
+                        regime_at_entry TEXT,
+                        vix_level REAL,
+                        market_breadth REAL,
+                        sector_momentum TEXT,
+                        volatility_regime TEXT,
+                        liquidity_score REAL,
+                        expected_return REAL,
+                        expected_risk REAL,
+                        risk_reward_ratio REAL,
+                        confidence REAL,
+                        thesis TEXT,
+                        key_levels TEXT,
+                        status TEXT NOT NULL DEFAULT 'OPEN',
+                        realized_pnl REAL DEFAULT 0.0,
+                        realized_pnl_pct REAL DEFAULT 0.0,
+                        holding_period_hours REAL,
+                        max_drawdown_during REAL,
+                        max_favorable_excursion REAL,
+                        max_adverse_excursion REAL,
+                        outcome_grade TEXT,
+                        execution_grade TEXT,
+                        reflection TEXT,
+                        lessons TEXT,
+                        pattern_matches TEXT,
+                        trading_mode TEXT NOT NULL DEFAULT 'paper',
+                        notes TEXT,
+                        created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+                        updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+                        is_deleted INTEGER NOT NULL DEFAULT 0
+                    );
+                """)
+                logger.info("schema_created_fallback", table="trade_records")
+
+            conn.close()
+        except Exception as exc:
+            logger.error("schema_init_failed", error=str(exc))
 
     @contextmanager
     def _conn(self) -> Generator[sqlite3.Connection, None, None]:
