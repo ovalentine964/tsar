@@ -19,9 +19,13 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Azure Login
-        uses: azure/login@v1
-        with:
-          creds: ${{ secrets.AZURE_CREDENTIALS }}
+        run: |
+          az login \
+            --service-principal \
+            -u *** secrets.AZURE_CLIENT_ID }} \
+            -p *** secrets.AZURE_CLIENT_SECRET }} \
+            --tenant *** secrets.AZURE_TENANT_ID }}
+          az account set --subscription *** secrets.AZURE_SUBSCRIPTION_ID }}
 
       - name: Provision Resources
         run: |
@@ -54,11 +58,11 @@ jobs:
               TSAR_DATABASE_PATH=/app/data/tsar.db \
               TSAR_CORS_ORIGINS=* \
             --secure-environment-variables \
-              EXCHANGE_API_KEY=${{ secrets.EXCHANGE_API_KEY }} \
-              EXCHANGE_SECRET=${{ secrets.EXCHANGE_SECRET }} \
-              NVIDIA_API_KEY=${{ secrets.NVIDIA_API_KEY }} \
-              TSAR_API_KEY=${{ secrets.TSAR_API_KEY }} \
-              TELEGRAM_BOT_TOKEN=${{ secrets.TELEGRAM_BOT_TOKEN }} \
+              EXCHANGE_API_KEY=*** secrets.EXCHANGE_API_KEY }} \
+              EXCHANGE_SECRET=*** secrets.EXCHANGE_SECRET }} \
+              NVIDIA_API_KEY=*** secrets.NVIDIA_API_KEY }} \
+              TSAR_API_KEY=*** secrets.TSAR_API_KEY }} \
+              TELEGRAM_BOT_TOKEN=*** secrets.TELEGRAM_BOT_TOKEN }} \
             --azure-file-volume-share-name tsar-data \
             --azure-file-volume-account-name tsar247store \
             --azure-file-volume-account-key "$STORAGE_KEY" \
