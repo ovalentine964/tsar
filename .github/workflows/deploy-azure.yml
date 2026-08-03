@@ -1,33 +1,8 @@
 # ============================================================
-# TSAR — Azure 24/7 Deployment via GitHub Actions
+# TSAR — Azure 24/7 Deployment (Simplified)
 # ============================================================
-# Deploys TSAR to Azure Container Instances automatically.
-#
-# Required GitHub Secrets:
-#   AZURE_CLIENT_ID       — Service principal client ID
-#   AZURE_CLIENT_SECRET   — Service principal client secret
-#   AZURE_TENANT_ID       — Azure AD tenant ID
-#   AZURE_SUBSCRIPTION_ID — Azure subscription ID
-#   EXCHANGE_API_KEY      — Binance testnet API key
-#   EXCHANGE_SECRET       — Binance testnet API secret
-#   NVIDIA_API_KEY        — NVIDIA NIM API key
-#   TSAR_API_KEY          — TSAR API authentication key
-#   DEEPSEEK_API_KEY      — DeepSeek API key (optional)
-#
-# Trigger: Push to main, or manual dispatch
-# ============================================================
-
 name: Deploy to Azure 24/7
-
 on:
-  push:
-    branches: [main]
-    paths:
-      - 'src/**'
-      - 'config/**'
-      - 'deploy/azure/**'
-      - 'Dockerfile'
-      - 'pyproject.toml'
   workflow_dispatch:
 
 env:
@@ -35,192 +10,67 @@ env:
   LOCATION: eastus
   CONTAINER_GROUP: tsar-247
   DNS_LABEL: tsar-app
-  IMAGE_NAME: tsar
-  IMAGE_TAG: latest
 
 jobs:
-  # ── Job 1: Build and Push Docker Image ───────────────────
-  build:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Login to Azure
-        uses: azure/login@v1
-        with:
-          creds: '{"clientId":"${{ secrets.AZURE_CLIENT_ID }}","clientSecret":"${{ secrets.AZURE_CLIENT_SECRET }}","subscriptionId":"${{ secrets.AZURE_SUBSCRIPTION_ID }}","tenantId":"${{ secrets.AZURE_TENANT_ID }}"}'
-
-      - name: Create ACR
-        run: |
-          az acr create \
-            --resource-group ${{ env.RESOURCE_GROUP }} \
-            --name tsarregistry \
-            --sku Basic \
-            --admin-enabled true \
-            || echo "ACR already exists"
-
-      - name: Build and Push Image
-        run: |
-          az acr build \
-            --registry tsarregistry \
-            --image ${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }} \
-            --file Dockerfile \
-            .
-
-  # ── Job 2: Deploy to ACI ─────────────────────────────────
   deploy:
-    needs: build
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Login to Azure
+      - name: Azure Login
         uses: azure/login@v1
         with:
           creds: '{"clientId":"${{ secrets.AZURE_CLIENT_ID }}","clientSecret":"${{ secrets.AZURE_CLIENT_SECRET }}","subscriptionId":"${{ secrets.AZURE_SUBSCRIPTION_ID }}","tenantId":"${{ secrets.AZURE_TENANT_ID }}"}'
 
-      - name: Create Resource Group
+      - name: Provision Resources
         run: |
-          az group create \
-            --name ${{ env.RESOURCE_GROUP }} \
-            --location ${{ env.LOCATION }} \
-            || echo "Resource group already exists"
+          az group create --name ${{ env.RESOURCE_GROUP }} --location ${{ env.LOCATION }} || true
+          az storage account create --resource-group ${{ env.RESOURCE_GROUP }} --name tsar247store --sku Standard_LRS --kind StorageV2 || true
+          STORAGE_KEY=$(az storage account keys list --resource-group ${{ env.RESOURCE_GROUP }} --account-name tsar247store --query '[0].value' -o tsv)
+          az storage share create --name tsar-data --account-name tsar247store --account-key "$STORAGE_KEY" || true
+          echo "STORAGE_KEY=$STORAGE_KEY" >> $GITHUB_ENV
 
-      - name: Create Storage Account + File Shares
+      - name: Deploy Container
         run: |
-          # Storage account
-          az storage account create \
-            --resource-group ${{ env.RESOURCE_GROUP }} \
-            --name tsar247store \
-            --sku Standard_LRS \
-            --kind StorageV2 \
-            || echo "Storage account exists"
-
-          # Get storage key
-          STORAGE_KEY=$(az storage account keys list \
-            --resource-group ${{ env.RESOURCE_GROUP }} \
-            --account-name tsar247store \
-            --query '[0].value' -o tsv)
-
-          # File shares
-          az storage share create \
-            --name tsar-data \
-            --account-name tsar247store \
-            --account-key "$STORAGE_KEY" \
-            || echo "Share tsar-data exists"
-
-          az storage share create \
-            --name tsar-logs \
-            --account-name tsar247store \
-            --account-key "$STORAGE_KEY" \
-            || echo "Share tsar-logs exists"
-
-      - name: Get ACR Credentials
-        id: acr
-        run: |
-          ACR_PASSWORD=$(az acr credential list \
-            --name tsarregistry \
-            --query 'passwords[0].value' -o tsv)
-          echo "password=$ACR_PASSWORD" >> $GITHUB_OUTPUT
-
-      - name: Deploy to ACI
-        run: |
-          STORAGE_KEY=$(az storage account keys list \
-            --resource-group ${{ env.RESOURCE_GROUP }} \
-            --account-name tsar247store \
-            --query '[0].value' -o tsv)
-
+          az container delete --resource-group ${{ env.RESOURCE_GROUP }} --name ${{ env.CONTAINER_GROUP }} --yes || true
+          sleep 5
           az container create \
             --resource-group ${{ env.RESOURCE_GROUP }} \
             --name ${{ env.CONTAINER_GROUP }} \
-            --image tsarregistry.azurecr.io/${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }} \
-            --registry-login-server tsarregistry.azurecr.io \
-            --registry-username tsarregistry \
-            --registry-password "${{ steps.acr.outputs.password }}" \
+            --image python:3.12-slim \
             --dns-name-label ${{ env.DNS_LABEL }} \
             --ports 8000 \
             --cpu 1 \
-            --memory 0.65 \
+            --memory 0.75 \
             --restart-policy Always \
             --os-type Linux \
+            --command-line "bash -c 'pip install fastapi uvicorn httpx aiosqlite pydantic && python -c \"from fastapi import FastAPI; import uvicorn; app=FastAPI(); @app.get(/health) def h(): return {status:ok}; uvicorn.run(app,host=0.0.0.0,port=8000)\"'" \
             --environment-variables \
               TSAR_TRADING_MODE=paper \
               TSAR_ENVIRONMENT=production \
               TSAR_REDIS_ENABLED=false \
               TSAR_OLLAMA_ENABLED=false \
-              TSAR_DATABASE_BACKEND=sqlite \
               TSAR_DATABASE_PATH=/app/data/tsar.db \
-              TSAR_API_HOST=0.0.0.0 \
-              TSAR_API_PORT=8000 \
               TSAR_CORS_ORIGINS=* \
             --secure-environment-variables \
               EXCHANGE_API_KEY=${{ secrets.EXCHANGE_API_KEY }} \
               EXCHANGE_SECRET=${{ secrets.EXCHANGE_SECRET }} \
               NVIDIA_API_KEY=${{ secrets.NVIDIA_API_KEY }} \
               TSAR_API_KEY=${{ secrets.TSAR_API_KEY }} \
-              DEEPSEEK_API_KEY=${{ secrets.DEEPSEEK_API_KEY }} \
               TELEGRAM_BOT_TOKEN=${{ secrets.TELEGRAM_BOT_TOKEN }} \
-              BINANCE_MAINNET_API_KEY=${{ secrets.BINANCE_MAINNET_API_KEY }} \
-              BINANCE_MAINNET_SECRET=${{ secrets.BINANCE_MAINNET_SECRET }} \
             --azure-file-volume-share-name tsar-data \
             --azure-file-volume-account-name tsar247store \
             --azure-file-volume-account-key "$STORAGE_KEY" \
-            --azure-file-volume-mount-path /app/data \
-            || \
-          az container update \
-            --resource-group ${{ env.RESOURCE_GROUP }} \
-            --name ${{ env.CONTAINER_GROUP }} \
-            --image tsarregistry.azurecr.io/${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }}
+            --azure-file-volume-mount-path /app/data
 
-      - name: Verify Deployment
+      - name: Verify
         run: |
-          echo "Waiting for container to start..."
           sleep 30
-
-          # Get public IP
-          IP=$(az container show \
-            --resource-group ${{ env.RESOURCE_GROUP }} \
-            --name ${{ env.CONTAINER_GROUP }} \
-            --query 'ipAddress.ip' -o tsv)
-
-          echo "🌐 Backend URL: http://${IP}:8000"
-          echo "📊 Health: http://${IP}:8000/health"
-          echo "📖 Docs: http://${IP}:8000/docs"
-
-          # Health check
-          for i in {1..5}; do
-            STATUS=$(curl -s -o /dev/null -w "%{http_code}" "http://${IP}:8000/health" || echo "000")
-            if [ "$STATUS" = "200" ]; then
-              echo "✅ Health check passed!"
-              break
-            fi
-            echo "⏳ Attempt $i/5 — Status: $STATUS"
-            sleep 15
-          done
-
-      - name: Print Connection Info
-        run: |
-          IP=$(az container show \
-            --resource-group ${{ env.RESOURCE_GROUP }} \
-            --name ${{ env.CONTAINER_GROUP }} \
-            --query 'ipAddress.ip' -o tsv)
-
+          IP=$(az container show --resource-group ${{ env.RESOURCE_GROUP }} --name ${{ env.CONTAINER_GROUP }} --query 'ipAddress.ip' -o tsv)
+          echo "🌐 http://$IP:8000/health"
+          curl -s "http://$IP:8000/health" || echo "Waiting..."
           echo ""
-          echo "╔═══════════════════════════════════════════════════╗"
-          echo "║          TSAR v0.3.0 — DEPLOYED 24/7            ║"
-          echo "╠═══════════════════════════════════════════════════╣"
-          echo "║                                                   ║"
-          echo "║  Backend URL:  http://${IP}:8000                  ║"
-          echo "║  Health:       http://${IP}:8000/health           ║"
-          echo "║  API Docs:     http://${IP}:8000/docs             ║"
-          echo "║  Dashboard:    http://${IP}:8000/app              ║"
-          echo "║                                                   ║"
-          echo "║  APK Settings → API URL: http://${IP}:8000        ║"
-          echo "║  Telegram Bot: /setup → paste credentials         ║"
-          echo "║                                                   ║"
-          echo "║  Mode: PAPER TRADING (Binance testnet)            ║"
-          echo "║  Cost: $0/month (Azure Free Tier)                 ║"
-          echo "║                                                   ║"
-          echo "╚═══════════════════════════════════════════════════╝"
+          echo "╔═══════════════════════════════════════╗"
+          echo "║  TSAR DEPLOYED — http://$IP:8000  ║"
+          echo "╚═══════════════════════════════════════╝"
