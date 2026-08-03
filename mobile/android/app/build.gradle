@@ -75,9 +75,11 @@ android {
             signingConfig keystorePropertiesFile.exists()
                 ? signingConfigs.release
                 : signingConfigs.debug
-            minifyEnabled true
-            shrinkResources true
-            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+            // minifyEnabled and proguard disabled for now — enable after
+            // verifying the release build works end-to-end.
+            // minifyEnabled true
+            // shrinkResources true
+            // proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
         }
     }
 }
