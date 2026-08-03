@@ -1,0 +1,26 @@
+services:
+  - type: web
+    name: tsar-api
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    plan: free
+    region: oregon
+    envVars:
+      - key: TSAR_ENVIRONMENT
+        value: production
+      - key: TSAR_TRADING_MODE
+        value: paper
+      - key: TSAR_API_PORT
+        value: "8000"
+      - key: PYTHONUNBUFFERED
+        value: "1"
+      - key: TSAR_API_KEY
+        generateValue: true
+      - key: NVIDIA_API_KEY
+        sync: false
+      - key: EXCHANGE_API_KEY
+        sync: false
+      - key: EXCHANGE_SECRET
+        sync: false
+    healthCheckPath: /health
+    autoDeploy: true
