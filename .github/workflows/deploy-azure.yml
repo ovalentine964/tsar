@@ -1,5 +1,5 @@
 # ============================================================
-# TSAR — Azure 24/7 Deployment (Simplified)
+# TSAR — Azure 24/7 Deployment
 # ============================================================
 name: Deploy to Azure 24/7
 on:
@@ -21,7 +21,7 @@ jobs:
       - name: Azure Login
         uses: azure/login@v1
         with:
-          creds: '{"clientId":"${{ secrets.AZURE_CLIENT_ID }}","clientSecret":"${{ secrets.AZURE_CLIENT_SECRET }}","subscriptionId":"${{ secrets.AZURE_SUBSCRIPTION_ID }}","tenantId":"${{ secrets.AZURE_TENANT_ID }}"}'
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
 
       - name: Provision Resources
         run: |
@@ -45,7 +45,7 @@ jobs:
             --memory 0.75 \
             --restart-policy Always \
             --os-type Linux \
-            --command-line "bash -c 'pip install fastapi uvicorn httpx aiosqlite pydantic && python -c \"from fastapi import FastAPI; import uvicorn; app=FastAPI(); @app.get(/health) def h(): return {status:ok}; uvicorn.run(app,host=0.0.0.0,port=8000)\"'" \
+            --command-line 'bash -c "pip install fastapi uvicorn httpx aiosqlite pydantic && python -c \"from fastapi import FastAPI; import uvicorn; app=FastAPI(); @app.get(/health) def h(): return {status:ok}; uvicorn.run(app,host=0.0.0.0,port=8000)\""' \
             --environment-variables \
               TSAR_TRADING_MODE=paper \
               TSAR_ENVIRONMENT=production \
@@ -68,9 +68,5 @@ jobs:
         run: |
           sleep 30
           IP=$(az container show --resource-group ${{ env.RESOURCE_GROUP }} --name ${{ env.CONTAINER_GROUP }} --query 'ipAddress.ip' -o tsv)
-          echo "🌐 http://$IP:8000/health"
-          curl -s "http://$IP:8000/health" || echo "Waiting..."
-          echo ""
-          echo "╔═══════════════════════════════════════╗"
-          echo "║  TSAR DEPLOYED — http://$IP:8000  ║"
-          echo "╚═══════════════════════════════════════╝"
+          echo "Backend: http://$IP:8000"
+          curl -s "http://$IP:8000/health" || echo "Starting..."
