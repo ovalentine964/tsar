@@ -4,9 +4,10 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>TSAR — Trading Super Agent for Returns</title>
-  <meta name="description" content="Self-improving autonomous trading system. Download the mobile app and take control of your trades.">
+  <meta name="description" content="Self-improving autonomous trading system with 13 AI agents, 43 tools, and a 7-layer risk engine. Download the mobile app and take control of your trades.">
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🏰</text></svg>">
   <style>
+    /* ── Reset & Variables ── */
     * { margin: 0; padding: 0; box-sizing: border-box; }
 
     :root {
@@ -22,7 +23,10 @@
       --green-glow: rgba(0, 200, 83, 0.3);
       --red: #ff1744;
       --gold: #ffd600;
+      --nav-h: 60px;
     }
+
+    html { scroll-behavior: smooth; }
 
     body {
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Inter', Roboto, sans-serif;
@@ -32,7 +36,7 @@
       overflow-x: hidden;
     }
 
-    /* Animated background */
+    /* ── Animated Background ── */
     body::before {
       content: '';
       position: fixed;
@@ -50,16 +54,189 @@
       100% { opacity: 1; }
     }
 
-    .container {
-      max-width: 960px;
-      margin: 0 auto;
-      padding: 2rem 1.5rem;
+    /* ── Navigation Bar ── */
+    nav {
+      position: sticky;
+      top: 0;
+      z-index: 1000;
+      background: rgba(10, 10, 15, 0.85);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      border-bottom: 1px solid var(--border);
+      height: var(--nav-h);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 2rem;
+      transition: box-shadow 0.3s;
     }
 
-    /* Hero */
-    .hero {
+    nav.scrolled {
+      box-shadow: 0 4px 24px rgba(0,0,0,0.4);
+    }
+
+    .nav-brand {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      font-weight: 800;
+      font-size: 1.1rem;
+      color: var(--text);
+      text-decoration: none;
+      letter-spacing: -0.02em;
+    }
+
+    .nav-brand span { font-size: 1.3rem; }
+
+    .nav-links {
+      display: flex;
+      align-items: center;
+      gap: 0.25rem;
+      list-style: none;
+    }
+
+    .nav-links a {
+      display: block;
+      padding: 0.5rem 1rem;
+      color: var(--text-dim);
+      text-decoration: none;
+      font-size: 0.85rem;
+      font-weight: 600;
+      border-radius: 8px;
+      transition: all 0.2s;
+      position: relative;
+    }
+
+    .nav-links a:hover {
+      color: var(--text);
+      background: var(--surface2);
+    }
+
+    .nav-links a.active {
+      color: var(--accent);
+      background: rgba(124, 77, 255, 0.1);
+    }
+
+    .nav-links a.active::after {
+      content: '';
+      position: absolute;
+      bottom: -1px;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 60%;
+      height: 2px;
+      background: var(--accent);
+      border-radius: 2px;
+    }
+
+    /* Hamburger */
+    .hamburger {
+      display: none;
+      flex-direction: column;
+      gap: 5px;
+      cursor: pointer;
+      background: none;
+      border: none;
+      padding: 4px;
+    }
+
+    .hamburger span {
+      display: block;
+      width: 24px;
+      height: 2px;
+      background: var(--text);
+      border-radius: 2px;
+      transition: all 0.3s;
+    }
+
+    .hamburger.open span:nth-child(1) {
+      transform: rotate(45deg) translate(5px, 5px);
+    }
+    .hamburger.open span:nth-child(2) { opacity: 0; }
+    .hamburger.open span:nth-child(3) {
+      transform: rotate(-45deg) translate(5px, -5px);
+    }
+
+    /* Mobile nav */
+    .mobile-menu {
+      display: none;
+      position: fixed;
+      top: var(--nav-h);
+      left: 0; right: 0;
+      background: rgba(10, 10, 15, 0.97);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      border-bottom: 1px solid var(--border);
+      padding: 1rem;
+      z-index: 999;
+    }
+
+    .mobile-menu.open { display: block; }
+
+    .mobile-menu a {
+      display: block;
+      padding: 0.85rem 1rem;
+      color: var(--text-dim);
+      text-decoration: none;
+      font-size: 0.95rem;
+      font-weight: 600;
+      border-radius: 8px;
+      transition: all 0.2s;
+    }
+
+    .mobile-menu a:hover,
+    .mobile-menu a.active {
+      color: var(--accent);
+      background: rgba(124, 77, 255, 0.1);
+    }
+
+    /* ── Section Base ── */
+    section {
+      max-width: 960px;
+      margin: 0 auto;
+      padding: 5rem 1.5rem 3rem;
+      min-height: 60vh;
+    }
+
+    /* Section divider */
+    .section-divider {
+      max-width: 960px;
+      margin: 0 auto;
+      padding: 0 1.5rem;
+    }
+
+    .section-divider .line {
+      height: 1px;
+      background: linear-gradient(90deg, transparent, var(--accent), var(--green), transparent);
+      opacity: 0.4;
+    }
+
+    .section-title {
+      font-size: 2rem;
+      font-weight: 800;
+      letter-spacing: -0.02em;
+      margin-bottom: 0.5rem;
+      background: linear-gradient(135deg, #fff 0%, var(--accent) 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+
+    .section-subtitle {
+      color: var(--text-dim);
+      font-size: 1rem;
+      margin-bottom: 2.5rem;
+      line-height: 1.6;
+    }
+
+    /* ── Hero Section ── */
+    #home {
+      min-height: calc(100vh - var(--nav-h));
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
       text-align: center;
-      padding: 4rem 0 3rem;
+      padding-top: 2rem;
     }
 
     .logo {
@@ -73,10 +250,10 @@
       50% { transform: translateY(-10px); }
     }
 
-    h1 {
-      font-size: 3rem;
-      font-weight: 800;
-      letter-spacing: -0.02em;
+    #home h1 {
+      font-size: 3.5rem;
+      font-weight: 900;
+      letter-spacing: -0.03em;
       background: linear-gradient(135deg, #fff 0%, var(--accent) 100%);
       -webkit-background-clip: text;
       -webkit-text-fill-color: transparent;
@@ -85,9 +262,17 @@
     }
 
     .tagline {
-      font-size: 1.25rem;
+      font-size: 1.3rem;
       color: var(--text-dim);
       margin-bottom: 0.5rem;
+    }
+
+    .hero-subtitle {
+      font-size: 1rem;
+      color: var(--text-dim);
+      max-width: 560px;
+      margin: 0 auto 2rem;
+      line-height: 1.6;
     }
 
     .version-badge {
@@ -98,19 +283,354 @@
       border-radius: 100px;
       font-size: 0.8rem;
       color: var(--text-dim);
+      margin-bottom: 2.5rem;
+    }
+
+    /* Download CTA */
+    .hero-cta {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.75rem;
+      background: linear-gradient(135deg, var(--green) 0%, #00e676 100%);
+      color: #000;
+      font-weight: 800;
+      font-size: 1.15rem;
+      padding: 1.1rem 2.5rem;
+      border-radius: 14px;
+      text-decoration: none;
+      transition: all 0.2s;
+      box-shadow: 0 4px 24px var(--green-glow);
+      border: none;
+      cursor: pointer;
+    }
+
+    .hero-cta:hover {
+      transform: translateY(-3px);
+      box-shadow: 0 8px 32px var(--green-glow);
+    }
+
+    .hero-cta svg {
+      width: 24px;
+      height: 24px;
+    }
+
+    .hero-meta {
+      margin-top: 1rem;
+      color: var(--text-dim);
+      font-size: 0.85rem;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0.5rem;
+      flex-wrap: wrap;
+    }
+
+    .hero-meta span.dot {
+      opacity: 0.5;
+    }
+
+    /* Flywheel */
+    .flywheel {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0.4rem;
+      flex-wrap: wrap;
+      margin: 2.5rem 0 1rem;
+    }
+
+    .flywheel-step {
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      padding: 0.55rem 1rem;
+      border-radius: 10px;
+      font-size: 0.82rem;
+      font-weight: 700;
+      transition: all 0.3s;
+    }
+
+    .flywheel-step:hover {
+      border-color: var(--accent);
+      box-shadow: 0 0 12px var(--accent-glow);
+    }
+
+    .flywheel-arrow {
+      color: var(--accent);
+      font-size: 1.1rem;
+      animation: arrowPulse 1.5s ease-in-out infinite;
+    }
+
+    @keyframes arrowPulse {
+      0%, 100% { opacity: 0.4; }
+      50% { opacity: 1; }
+    }
+
+    .flywheel-loop {
+      color: var(--green);
+      font-size: 1.1rem;
+      font-weight: 700;
+    }
+
+    .flywheel-caption {
+      text-align: center;
+      color: var(--text-dim);
+      font-size: 0.85rem;
       margin-bottom: 2rem;
     }
 
-    /* Download Card */
+    /* Stats */
+    .stats {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 1rem;
+      margin-top: 2rem;
+    }
+
+    .stat {
+      text-align: center;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 1.25rem 0.75rem;
+    }
+
+    .stat-value {
+      font-size: 1.6rem;
+      font-weight: 800;
+      color: var(--accent);
+    }
+
+    .stat-label {
+      font-size: 0.7rem;
+      color: var(--text-dim);
+      margin-top: 0.2rem;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+
+    /* ── Features Section ── */
+    .features-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 1rem;
+    }
+
+    .feature-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 1.5rem;
+      transition: all 0.25s;
+      opacity: 0;
+      transform: translateY(20px);
+    }
+
+    .feature-card.visible {
+      opacity: 1;
+      transform: translateY(0);
+    }
+
+    .feature-card:hover {
+      border-color: var(--accent);
+      transform: translateY(-4px);
+      box-shadow: 0 8px 32px rgba(0,0,0,0.3);
+    }
+
+    .feature-card-icon {
+      font-size: 2rem;
+      margin-bottom: 0.75rem;
+      display: block;
+    }
+
+    .feature-card h3 {
+      font-size: 1rem;
+      font-weight: 700;
+      margin-bottom: 0.4rem;
+    }
+
+    .feature-card p {
+      font-size: 0.82rem;
+      color: var(--text-dim);
+      line-height: 1.55;
+    }
+
+    /* ── Architecture Section ── */
+    .arch-visual {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 0.75rem;
+      margin-bottom: 2rem;
+    }
+
+    .arch-layer {
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+      padding: 1rem 1.25rem;
+      border-radius: 12px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      transition: all 0.25s;
+      opacity: 0;
+      transform: translateX(-20px);
+    }
+
+    .arch-layer.visible {
+      opacity: 1;
+      transform: translateX(0);
+    }
+
+    .arch-layer:hover {
+      border-color: var(--accent);
+      box-shadow: 0 0 16px var(--accent-glow);
+    }
+
+    .arch-layer-icon {
+      font-size: 1.5rem;
+      width: 2.5rem;
+      text-align: center;
+      flex-shrink: 0;
+    }
+
+    .arch-layer-info { flex: 1; }
+
+    .arch-layer-name {
+      font-weight: 700;
+      font-size: 0.95rem;
+      margin-bottom: 0.15rem;
+    }
+
+    .arch-layer-desc {
+      color: var(--text-dim);
+      font-size: 0.8rem;
+      line-height: 1.4;
+    }
+
+    .arch-layer-tech {
+      background: var(--bg);
+      padding: 0.25rem 0.75rem;
+      border-radius: 6px;
+      font-size: 0.72rem;
+      color: var(--accent);
+      font-weight: 700;
+      flex-shrink: 0;
+      border: 1px solid var(--border);
+    }
+
+    .arch-summary {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 1rem;
+      margin-top: 2rem;
+    }
+
+    .arch-summary-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 1.25rem;
+      text-align: center;
+    }
+
+    .arch-summary-card .icon { font-size: 1.5rem; margin-bottom: 0.5rem; }
+    .arch-summary-card h4 { font-size: 0.9rem; font-weight: 700; margin-bottom: 0.3rem; }
+    .arch-summary-card p { font-size: 0.75rem; color: var(--text-dim); line-height: 1.4; }
+
+    /* ── Risk Section ── */
+    .risk-layers {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+      gap: 0.75rem;
+      margin-bottom: 2rem;
+    }
+
+    .risk-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 1.25rem 1rem;
+      text-align: center;
+      transition: all 0.25s;
+      opacity: 0;
+      transform: scale(0.9);
+    }
+
+    .risk-card.visible {
+      opacity: 1;
+      transform: scale(1);
+    }
+
+    .risk-card:hover {
+      border-color: var(--red);
+      box-shadow: 0 0 16px rgba(255, 23, 68, 0.15);
+    }
+
+    .risk-card-icon {
+      font-size: 1.6rem;
+      margin-bottom: 0.5rem;
+    }
+
+    .risk-card-name {
+      font-size: 0.82rem;
+      font-weight: 700;
+      margin-bottom: 0.25rem;
+    }
+
+    .risk-card-desc {
+      font-size: 0.7rem;
+      color: var(--text-dim);
+      line-height: 1.4;
+    }
+
+    .risk-principle {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 2rem;
+      text-align: center;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .risk-principle::before {
+      content: '';
+      position: absolute;
+      top: 0; left: 0; right: 0;
+      height: 3px;
+      background: linear-gradient(90deg, var(--red), var(--gold), var(--red));
+    }
+
+    .risk-principle h3 {
+      font-size: 1.1rem;
+      font-weight: 800;
+      margin-bottom: 0.5rem;
+    }
+
+    .risk-principle p {
+      color: var(--text-dim);
+      font-size: 0.9rem;
+      line-height: 1.6;
+      max-width: 600px;
+      margin: 0 auto;
+    }
+
+    /* ── Download Section ── */
+    .download-cards {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 1.25rem;
+      margin-bottom: 2rem;
+    }
+
     .download-card {
       background: var(--surface);
       border: 1px solid var(--border);
-      border-radius: 20px;
-      padding: 2.5rem;
+      border-radius: 16px;
+      padding: 2rem;
       text-align: center;
-      margin-bottom: 3rem;
       position: relative;
       overflow: hidden;
+      transition: all 0.25s;
     }
 
     .download-card::before {
@@ -128,16 +648,34 @@
       100% { background-position: -200% 0; }
     }
 
-    .download-btn {
+    .download-card:hover {
+      transform: translateY(-4px);
+      box-shadow: 0 8px 32px rgba(0,0,0,0.3);
+    }
+
+    .download-card h3 {
+      font-size: 1.2rem;
+      font-weight: 800;
+      margin-bottom: 0.5rem;
+    }
+
+    .download-card p {
+      color: var(--text-dim);
+      font-size: 0.9rem;
+      margin-bottom: 1.5rem;
+      line-height: 1.5;
+    }
+
+    .dl-btn {
       display: inline-flex;
       align-items: center;
       gap: 0.75rem;
       background: linear-gradient(135deg, var(--green) 0%, #00e676 100%);
       color: #000;
       font-weight: 800;
-      font-size: 1.15rem;
-      padding: 1.1rem 2.5rem;
-      border-radius: 14px;
+      font-size: 1.05rem;
+      padding: 1rem 2rem;
+      border-radius: 12px;
       text-decoration: none;
       transition: all 0.2s;
       box-shadow: 0 4px 24px var(--green-glow);
@@ -145,329 +683,239 @@
       cursor: pointer;
     }
 
-    .download-btn:hover {
-      transform: translateY(-3px);
+    .dl-btn:hover {
+      transform: translateY(-2px);
       box-shadow: 0 8px 32px var(--green-glow);
     }
 
-    .download-btn:active {
-      transform: translateY(0);
+    .dl-btn svg {
+      width: 22px;
+      height: 22px;
     }
 
-    .download-btn svg {
-      width: 24px;
-      height: 24px;
-    }
-
-    .download-info {
-      margin-top: 1rem;
-      color: var(--text-dim);
-      font-size: 0.85rem;
-    }
-
-    .download-info span {
-      margin: 0 0.5rem;
-    }
-
-    /* Flywheel Animation */
-    .flywheel-section {
-      text-align: center;
-      margin-bottom: 3rem;
-    }
-
-    .flywheel {
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      gap: 0.5rem;
-      flex-wrap: wrap;
-      margin: 1.5rem 0;
-    }
-
-    .flywheel-step {
-      background: var(--surface2);
-      border: 1px solid var(--border);
-      padding: 0.6rem 1.2rem;
-      border-radius: 10px;
-      font-size: 0.9rem;
-      font-weight: 600;
-      transition: all 0.3s;
-    }
-
-    .flywheel-step:hover {
-      border-color: var(--accent);
-      box-shadow: 0 0 12px var(--accent-glow);
-    }
-
-    .flywheel-arrow {
-      color: var(--accent);
-      font-size: 1.2rem;
-      animation: arrowPulse 1.5s ease-in-out infinite;
-    }
-
-    @keyframes arrowPulse {
-      0%, 100% { opacity: 0.4; }
-      50% { opacity: 1; }
-    }
-
-    .flywheel-loop {
-      color: var(--green);
-      font-size: 1.2rem;
-      font-weight: 700;
-    }
-
-    /* Features Grid */
-    .features {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-      gap: 1rem;
-      margin-bottom: 3rem;
-    }
-
-    .feature {
-      background: var(--surface);
-      border: 1px solid var(--border);
-      border-radius: 14px;
-      padding: 1.5rem;
-      transition: all 0.2s;
-    }
-
-    .feature:hover {
-      border-color: var(--accent);
-      transform: translateY(-2px);
-    }
-
-    .feature-icon {
-      font-size: 1.8rem;
-      margin-bottom: 0.75rem;
-    }
-
-    .feature h3 {
-      font-size: 1rem;
-      font-weight: 700;
-      margin-bottom: 0.4rem;
-    }
-
-    .feature p {
-      font-size: 0.82rem;
-      color: var(--text-dim);
-      line-height: 1.5;
-    }
-
-    /* Stats */
-    .stats {
-      display: grid;
-      grid-template-columns: repeat(4, 1fr);
-      gap: 1rem;
-      margin-bottom: 3rem;
-    }
-
-    .stat {
-      text-align: center;
-      background: var(--surface);
-      border: 1px solid var(--border);
-      border-radius: 14px;
-      padding: 1.5rem 1rem;
-    }
-
-    .stat-value {
-      font-size: 1.8rem;
-      font-weight: 800;
-      color: var(--accent);
-    }
-
-    .stat-label {
-      font-size: 0.75rem;
-      color: var(--text-dim);
-      margin-top: 0.25rem;
-      text-transform: uppercase;
-      letter-spacing: 0.05em;
-    }
-
-    /* Architecture */
-    .arch-section {
-      background: var(--surface);
-      border: 1px solid var(--border);
-      border-radius: 16px;
-      padding: 2rem;
-      margin-bottom: 3rem;
-    }
-
-    .arch-section h2 {
-      font-size: 1.4rem;
-      margin-bottom: 1rem;
-      color: var(--text);
-    }
-
-    .arch-layers {
-      display: flex;
-      flex-direction: column;
-      gap: 0.5rem;
-    }
-
-    .arch-layer {
-      display: flex;
-      align-items: center;
-      gap: 1rem;
-      padding: 0.75rem 1rem;
-      border-radius: 10px;
-      background: var(--surface2);
-      border: 1px solid var(--border);
-    }
-
-    .arch-layer-icon {
-      font-size: 1.3rem;
-      width: 2rem;
-      text-align: center;
-    }
-
-    .arch-layer-name {
-      font-weight: 700;
-      font-size: 0.9rem;
-      min-width: 120px;
-    }
-
-    .arch-layer-desc {
-      color: var(--text-dim);
-      font-size: 0.82rem;
-    }
-
-    .arch-layer-tech {
-      margin-left: auto;
-      background: var(--bg);
-      padding: 0.2rem 0.6rem;
-      border-radius: 6px;
-      font-size: 0.72rem;
-      color: var(--accent);
-      font-weight: 600;
-    }
-
-    /* Risk Section */
-    .risk-section {
-      margin-bottom: 3rem;
-    }
-
-    .risk-section h2 {
-      font-size: 1.4rem;
-      margin-bottom: 1rem;
-    }
-
-    .risk-layers {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
-      gap: 0.75rem;
-    }
-
-    .risk-layer {
-      background: var(--surface);
-      border: 1px solid var(--border);
-      border-radius: 10px;
-      padding: 1rem;
-      text-align: center;
-    }
-
-    .risk-layer-icon {
-      font-size: 1.5rem;
-      margin-bottom: 0.5rem;
-    }
-
-    .risk-layer-name {
-      font-size: 0.8rem;
-      font-weight: 700;
-    }
-
-    /* GitHub */
-    .github-section {
-      text-align: center;
-      margin-bottom: 2rem;
-    }
-
-    .github-btn {
+    .dl-btn-outline {
       display: inline-flex;
       align-items: center;
       gap: 0.5rem;
       background: var(--surface2);
       border: 1px solid var(--border);
       color: var(--text);
-      padding: 0.75rem 1.5rem;
-      border-radius: 10px;
+      padding: 0.85rem 1.75rem;
+      border-radius: 12px;
       text-decoration: none;
-      font-weight: 600;
-      font-size: 0.9rem;
+      font-weight: 700;
+      font-size: 0.95rem;
       transition: all 0.2s;
     }
 
-    .github-btn:hover {
+    .dl-btn-outline:hover {
       border-color: var(--text-dim);
       background: var(--surface);
     }
 
-    .github-btn svg {
+    .dl-btn-outline svg {
       width: 20px;
       height: 20px;
       fill: currentColor;
     }
 
-    /* Footer */
-    .footer {
+    .download-meta {
+      margin-top: 1rem;
+      color: var(--text-dim);
+      font-size: 0.8rem;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0.5rem;
+      flex-wrap: wrap;
+    }
+
+    .download-meta span.dot { opacity: 0.5; }
+
+    /* ── About Section ── */
+    .about-content {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 2rem;
+    }
+
+    .about-text {
+      color: var(--text-dim);
+      font-size: 0.95rem;
+      line-height: 1.7;
+    }
+
+    .about-text p { margin-bottom: 1rem; }
+
+    .about-links {
+      display: flex;
+      gap: 1rem;
+      flex-wrap: wrap;
+      margin-top: 1.5rem;
+    }
+
+    .about-link {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      color: var(--text);
+      padding: 0.65rem 1.25rem;
+      border-radius: 10px;
+      text-decoration: none;
+      font-weight: 600;
+      font-size: 0.85rem;
+      transition: all 0.2s;
+    }
+
+    .about-link:hover {
+      border-color: var(--accent);
+      background: var(--surface);
+    }
+
+    .about-quote {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 1.5rem 2rem;
+      font-style: italic;
+      color: var(--text-dim);
       text-align: center;
-      padding: 2rem 0;
+      font-size: 0.95rem;
+      line-height: 1.6;
+      position: relative;
+    }
+
+    .about-quote::before {
+      content: '"';
+      font-size: 3rem;
+      color: var(--accent);
+      position: absolute;
+      top: 0.5rem;
+      left: 1rem;
+      opacity: 0.5;
+    }
+
+    /* ── Footer ── */
+    footer {
+      text-align: center;
+      padding: 2rem 1.5rem;
       color: var(--text-dim);
       font-size: 0.75rem;
       border-top: 1px solid var(--border);
+      max-width: 960px;
+      margin: 0 auto;
     }
 
-    .footer a {
+    footer a {
       color: var(--accent);
       text-decoration: none;
     }
 
-    /* Mobile */
-    @media (max-width: 640px) {
-      h1 { font-size: 2rem; }
-      .tagline { font-size: 1rem; }
+    footer a:hover { text-decoration: underline; }
+
+    /* ── Fade-in Animation ── */
+    .fade-in {
+      opacity: 0;
+      transform: translateY(16px);
+      transition: opacity 0.6s ease, transform 0.6s ease;
+    }
+
+    .fade-in.visible {
+      opacity: 1;
+      transform: translateY(0);
+    }
+
+    /* ── Responsive ── */
+    @media (max-width: 768px) {
+      nav { padding: 0 1rem; }
+      .nav-links { display: none; }
+      .hamburger { display: flex; }
+
+      section { padding: 3.5rem 1rem 2rem; min-height: auto; }
+
+      #home { min-height: calc(100vh - var(--nav-h)); }
+      #home h1 { font-size: 2.25rem; }
+      .tagline { font-size: 1.05rem; }
+      .logo { font-size: 3.5rem; }
+
       .stats { grid-template-columns: repeat(2, 1fr); }
+      .features-grid { grid-template-columns: 1fr; }
+      .arch-summary { grid-template-columns: 1fr; }
+      .risk-layers { grid-template-columns: repeat(2, 1fr); }
+      .download-cards { grid-template-columns: 1fr; }
+
       .arch-layer { flex-direction: column; align-items: flex-start; gap: 0.5rem; }
       .arch-layer-tech { margin-left: 0; }
+
+      .flywheel { gap: 0.25rem; }
+      .flywheel-step { padding: 0.4rem 0.7rem; font-size: 0.7rem; }
+
+      .section-title { font-size: 1.6rem; }
+    }
+
+    @media (max-width: 400px) {
+      #home h1 { font-size: 1.8rem; }
+      .hero-cta { padding: 0.9rem 1.5rem; font-size: 1rem; }
+      .risk-layers { grid-template-columns: 1fr; }
     }
   </style>
 </head>
 <body>
-  <div class="container">
 
-    <!-- Hero -->
-    <section class="hero">
-      <div class="logo">🏰</div>
-      <h1>TSAR</h1>
-      <p class="tagline">Trading Super Agent for Returns</p>
-      <div class="version-badge">v1.0.0 &middot; Alpha &middot; MIT License &middot; Commit 3c3e74ed</div>
-    </section>
+  <!-- ════════ NAVIGATION ════════ -->
+  <nav id="navbar">
+    <a href="#home" class="nav-brand">
+      <span>🏰</span> TSAR
+    </a>
+    <ul class="nav-links">
+      <li><a href="#home" class="active">Home</a></li>
+      <li><a href="#features">Features</a></li>
+      <li><a href="#architecture">Architecture</a></li>
+      <li><a href="#risk">Risk &amp; Security</a></li>
+      <li><a href="#download">Download</a></li>
+      <li><a href="#about">About</a></li>
+    </ul>
+    <button class="hamburger" id="hamburger" aria-label="Toggle menu">
+      <span></span><span></span><span></span>
+    </button>
+  </nav>
 
-    <!-- Download -->
-    <section class="download-card">
-      <h2 style="font-size:1.3rem; margin-bottom:0.5rem;">Download the Mobile App</h2>
-      <p style="color:var(--text-dim); margin-bottom:1.5rem; font-size:0.9rem;">
-        Monitor trades, manage risk, and control your super agent from anywhere.
-      </p>
-      <a href="download/app-release.apk" class="download-btn" download>
-        <svg viewBox="0 0 24 24" fill="currentColor"><path d="M5 20h14v-2H5v2zm7-18v12.17l3.59-3.58L17 12l-5 5-5-5 1.41-1.41L12 14.17V2z"/></svg>
-        Download APK
-      </a>
-      <div class="download-info">
-        <span>📱 Android 5.0+</span>
-        <span>&middot;</span>
-        <span>📦 23.4 MB</span>
-        <span>&middot;</span>
-        <span>🔒 Requires TSAR backend</span>
-      </div>
-    </section>
+  <div class="mobile-menu" id="mobileMenu">
+    <a href="#home" class="active">Home</a>
+    <a href="#features">Features</a>
+    <a href="#architecture">Architecture</a>
+    <a href="#risk">Risk &amp; Security</a>
+    <a href="#download">Download</a>
+    <a href="#about">About</a>
+  </div>
+
+  <!-- ════════ HOME ════════ -->
+  <section id="home">
+    <div class="logo">🏰</div>
+    <h1>TSAR</h1>
+    <p class="tagline">Trading Super Agent for Returns</p>
+    <p class="hero-subtitle">
+      A self-improving autonomous trading system combining 13 AI agents,
+      43 tools, and a 7-layer deterministic risk engine — running on local LLMs at $0/day.
+    </p>
+    <div class="version-badge">v1.0.0 &middot; Alpha &middot; MIT License</div>
+    <a href="download/app-release.apk" class="hero-cta" download>
+      <svg viewBox="0 0 24 24" fill="currentColor"><path d="M5 20h14v-2H5v2zm7-18v12.17l3.59-3.58L17 12l-5 5-5-5 1.41-1.41L12 14.17V2z"/></svg>
+      Download APK
+    </a>
+    <div class="hero-meta">
+      <span>📱 Android 5.0+</span>
+      <span class="dot">&middot;</span>
+      <span>📦 23.4 MB</span>
+      <span class="dot">&middot;</span>
+      <span>🔒 Requires TSAR backend</span>
+    </div>
 
     <!-- Flywheel -->
-    <section class="flywheel-section">
-      <h2 style="font-size:1.4rem; margin-bottom:0.5rem;">The Self-Improvement Flywheel</h2>
-      <p style="color:var(--text-dim); font-size:0.9rem; margin-bottom:1rem;">
-        Every trade makes the system smarter. Knowledge compounds through use.
-      </p>
+    <div style="margin-top: 3.5rem;">
+      <p style="font-size:0.95rem; color:var(--text-dim); margin-bottom:0.5rem;">The Self-Improvement Flywheel</p>
       <div class="flywheel">
         <div class="flywheel-step">TRADE</div>
         <div class="flywheel-arrow">→</div>
@@ -481,10 +929,11 @@
         <div class="flywheel-arrow">→</div>
         <div class="flywheel-loop">♻️ BETTER TRADE</div>
       </div>
-    </section>
+      <p class="flywheel-caption">Every trade makes the system smarter. Knowledge compounds through use.</p>
+    </div>
 
     <!-- Stats -->
-    <section class="stats">
+    <div class="stats">
       <div class="stat">
         <div class="stat-value">84K+</div>
         <div class="stat-label">Lines of Code</div>
@@ -501,165 +950,373 @@
         <div class="stat-value">$0</div>
         <div class="stat-label">Daily Cost</div>
       </div>
-    </section>
+    </div>
+  </section>
 
-    <!-- Features -->
-    <section class="features">
-      <div class="feature">
-        <div class="feature-icon">🧠</div>
+  <div class="section-divider"><div class="line"></div></div>
+
+  <!-- ════════ FEATURES ════════ -->
+  <section id="features">
+    <h2 class="section-title fade-in">Features</h2>
+    <p class="section-subtitle fade-in">13 specialized AI agents, 43 tools, and a self-improving flywheel — everything you need for autonomous trading.</p>
+
+    <div class="features-grid">
+      <div class="feature-card">
+        <span class="feature-card-icon">🧠</span>
         <h3>Self-Improving</h3>
-        <p>Every trade generates proprietary data. The flywheel extracts patterns, mutates strategies, and compounds knowledge.</p>
+        <p>Every trade generates proprietary data. The flywheel extracts patterns, mutates strategies, and compounds knowledge over time.</p>
       </div>
-      <div class="feature">
-        <div class="feature-icon">🛡️</div>
+      <div class="feature-card">
+        <span class="feature-card-icon">🛡️</span>
         <h3>7-Layer Risk Engine</h3>
-        <p>Deterministic veto protocol. Zero LLM involvement in safety. Anti-behavioral guards for revenge, greed, FOMO.</p>
+        <p>Deterministic veto protocol with zero LLM involvement in safety. Anti-behavioral guards for revenge, greed, and FOMO.</p>
       </div>
-      <div class="feature">
-        <div class="feature-icon">⚡</div>
+      <div class="feature-card">
+        <span class="feature-card-icon">⚡</span>
         <h3>Dual Execution</h3>
         <p>CEX via ccxt (100+ exchanges) + DEX via 1inch/Jupiter. MEV protection with Flashbots + Jito.</p>
       </div>
-      <div class="feature">
-        <div class="feature-icon">💰</div>
+      <div class="feature-card">
+        <span class="feature-card-icon">💰</span>
         <h3>$0/Day Operating</h3>
         <p>Local Qwen 2.5 7B for routine tasks. DeepSeek-R1 via NVIDIA NIM for complex reasoning. Budget capped at $1/day.</p>
       </div>
-      <div class="feature">
-        <div class="feature-icon">📱</div>
+      <div class="feature-card">
+        <span class="feature-card-icon">📱</span>
         <h3>Mobile Dashboard</h3>
-        <p>Monitor P&L, risk levels, active positions, and flywheel health from your phone. Kill switch at your fingertips.</p>
+        <p>Monitor P&amp;L, risk levels, active positions, and flywheel health from your phone. Kill switch at your fingertips.</p>
       </div>
-      <div class="feature">
-        <div class="feature-icon">⛓️</div>
-        <h3>On-Chain Rules</h3>
-        <p>Solidity smart contracts for trustless risk enforcement. Kill switch, mandate, audit trail on Polygon.</p>
+      <div class="feature-card">
+        <span class="feature-card-icon">⛓️</span>
+        <h3>Blockchain Rules</h3>
+        <p>Solidity smart contracts for trustless risk enforcement. Kill switch, mandate, and audit trail on Polygon.</p>
       </div>
-      <div class="feature">
-        <div class="feature-icon">📡</div>
+      <div class="feature-card">
+        <span class="feature-card-icon">📡</span>
         <h3>News Intelligence</h3>
-        <p>Whale Alert, SEC/CFTC, Twitter, Reddit. LLM-verified signals with source accuracy tracking.</p>
+        <p>Whale Alert, SEC/CFTC, Twitter, Reddit feeds. LLM-verified signals with source accuracy tracking.</p>
       </div>
-      <div class="feature">
-        <div class="feature-icon">🧬</div>
+      <div class="feature-card">
+        <span class="feature-card-icon">🧬</span>
         <h3>Strategy Evolution</h3>
-        <p>Genomes mutate through selection. Walk-forward validation. 28 quantitative factors. Monte Carlo simulation.</p>
+        <p>Genomes mutate through selection. Walk-forward validation, 28 quantitative factors, and Monte Carlo simulation.</p>
       </div>
-    </section>
+      <div class="feature-card">
+        <span class="feature-card-icon">🔄</span>
+        <h3>DeFi Integration</h3>
+        <p>DEX aggregation across Ethereum, Solana, and L2s. Yield farming, liquidity provision, and on-chain arbitrage.</p>
+      </div>
+      <div class="feature-card">
+        <span class="feature-card-icon">📊</span>
+        <h3>Quantitative Engine</h3>
+        <p>Option pricing, FIX protocol support, and GPU-accelerated Monte Carlo simulations for complex derivatives.</p>
+      </div>
+      <div class="feature-card">
+        <span class="feature-card-icon">💾</span>
+        <h3>Knowledge Base</h3>
+        <p>Trade memory, pattern library, lesson archive, and strategy genomes stored with full-text search.</p>
+      </div>
+      <div class="feature-card">
+        <span class="feature-card-icon">🤖</span>
+        <h3>13 Specialized Agents</h3>
+        <p>From SignalScout to TradePhilosopher — each agent owns a single responsibility in the pipeline.</p>
+      </div>
+    </div>
+  </section>
 
-    <!-- Architecture -->
-    <section class="arch-section">
-      <h2>Architecture</h2>
-      <div class="arch-layers">
-        <div class="arch-layer">
-          <div class="arch-layer-icon">🧠</div>
+  <div class="section-divider"><div class="line"></div></div>
+
+  <!-- ════════ ARCHITECTURE ════════ -->
+  <section id="architecture">
+    <h2 class="section-title fade-in">Architecture</h2>
+    <p class="section-subtitle fade-in">Python brain, Rust muscles, C++ quant engine, Solidity on-chain settlement.</p>
+
+    <div class="arch-visual">
+      <div class="arch-layer">
+        <div class="arch-layer-icon">🧠</div>
+        <div class="arch-layer-info">
           <div class="arch-layer-name">Agent Layer</div>
           <div class="arch-layer-desc">SignalScout → RiskGuardian → ExecutionSniper → TradePhilosopher</div>
-          <div class="arch-layer-tech">Python</div>
         </div>
-        <div class="arch-layer">
-          <div class="arch-layer-icon">🔄</div>
-          <div class="arch-layer-name">Flywheel</div>
+        <div class="arch-layer-tech">Python</div>
+      </div>
+      <div class="arch-layer">
+        <div class="arch-layer-icon">🔄</div>
+        <div class="arch-layer-info">
+          <div class="arch-layer-name">Flywheel Engine</div>
           <div class="arch-layer-desc">ShadowExtractor → RuleValidator → GenomeMutator → StrategyGeneticist</div>
-          <div class="arch-layer-tech">Python</div>
         </div>
-        <div class="arch-layer">
-          <div class="arch-layer-icon">⚡</div>
-          <div class="arch-layer-name">Performance</div>
+        <div class="arch-layer-tech">Python</div>
+      </div>
+      <div class="arch-layer">
+        <div class="arch-layer-icon">⚡</div>
+        <div class="arch-layer-info">
+          <div class="arch-layer-name">Performance Layer</div>
           <div class="arch-layer-desc">WebSocket manager, tick processor, MEV scanner, DEX aggregator</div>
-          <div class="arch-layer-tech">Rust</div>
         </div>
-        <div class="arch-layer">
-          <div class="arch-layer-icon">📊</div>
-          <div class="arch-layer-name">Quantitative</div>
+        <div class="arch-layer-tech">Rust</div>
+      </div>
+      <div class="arch-layer">
+        <div class="arch-layer-icon">📊</div>
+        <div class="arch-layer-info">
+          <div class="arch-layer-name">Quantitative Engine</div>
           <div class="arch-layer-desc">Option pricing, FIX protocol, Monte Carlo (GPU-accelerated)</div>
-          <div class="arch-layer-tech">C++</div>
         </div>
-        <div class="arch-layer">
-          <div class="arch-layer-icon">⛓️</div>
-          <div class="arch-layer-name">Blockchain</div>
+        <div class="arch-layer-tech">C++</div>
+      </div>
+      <div class="arch-layer">
+        <div class="arch-layer-icon">⛓️</div>
+        <div class="arch-layer-info">
+          <div class="arch-layer-name">Blockchain Settlement</div>
           <div class="arch-layer-desc">Kill switch, mandate, audit trail, governance contracts</div>
-          <div class="arch-layer-tech">Solidity</div>
         </div>
-        <div class="arch-layer">
-          <div class="arch-layer-icon">💾</div>
-          <div class="arch-layer-name">Knowledge</div>
+        <div class="arch-layer-tech">Solidity</div>
+      </div>
+      <div class="arch-layer">
+        <div class="arch-layer-icon">💾</div>
+        <div class="arch-layer-info">
+          <div class="arch-layer-name">Knowledge Store</div>
           <div class="arch-layer-desc">Trade memory, pattern library, lesson archive, strategy genomes</div>
-          <div class="arch-layer-tech">SQLite + FTS5</div>
+        </div>
+        <div class="arch-layer-tech">SQLite + FTS5</div>
+      </div>
+    </div>
+
+    <div class="arch-summary">
+      <div class="arch-summary-card">
+        <div class="icon">🐍</div>
+        <h4>Python Brain</h4>
+        <p>All agent logic, LLM orchestration, strategy management, and the self-improvement flywheel.</p>
+      </div>
+      <div class="arch-summary-card">
+        <div class="icon">🦀</div>
+        <h4>Rust Muscles</h4>
+        <p>High-performance WebSocket feeds, real-time tick processing, and MEV-resistant execution.</p>
+      </div>
+      <div class="arch-summary-card">
+        <div class="icon">⛓️</div>
+        <h4>Blockchain Settlement</h4>
+        <p>On-chain risk enforcement via Solidity. Trustless kill switch and audit trail on Polygon.</p>
+      </div>
+    </div>
+  </section>
+
+  <div class="section-divider"><div class="line"></div></div>
+
+  <!-- ════════ RISK & SECURITY ════════ -->
+  <section id="risk">
+    <h2 class="section-title fade-in">Risk &amp; Security</h2>
+    <p class="section-subtitle fade-in">7-layer deterministic risk engine. Zero LLM involvement in safety decisions. The human always has the kill switch.</p>
+
+    <div class="risk-layers">
+      <div class="risk-card">
+        <div class="risk-card-icon">🔴</div>
+        <div class="risk-card-name">Kill Switch</div>
+        <div class="risk-card-desc">Instant full halt. On-chain and in-app. One tap to stop everything.</div>
+      </div>
+      <div class="risk-card">
+        <div class="risk-card-icon">✅</div>
+        <div class="risk-card-name">Input Validation</div>
+        <div class="risk-card-desc">Every signal, price, and order validated before processing.</div>
+      </div>
+      <div class="risk-card">
+        <div class="risk-card-icon">🧠</div>
+        <div class="risk-card-name">Anti-FOMO Guard</div>
+        <div class="risk-card-desc">Detects and blocks FOMO-driven entries. No chasing pumps.</div>
+      </div>
+      <div class="risk-card">
+        <div class="risk-card-icon">⏰</div>
+        <div class="risk-card-name">Time Rules</div>
+        <div class="risk-card-desc">Trading windows enforced. No 3am impulse trades.</div>
+      </div>
+      <div class="risk-card">
+        <div class="risk-card-icon">😤</div>
+        <div class="risk-card-name">Anti-Behavioral</div>
+        <div class="risk-card-desc">Revenge trading, greed, tilt — detected and blocked at the gate.</div>
+      </div>
+      <div class="risk-card">
+        <div class="risk-card-icon">📉</div>
+        <div class="risk-card-name">Circuit Breakers</div>
+        <div class="risk-card-desc">Daily/weekly drawdown limits. Auto-halt on breach.</div>
+      </div>
+      <div class="risk-card">
+        <div class="risk-card-icon">📏</div>
+        <div class="risk-card-name">Position Limits</div>
+        <div class="risk-card-desc">Max size per trade, per asset, and portfolio-wide. Hard caps.</div>
+      </div>
+    </div>
+
+    <div class="risk-principle">
+      <h3>Scenario Prevention</h3>
+      <p>
+        The risk engine runs <strong>deterministic veto logic</strong> — no LLM can override a safety decision.
+        Every trade passes through all 7 layers before execution. The kill switch is enforced both
+        in-app and on-chain via Solidity smart contracts. The human always has final authority.
+      </p>
+    </div>
+  </section>
+
+  <div class="section-divider"><div class="line"></div></div>
+
+  <!-- ════════ DOWNLOAD ════════ -->
+  <section id="download">
+    <h2 class="section-title fade-in">Download</h2>
+    <p class="section-subtitle fade-in">Get the mobile app or explore the source code.</p>
+
+    <div class="download-cards">
+      <div class="download-card">
+        <h3>📱 Mobile App</h3>
+        <p>Monitor trades, manage risk, and control your super agent from anywhere. Kill switch at your fingertips.</p>
+        <a href="download/app-release.apk" class="dl-btn" download>
+          <svg viewBox="0 0 24 24" fill="currentColor"><path d="M5 20h14v-2H5v2zm7-18v12.17l3.59-3.58L17 12l-5 5-5-5 1.41-1.41L12 14.17V2z"/></svg>
+          Download APK
+        </a>
+        <div class="download-meta">
+          <span>📱 Android 5.0+</span>
+          <span class="dot">&middot;</span>
+          <span>📦 23.4 MB</span>
+          <span class="dot">&middot;</span>
+          <span>v1.0.0 Alpha</span>
         </div>
       </div>
-    </section>
-
-    <!-- Risk System -->
-    <section class="risk-section">
-      <h2>7-Layer Risk System</h2>
-      <div class="risk-layers">
-        <div class="risk-layer">
-          <div class="risk-layer-icon">🔴</div>
-          <div class="risk-layer-name">Kill Switch</div>
-        </div>
-        <div class="risk-layer">
-          <div class="risk-layer-icon">✅</div>
-          <div class="risk-layer-name">Input Validation</div>
-        </div>
-        <div class="risk-layer">
-          <div class="risk-layer-icon">🧠</div>
-          <div class="risk-layer-name">Anti-FOMO</div>
-        </div>
-        <div class="risk-layer">
-          <div class="risk-layer-icon">⏰</div>
-          <div class="risk-layer-name">Time Rules</div>
-        </div>
-        <div class="risk-layer">
-          <div class="risk-layer-icon">😤</div>
-          <div class="risk-layer-name">Anti-Behavioral</div>
-        </div>
-        <div class="risk-layer">
-          <div class="risk-layer-icon">📉</div>
-          <div class="risk-layer-name">Drawdown</div>
-        </div>
-        <div class="risk-layer">
-          <div class="risk-layer-icon">📏</div>
-          <div class="risk-layer-name">Position Limits</div>
+      <div class="download-card">
+        <h3>📦 Source Code</h3>
+        <p>Open source under the MIT License. Explore the code, report issues, or contribute to the project.</p>
+        <a href="https://github.com/ovalentine964/tsar" class="dl-btn-outline" target="_blank">
+          <svg viewBox="0 0 16 16"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>
+          View on GitHub
+        </a>
+        <div class="download-meta">
+          <span>⭐ MIT License</span>
+          <span class="dot">&middot;</span>
+          <span>84K+ lines</span>
         </div>
       </div>
-    </section>
+    </div>
+  </section>
 
-    <!-- About -->
-    <section class="arch-section">
-      <h2>About TSAR</h2>
-      <p style="color:var(--text-dim); font-size:0.9rem; line-height:1.7; margin-bottom:1rem;">
-        TSAR (Trading Super Agent for Returns) is a self-improving autonomous trading system
-        that combines 13 specialized AI agents, a 7-layer deterministic risk engine, and a
-        self-improvement flywheel that makes every trade generate proprietary knowledge.
-        Built 2026-08-03with Python, Rust, C++, and Solidity — running on local LLMs at $0/day.
-      </p>
-      <p style="color:var(--text-dim); font-size:0.9rem; line-height:1.7; margin-bottom:1rem;">
-        Open source under the MIT License. Contributions welcome.
-      </p>
-      <p style="margin-top:1rem;">
-        <a href="https://ovalentine964.github.io/tsar/" target="_blank" style="color:var(--accent); text-decoration:none; font-weight:600;">🌐 Visit Website</a>
-        &nbsp;&middot;&nbsp;
-        <a href="https://github.com/ovalentine964/tsar" target="_blank" style="color:var(--accent); text-decoration:none; font-weight:600;">📦 View Source</a>
-      </p>
-    </section>
+  <div class="section-divider"><div class="line"></div></div>
 
-    <!-- GitHub -->
-    <section class="github-section">
-      <a href="https://github.com/ovalentine964/tsar" class="github-btn" target="_blank">
-        <svg viewBox="0 0 16 16"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>
-        View Source on GitHub
-      </a>
-    </section>
+  <!-- ════════ ABOUT ════════ -->
+  <section id="about">
+    <h2 class="section-title fade-in">About</h2>
+    <p class="section-subtitle fade-in">The story behind TSAR.</p>
 
-    <!-- Footer -->
-    <footer class="footer">
-      <p>Built 2026-08-03with ❤️ by <a href="https://github.com/ovalentine964">Valentine Owuor</a> &middot; Angavu Intelligence Ltd.</p>
-      <p style="margin-top:0.5rem;">MIT License &middot; Built 2026-08-03 &middot; Self-improving autonomous trading &middot; <em>"You can copy a bot's code. You cannot copy a super agent's knowledge."</em></p>
-    </footer>
+    <div class="about-content">
+      <div class="about-text fade-in">
+        <p>
+          <strong>TSAR</strong> (Trading Super Agent for Returns) is a self-improving autonomous trading system
+          that combines 13 specialized AI agents, a 7-layer deterministic risk engine, and a
+          self-improvement flywheel that makes every trade generate proprietary knowledge.
+        </p>
+        <p>
+          Built with Python, Rust, C++, and Solidity — running on local LLMs at $0/day.
+          The system executes across 100+ centralized exchanges and major DEXs with MEV protection,
+          while smart contracts on Polygon enforce trustless risk limits.
+        </p>
+        <p>
+          Open source under the MIT License. Contributions welcome.
+        </p>
+      </div>
 
-  </div>
+      <div class="about-links fade-in">
+        <a href="https://ovalentine964.github.io/tsar/" class="about-link" target="_blank">🌐 Website</a>
+        <a href="https://github.com/ovalentine964/tsar" class="about-link" target="_blank">📦 GitHub</a>
+        <a href="download/app-release.apk" class="about-link" download>📱 Download APK</a>
+      </div>
+
+      <div class="about-quote fade-in">
+        You can copy a bot's code. You cannot copy a super agent's knowledge.
+      </div>
+    </div>
+  </section>
+
+  <!-- ════════ FOOTER ════════ -->
+  <footer>
+    <p>Built with ❤️ by <a href="https://github.com/ovalentine964">Valentine Owuor</a> &middot; Angavu Intelligence Ltd.</p>
+    <p style="margin-top:0.5rem;">MIT License &middot; Built 2026-08-03 &middot; Self-improving autonomous trading</p>
+  </footer>
+
+  <!-- ════════ JAVASCRIPT ════════ -->
+  <script>
+    // ── Sticky nav shadow ──
+    const navbar = document.getElementById('navbar');
+    window.addEventListener('scroll', () => {
+      navbar.classList.toggle('scrolled', window.scrollY > 10);
+    });
+
+    // ── Hamburger toggle ──
+    const hamburger = document.getElementById('hamburger');
+    const mobileMenu = document.getElementById('mobileMenu');
+
+    hamburger.addEventListener('click', () => {
+      hamburger.classList.toggle('open');
+      mobileMenu.classList.toggle('open');
+    });
+
+    // Close mobile menu on link click
+    mobileMenu.querySelectorAll('a').forEach(link => {
+      link.addEventListener('click', () => {
+        hamburger.classList.remove('open');
+        mobileMenu.classList.remove('open');
+      });
+    });
+
+    // ── Active tab highlighting on scroll ──
+    const sections = document.querySelectorAll('section[id]');
+    const navLinks = document.querySelectorAll('.nav-links a');
+    const mobileLinks = document.querySelectorAll('.mobile-menu a');
+
+    function setActiveTab() {
+      let current = '';
+      const scrollY = window.scrollY + 80;
+
+      sections.forEach(section => {
+        const top = section.offsetTop;
+        const height = section.offsetHeight;
+        if (scrollY >= top && scrollY < top + height) {
+          current = section.getAttribute('id');
+        }
+      });
+
+      navLinks.forEach(link => {
+        link.classList.toggle('active', link.getAttribute('href') === '#' + current);
+      });
+      mobileLinks.forEach(link => {
+        link.classList.toggle('active', link.getAttribute('href') === '#' + current);
+      });
+    }
+
+    window.addEventListener('scroll', setActiveTab);
+    setActiveTab();
+
+    // ── Intersection Observer for fade-in / slide-in ──
+    const observerOptions = { threshold: 0.1, rootMargin: '0px 0px -40px 0px' };
+
+    const fadeObserver = new IntersectionObserver((entries) => {
+      entries.forEach(entry => {
+        if (entry.isIntersecting) {
+          entry.target.classList.add('visible');
+        }
+      });
+    }, observerOptions);
+
+    document.querySelectorAll('.fade-in, .feature-card, .arch-layer, .risk-card').forEach(el => {
+      fadeObserver.observe(el);
+    });
+
+    // Stagger feature cards
+    document.querySelectorAll('.feature-card').forEach((card, i) => {
+      card.style.transitionDelay = (i * 0.05) + 's';
+    });
+
+    document.querySelectorAll('.arch-layer').forEach((layer, i) => {
+      layer.style.transitionDelay = (i * 0.08) + 's';
+    });
+
+    document.querySelectorAll('.risk-card').forEach((card, i) => {
+      card.style.transitionDelay = (i * 0.06) + 's';
+    });
+  </script>
 </body>
 </html>
-<!-- updated Mon Aug  3 16:51:48 UTC 2026 -->
-
