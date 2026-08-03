@@ -94,7 +94,7 @@ def create_app(config: Any = None) -> FastAPI:
     app = FastAPI(
         title="TSAR — Trading Super Agent Regime",
         description="Self-improving autonomous trading system",
-        version="0.5.0",
+        version="0.1.0",
         docs_url=None if is_production else "/docs",
         redoc_url=None if is_production else "/redoc",
         openapi_url=None if is_production else "/openapi.json",
@@ -169,7 +169,7 @@ def create_app(config: Any = None) -> FastAPI:
 
         return {
             "status": "ok",
-            "version": "0.5.0",
+            "version": "0.1.0",
             "timestamp": datetime.now(UTC).isoformat(),
             "components": components,
         }
@@ -189,7 +189,7 @@ def create_app(config: Any = None) -> FastAPI:
     @app.get("/")
     async def dashboard(api_key: str = Depends(require_api_key)):
         """System overview dashboard — aggregates data from multiple tools."""
-        data = {"system": "TSAR", "version": "0.5.0", "status": "running"}
+        data = {"system": "TSAR", "version": "0.1.0", "status": "running"}
 
         try:
             from src.knowledge.trade_memory import TradeMemory
