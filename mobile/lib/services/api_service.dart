@@ -16,7 +16,7 @@ class ApiService {
   factory ApiService() => _instance;
   ApiService._internal();
 
-  String _baseUrl = 'http://localhost:8000';
+  String _baseUrl = 'https://tsar-api.onrender.com';
   String? _apiKey;
   Duration _timeout = const Duration(seconds: 15);
   bool _configured = false;

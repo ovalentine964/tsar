@@ -56,7 +56,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       controller: _urlController,
                       style: TsarTheme.numberStyle.copyWith(fontSize: 14),
                       decoration: InputDecoration(
-                        hintText: 'http://localhost:8000',
+                        hintText: 'https://tsar-api.onrender.com',
                         filled: true,
                         fillColor: Colors.black26,
                         border: OutlineInputBorder(

@@ -15,7 +15,7 @@ class SettingsProvider extends ChangeNotifier {
   final ApiService _apiService;
 
   bool _isDarkMode = true;
-  String _baseUrl = 'http://localhost:8000';
+  String _baseUrl = 'https://tsar-api.onrender.com';
   String? _apiKey;
   bool _autoRefresh = true;
   int _refreshIntervalSeconds = 30;
@@ -42,7 +42,7 @@ class SettingsProvider extends ChangeNotifier {
     try {
       final prefs = await SharedPreferences.getInstance();
       _isDarkMode = prefs.getBool(_keyDarkMode) ?? true;
-      _baseUrl = prefs.getString(_keyBaseUrl) ?? 'http://localhost:8000';
+      _baseUrl = prefs.getString(_keyBaseUrl) ?? 'https://tsar-api.onrender.com';
       _autoRefresh = prefs.getBool(_keyAutoRefresh) ?? true;
       _refreshIntervalSeconds = prefs.getInt(_keyRefreshInterval) ?? 30;
 
