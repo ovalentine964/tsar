@@ -129,8 +129,11 @@ jobs:
       - name: Prepare Pages site
         run: |
           mkdir -p _site
-          cp -r . _site/
-          rm -rf _site/.git
+          # Exclude large APK binary from Pages artifact (already on gh-pages)
+          rsync -a --exclude='.git' --exclude='download/app-release.apk' ./ _site/
+          # Copy only the download HTML page, not the APK itself
+          mkdir -p _site/download
+          cp download/app-release.apk _site/download/ 2>/dev/null || true
 
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v3
