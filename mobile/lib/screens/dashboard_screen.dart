@@ -2,8 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../theme.dart';
 import '../providers/dashboard_provider.dart';
-import '../providers/settings_provider.dart';
-import '../widgets/cards.dart';
 
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key});

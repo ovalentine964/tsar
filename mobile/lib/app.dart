@@ -176,7 +176,7 @@ class _MainShellState extends State<MainShell> {
         // Connection status indicator
         Consumer<WebSocketService>(
           builder: (context, ws, _) {
-            final connected = ws.isConnected;
+            final connected = ws.connected;
             return Padding(
               padding: const EdgeInsets.symmetric(horizontal: 8),
               child: Tooltip(
@@ -571,4 +571,4 @@ class _AnimatedNumberState extends State<AnimatedNumber>
 // ═══════════════════════════════════════════════════════════════════════════
 
 // NOTE: RiskProvider is imported from providers/risk_provider.dart.
-// Ensure WebSocketService exposes an `isConnected` getter.
+
