@@ -154,12 +154,16 @@ jobs:
               TSAR_DATABASE_PATH=/app/data/tsar.db \
               TSAR_API_HOST=0.0.0.0 \
               TSAR_API_PORT=8000 \
+              TSAR_CORS_ORIGINS=* \
             --secure-environment-variables \
               EXCHANGE_API_KEY=${{ secrets.EXCHANGE_API_KEY }} \
               EXCHANGE_SECRET=${{ secrets.EXCHANGE_SECRET }} \
               NVIDIA_API_KEY=${{ secrets.NVIDIA_API_KEY }} \
               TSAR_API_KEY=${{ secrets.TSAR_API_KEY }} \
               DEEPSEEK_API_KEY=${{ secrets.DEEPSEEK_API_KEY }} \
+              TELEGRAM_BOT_TOKEN=${{ secrets.TELEGRAM_BOT_TOKEN }} \
+              BINANCE_MAINNET_API_KEY=${{ secrets.BINANCE_MAINNET_API_KEY }} \
+              BINANCE_MAINNET_SECRET=${{ secrets.BINANCE_MAINNET_SECRET }} \
             --azure-file-volume-share-name tsar-data \
             --azure-file-volume-account-name tsar247store \
             --azure-file-volume-account-key "$STORAGE_KEY" \
