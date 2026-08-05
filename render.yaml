@@ -1,11 +1,22 @@
+# ============================================================
+# TSAR — Render.com Deployment (VMPM Strategy, $10 Binance)
+# ============================================================
+# Deploys the full trading system (agents + API) using
+# Dockerfile.trading with VMPM strategy active.
+#
+# Resource plan: starter ($7/mo) — fits within $10 budget
+# Region: oregon (low latency to Binance US)
+# ============================================================
+
 services:
   - type: web
-    name: tsar-api
+    name: tsar-trading
     runtime: docker
-    dockerfilePath: ./Dockerfile
-    plan: free
+    dockerfilePath: ./Dockerfile.trading
+    plan: starter
     region: oregon
     envVars:
+      # ── Core TSAR ──────────────────────────────────────────
       - key: TSAR_ENVIRONMENT
         value: production
       - key: TSAR_TRADING_MODE
@@ -16,11 +27,112 @@ services:
         value: "1"
       - key: TSAR_API_KEY
         generateValue: true
-      - key: NVIDIA_API_KEY
-        sync: false
+      - key: TSAR_DATABASE_BACKEND
+        value: sqlite
+      - key: TSAR_DATABASE_PATH
+        value: /app/data/tsar.db
+
+      # ── Strategy ───────────────────────────────────────────
+      - key: STRATEGY
+        value: vmpm
+      - key: VMPM_STATUS
+        value: ACTIVE
+
+      # ── VMPM Genome — Core Pipeline Parameters ─────────────
+      - key: VMPM_MIN_SIGNAL_SCORE
+        value: "0.70"
+      - key: VMPM_MIN_CONFLUENCE_SCORE
+        value: "55.0"
+      - key: VMPM_MIN_RISK_REWARD
+        value: "2.5"
+
+      # ── VMPM Genome — Moving Averages ──────────────────────
+      - key: VMPM_MA_FAST_PERIOD
+        value: "50"
+      - key: VMPM_MA_SLOW_PERIOD
+        value: "200"
+      - key: VMPM_MA_TYPE
+        value: SMA
+
+      # ── VMPM Genome — RSI ──────────────────────────────────
+      - key: VMPM_RSI_PERIOD
+        value: "14"
+      - key: VMPM_RSI_OVERSOLD
+        value: "30"
+      - key: VMPM_RSI_OVERBOUGHT
+        value: "70"
+
+      # ── VMPM Genome — S/R & Retest ────────────────────────
+      - key: VMPM_SR_PROXIMITY_PCT
+        value: "0.3"
+      - key: VMPM_RETEST_CANDLES
+        value: "3"
+      - key: VMPM_ATR_BUFFER_MULT
+        value: "0.5"
+
+      # ── VMPM Genome — Exits ────────────────────────────────
+      - key: VMPM_STOP_LOSS_ATR_MULT
+        value: "1.5"
+      - key: VMPM_TAKE_PROFIT_ATR_MULT
+        value: "4.0"
+      - key: VMPM_TRAILING_STOP_ATR_MULT
+        value: "1.5"
+
+      # ── VMPM Genome — Session & Volume ─────────────────────
+      - key: VMPM_SESSION_OVERLAP_MULT
+        value: "1.5"
+      - key: VMPM_VOLUME_MULTIPLIER
+        value: "1.2"
+
+      # ── VMPM Genome — Regime Routing Weights ───────────────
+      - key: VMPM_ROUTING_STRONG_TREND_UP_WEIGHT
+        value: "0.7"
+      - key: VMPM_ROUTING_STRONG_TREND_DOWN_WEIGHT
+        value: "0.7"
+      - key: VMPM_ROUTING_RANGING_WEIGHT
+        value: "0.6"
+      - key: VMPM_ROUTING_HIGH_VOLATILITY_WEIGHT
+        value: "0.5"
+
+      # ── VMPM Genome — Position Sizing ──────────────────────
+      - key: VMPM_ROUTING_STRONG_TREND_SIZING_MULT
+        value: "1.0"
+      - key: VMPM_ROUTING_RANGING_SIZING_MULT
+        value: "0.8"
+      - key: VMPM_ROUTING_HIGH_VOLATILITY_SIZING_MULT
+        value: "0.5"
+
+      # ── Risk Defaults ──────────────────────────────────────
+      - key: TSAR_RISK_PER_TRADE_PCT
+        value: "1.5"
+      - key: TSAR_MAX_POSITION_PCT
+        value: "10.0"
+      - key: TSAR_MAX_OPEN_POSITIONS
+        value: "3"
+      - key: TSAR_DAILY_LOSS_LIMIT_PCT
+        value: "2.0"
+
+      # ── Exchange (Binance) ─────────────────────────────────
       - key: EXCHANGE_API_KEY
         sync: false
       - key: EXCHANGE_SECRET
         sync: false
+      - key: EXCHANGE_SANDBOX
+        value: "true"
+
+      # ── LLM (NVIDIA NIM — free tier) ──────────────────────
+      - key: NVIDIA_API_KEY
+        sync: false
+
+      # ── Redis (disabled for free/starter Render) ───────────
+      - key: TSAR_REDIS_ENABLED
+        value: "false"
+      - key: TSAR_OLLAMA_ENABLED
+        value: "false"
+
     healthCheckPath: /health
     autoDeploy: true
+    disk:
+      name: tsar-data
+      mountPath: /app/data
+      sizeGB: 1
