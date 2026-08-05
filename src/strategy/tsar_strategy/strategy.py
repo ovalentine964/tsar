@@ -334,6 +334,10 @@ class TSARStrategy(BaseStrategy):
 
     # -- Internal helpers --
 
+    def get_genome(self) -> StrategyGenome | None:
+        """Return the current genome (or None if running with defaults)."""
+        return self._genome
+
     def _get_param(self, name: str, default: Any) -> Any:
         """Get parameter from genome params, falling back to default."""
         return self._params.get(name, default)

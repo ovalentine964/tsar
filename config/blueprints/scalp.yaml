@@ -1,0 +1,110 @@
+# ============================================================
+# TSAR — Scalp Blueprint
+# ============================================================
+# Very short-term trading. Quick in, quick out.
+# Targets small, frequent profits with tight risk.
+#
+# Profile: Active traders, any account size
+# Target: 1-3% per trade, 10-30 trades/day
+# Time commitment: Very high (constant monitoring)
+
+blueprint:
+  name: "scalp"
+  display_name: "Scalp Trading"
+  description: >
+    Ultra-short-term scalping strategy. Targets small price
+    movements with high frequency. Requires constant attention
+    and fast execution. Best during high-liquidity sessions.
+  target_audience:
+    experience: ["advanced", "expert"]
+    account_size_range_usd: [500, 100000]
+    risk_tolerance: "medium"
+    time_horizon: "minutes_to_hours"
+  tags: ["scalping", "short-term", "high-frequency"]
+
+# --- Risk Profile ---
+risk:
+  max_risk_per_trade_pct: 0.005       # 0.5% per trade (tiny)
+  max_portfolio_heat_pct: 0.02        # 2% total (many small positions)
+  max_open_positions: 3               # Few at once
+  max_daily_trades: 30                # High frequency
+  max_drawdown_pause: 0.03
+  max_drawdown_flatten: 0.05
+  kelly_fraction: 0.20
+  min_rr_ratio: 1.5                   # Lower R:R acceptable
+  anti_revenge_cooldown_minutes: 15   # Short cooldown
+  anti_fomo_min_signal_score: 0.70    # High signal bar
+
+# --- Strategy Mix ---
+strategies:
+  primary:
+    name: "mean_reversion"
+    allocation_pct: 60
+    overrides:
+      min_signal_score: 0.65
+      rsi_oversold: 25                # More extreme RSI
+      rsi_overbought: 75
+      stop_loss_pct: 0.3              # Very tight
+      take_profit_pct: 0.8            # Small targets
+      time_stop_hours: 0.5            # 30-min max hold
+
+  secondary:
+    name: "tsar"
+    allocation_pct: 40
+    overrides:
+      min_signal_score: 0.70
+      sr_proximity_pct: 0.2           # Very close to S/R
+      retest_candles: 1               # Immediate retest
+      session_overlap_only: true
+
+# --- Sizing ---
+sizing:
+  method: "half_kelly"
+  base_allocation_pct: 80
+  max_position_pct: 0.10
+  scale_in: false                     # No scaling — single entry
+
+# --- Time Filters ---
+time_filters:
+  preferred_sessions: ["london_new_york_overlap", "london", "new_york"]
+  avoid_sessions: ["sydney", "tokyo"]  # Low liquidity
+  blackout_before_news_minutes: 10    # Narrow buffer for speed
+  overlap_only: true                  # Only trade during peak liquidity
+
+# --- Asset Filters ---
+asset_filters:
+  allowed_classes: ["crypto"]
+  min_liquidity_usd: 1000000          # Very high liquidity
+  min_volume_24h_usd: 50000000
+  max_spread_bps: 10                  # Tight spreads only
+  max_volatility_pct: 4.0             # Low-moderate vol
+
+# --- Exit Rules (Very Tight) ---
+exit_rules:
+  stop_loss:
+    type: "atr_multiple"
+    multiplier: 0.5                   # Very tight stops
+  take_profit:
+    type: "atr_multiple"
+    multiplier: 1.0                   # Quick exits
+  trailing_stop:
+    enabled: true
+    trigger_rr: 0.5                   # Trail immediately
+    atr_multiplier: 0.5
+  time_stop_minutes: 30               # Hard 30-min cap
+  breakeven:
+    trigger_rr: 0.5                   # Move to BE at 0.5R
+
+# --- Execution ---
+execution:
+  order_type: "market"                # Market orders for speed
+  max_slippage_bps: 5                 # 5 bps max slippage
+  latency_alert_ms: 100               # Alert if >100ms
+
+# --- Notifications ---
+alerts:
+  on_entry: true
+  on_exit: true
+  on_stop_hit: true
+  session_summary: true               # Per-session not daily
+  drawdown_warning_pct: 0.015

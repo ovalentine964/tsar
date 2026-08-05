@@ -1,13 +1,16 @@
 """
 Flywheel Orchestrator — Auto-triggers the TSAR self-improvement loop.
 
-The flywheel: TRADE → OBSERVE → REFLECT → EXTRACT → ADAPT → BETTER TRADE
+The flywheel: TRADE → OBSERVE → REFLECT → EXTRACT → ADAPT → **FINE-TUNE** → BETTER TRADE
 
 This agent monitors trade completions and automatically kicks off:
   ShadowExtractor → RuleValidator → GenomeMutator → StrategyGeneticist
+  → PostTrainingPipeline (LoRA fine-tuning from trade data)
 
 It closes the loop so the system learns from every trade without manual
-intervention.
+intervention. The post-training step is Jensen's vision realized:
+"You can now also improve the AI model, the large language model,
+inside the harness."
 
 Subscribes to: trades (via EventBus)
 Publishes to:  flywheel_events
@@ -27,10 +30,11 @@ logger = logging.getLogger(__name__)
 
 
 class FlywheelOrchestrator(BaseAgent):
-    """Orchestrate the TSAR flywheel: extract → validate → mutate → evolve.
+    """Orchestrate the TSAR flywheel: extract → validate → mutate → evolve → fine-tune.
 
     Listens for trade completions on the EventBus and triggers the
-    full learning pipeline automatically.
+    full learning pipeline automatically. Includes the post-training
+    pipeline that fine-tunes the LLM from accumulated trade data.
 
     Attributes:
         AGENT_NAME: Unique agent identifier.
@@ -48,6 +52,10 @@ class FlywheelOrchestrator(BaseAgent):
     COOLDOWN_SECONDS = 300  # 5 min between flywheel runs
     BATCH_SIZE = 10  # Run flywheel every N trades
 
+    # Post-training tuning
+    POST_TRAINING_BATCH_SIZE = 50  # Run post-training every N trades
+    POST_TRAINING_COOLDOWN_S = 21600  # 6 hours between post-training runs
+
     def __init__(
         self,
         config: dict[str, Any],
@@ -62,9 +70,16 @@ class FlywheelOrchestrator(BaseAgent):
         self._genome_mutator = None
         self._strategy_geneticist = None
 
+        # Post-training pipeline (LoRA fine-tuning)
+        self._post_training_pipeline = None
+        self._last_post_training_run: float = 0
+        self._post_training_runs = 0
+        self._post_training_deployments = 0
+
         # Trade tracking
         self._trade_count = 0
         self._trades_since_flywheel = 0
+        self._trades_since_post_training = 0
         self._last_flywheel_run: float = 0
 
         # Flywheel metrics
@@ -86,17 +101,22 @@ class FlywheelOrchestrator(BaseAgent):
         logger.info(
             "🔄 Flywheel Orchestrator ready: "
             "shadow=%s, validator=%s, mutator=%s, geneticist=%s, "
-            "batch_size=%d, cooldown=%ds",
+            "post_training=%s, batch_size=%d, cooldown=%ds",
             self._shadow_extractor is not None,
             self._rule_validator is not None,
             self._genome_mutator is not None,
             self._strategy_geneticist is not None,
+            self._post_training_pipeline is not None,
             self.BATCH_SIZE,
             self.COOLDOWN_SECONDS,
         )
 
     async def _init_pipeline_components(self) -> None:
-        """Initialize ShadowExtractor, RuleValidator, GenomeMutator, and StrategyGeneticist."""
+        """Initialize all flywheel pipeline components.
+
+        Includes the standard EXTRACT→VALIDATE→MUTATE→EVOLVE pipeline
+        plus the post-training pipeline (LoRA fine-tuning).
+        """
         shadow_config = self.config.get("shadow_extractor", {})
         if not shadow_config.get("enabled", False):
             logger.info("Flywheel: shadow_extractor disabled in config")
@@ -153,6 +173,29 @@ class FlywheelOrchestrator(BaseAgent):
                 ohlcv_provider=ohlcv_adapter,
             )
 
+            # ── Post-Training Pipeline (LoRA fine-tuning) ─────
+            # This is the missing piece: "improve the AI model inside the harness"
+            post_training_cfg = self.config.get("post_training", {})
+            if post_training_cfg.get("enabled", True):
+                try:
+                    from src.knowledge.lesson_archive import LessonArchive
+                    from src.knowledge.pattern_library import PatternLibrary
+                    from src.llm.post_training import PostTrainingPipeline
+
+                    lesson_archive = LessonArchive(db_path)
+                    pattern_library = PatternLibrary(db_path)
+
+                    self._post_training_pipeline = PostTrainingPipeline(
+                        trade_memory=trade_memory,
+                        lesson_archive=lesson_archive,
+                        pattern_library=pattern_library,
+                        config=post_training_cfg,
+                    )
+                    logger.info("🔄 Post-training pipeline initialized")
+                except Exception as pt_err:
+                    logger.warning("Post-training pipeline init failed: %s", pt_err)
+                    self._post_training_pipeline = None
+
             logger.info("🔄 Flywheel pipeline components initialized")
 
         except Exception as e:
@@ -161,20 +204,25 @@ class FlywheelOrchestrator(BaseAgent):
             self._rule_validator = None
             self._genome_mutator = None
             self._strategy_geneticist = None
+            self._post_training_pipeline = None
 
     async def _on_trade_executed(self, data: dict[str, Any]) -> None:
         """Handle a trade execution event from the EventBus.
 
-        Increments trade counters and triggers flywheel if batch threshold
-        is reached and cooldown has elapsed.
+        Increments trade counters and triggers:
+        - Flywheel (EXTRACT→VALIDATE→MUTATE→EVOLVE) every BATCH_SIZE trades
+        - Post-training pipeline (GENERATE→TRAIN→EVALUATE→DEPLOY) every
+          POST_TRAINING_BATCH_SIZE trades
         """
         self._trade_count += 1
         self._trades_since_flywheel += 1
+        self._trades_since_post_training += 1
 
         logger.debug(
-            "Flywheel: trade #%d recorded (since_last_flywheel=%d)",
+            "Flywheel: trade #%d recorded (since_flywheel=%d, since_post_training=%d)",
             self._trade_count,
             self._trades_since_flywheel,
+            self._trades_since_post_training,
         )
 
         # Check if it's time to run the flywheel
@@ -185,6 +233,13 @@ class FlywheelOrchestrator(BaseAgent):
         if batch_ready and cooldown_elapsed:
             # Run flywheel in background (don't block trade processing)
             asyncio.create_task(self._run_flywheel())
+
+        # Check if it's time to run post-training
+        pt_cooldown = (now - self._last_post_training_run) >= self.POST_TRAINING_COOLDOWN_S
+        pt_batch_ready = self._trades_since_post_training >= self.POST_TRAINING_BATCH_SIZE
+
+        if pt_batch_ready and pt_cooldown and self._post_training_pipeline:
+            asyncio.create_task(self._run_post_training())
 
     async def handle_event(self, stream: str, event: CloudEvent) -> None:
         """Handle events from subscribed streams (trades, fills).
@@ -201,7 +256,7 @@ class FlywheelOrchestrator(BaseAgent):
         """Main flywheel orchestrator cycle.
 
         Monitors trade count and triggers flywheel on schedule.
-        Also publishes health metrics.
+        Also publishes health metrics and post-training status.
         """
         # The flywheel is event-driven via _on_trade_executed.
         # This cycle handles periodic health checks and metric logging.
@@ -209,12 +264,15 @@ class FlywheelOrchestrator(BaseAgent):
             logger.info(
                 "🔄 Flywheel health: runs=%d, rules_extracted=%d, "
                 "rules_validated=%d, mutations_proposed=%d, mutations_applied=%d, "
+                "post_training_runs=%d, post_training_deployments=%d, "
                 "total_trades=%d",
                 self._flywheel_runs,
                 self._total_rules_extracted,
                 self._total_rules_validated,
                 self._total_mutations_proposed,
                 self._total_mutations_applied,
+                self._post_training_runs,
+                self._post_training_deployments,
                 self._trade_count,
             )
 
@@ -301,6 +359,11 @@ class FlywheelOrchestrator(BaseAgent):
                         "outcome": "success",
                     },
                 )
+
+                # ── Step 5: FINE-TUNE — PostTrainingPipeline ──
+                # After the rule extraction cycle, check if it's time
+                # to fine-tune the LLM from accumulated trade data.
+                await self._maybe_run_post_training(run_id)
 
             except Exception as e:
                 logger.error("🔄 Flywheel #%d failed: %s", run_id, e)
@@ -454,6 +517,121 @@ class FlywheelOrchestrator(BaseAgent):
         self._total_mutations_applied += applied
         return applied
 
+    # ── Post-Training Pipeline ─────────────────────────────────
+
+    async def _run_post_training(self) -> None:
+        """Execute the post-training pipeline.
+
+        This is Jensen's "improve the AI model inside the harness" —
+        the LLM learns from every trade, getting better over time.
+
+        Pipeline: GENERATE dataset → TRAIN (LoRA) → EVALUATE → DEPLOY
+        """
+        if not self._post_training_pipeline:
+            return
+
+        self._last_post_training_run = time.monotonic()
+        self._trades_since_post_training = 0
+        self._post_training_runs += 1
+
+        run_id = self._post_training_runs
+        logger.info(
+            "🧠 ═══ POST-TRAINING RUN #%d STARTING (trade_count=%d) ═══",
+            run_id,
+            self._trade_count,
+        )
+
+        try:
+            await self._publish_flywheel_event(
+                "post_training.started",
+                {
+                    "run_id": run_id,
+                    "trade_count": self._trade_count,
+                },
+            )
+
+            # Run the full pipeline in a thread (training is CPU/GPU intensive)
+            result = await asyncio.get_event_loop().run_in_executor(
+                None,
+                self._post_training_pipeline.run,
+            )
+
+            status = result.get("status", "unknown")
+            if status == "deployed":
+                self._post_training_deployments += 1
+                logger.info(
+                    "🧠 ═══ POST-TRAINING RUN #%d DEPLOYED: "
+                    "improvement=%.1f%%, adapter=%s ═══",
+                    run_id,
+                    result.get("improvement_pct", 0),
+                    result.get("adapter_path", "unknown"),
+                )
+            elif status == "rejected":
+                logger.info(
+                    "🧠 POST-TRAINING RUN #%d REJECTED: %s",
+                    run_id,
+                    result.get("reason", "insufficient improvement"),
+                )
+            elif status == "skipped":
+                logger.info(
+                    "🧠 POST-TRAINING RUN #%d SKIPPED: %s",
+                    run_id,
+                    result.get("reason", "insufficient data"),
+                )
+            else:
+                logger.warning(
+                    "🧠 POST-TRAINING RUN #%d status=%s: %s",
+                    run_id,
+                    status,
+                    result.get("reason", ""),
+                )
+
+            await self._publish_flywheel_event(
+                "post_training.complete",
+                {
+                    "run_id": run_id,
+                    "status": status,
+                    "improvement_pct": result.get("improvement_pct", 0),
+                    "adapter_path": result.get("adapter_path", ""),
+                    "reason": result.get("reason", ""),
+                },
+            )
+
+        except Exception as e:
+            logger.error("🧠 Post-training run #%d failed: %s", run_id, e)
+            await self._publish_flywheel_event(
+                "post_training.error",
+                {
+                    "run_id": run_id,
+                    "error": str(e),
+                },
+            )
+
+    async def _maybe_run_post_training(self, flywheel_run_id: int) -> None:
+        """Check if post-training should run after a flywheel cycle.
+
+        Post-training runs less frequently than the standard flywheel
+        (every POST_TRAINING_BATCH_SIZE trades with cooldown).
+        """
+        if not self._post_training_pipeline:
+            return
+
+        now = time.monotonic()
+        pt_cooldown = (now - self._last_post_training_run) >= self.POST_TRAINING_COOLDOWN_S
+        pt_batch_ready = self._trades_since_post_training >= self.POST_TRAINING_BATCH_SIZE
+
+        if pt_batch_ready and pt_cooldown:
+            logger.info(
+                "🧠 Post-training triggered after flywheel #%d "
+                "(trades_since_pt=%d, cooldown_elapsed=%ds)",
+                flywheel_run_id,
+                self._trades_since_post_training,
+                int(now - self._last_post_training_run),
+            )
+            asyncio.create_task(self._run_post_training())
+
+    # ── Events & Health ────────────────────────────────────────
+
     async def _publish_flywheel_event(self, event_type: str, data: dict[str, Any]) -> None:
         """Publish a flywheel lifecycle event."""
         try:
@@ -469,6 +647,12 @@ class FlywheelOrchestrator(BaseAgent):
     def get_health(self) -> dict[str, Any]:
         """Get flywheel orchestrator health status."""
         base_health = super().get_health()
+
+        # Post-training status
+        post_training_status = None
+        if self._post_training_pipeline:
+            post_training_status = self._post_training_pipeline.get_status()
+
         base_health.update(
             {
                 "flywheel": {
@@ -490,6 +674,15 @@ class FlywheelOrchestrator(BaseAgent):
                     "batch_size": self.BATCH_SIZE,
                     "cooldown_s": self.COOLDOWN_SECONDS,
                 },
+                "post_training": {
+                    "enabled": self._post_training_pipeline is not None,
+                    "runs": self._post_training_runs,
+                    "deployments": self._post_training_deployments,
+                    "trades_since_post_training": self._trades_since_post_training,
+                    "batch_size": self.POST_TRAINING_BATCH_SIZE,
+                    "cooldown_s": self.POST_TRAINING_COOLDOWN_S,
+                    "pipeline_status": post_training_status,
+                },
             }
         )
         return base_health
@@ -498,3 +691,8 @@ class FlywheelOrchestrator(BaseAgent):
         """Manually trigger a flywheel run (for testing/debugging)."""
         logger.info("🔄 Manual flywheel trigger requested")
         asyncio.create_task(self._run_flywheel())
+
+    async def trigger_post_training(self) -> None:
+        """Manually trigger a post-training run (for testing/debugging)."""
+        logger.info("🧠 Manual post-training trigger requested")
+        asyncio.create_task(self._run_post_training())

@@ -1,0 +1,95 @@
+# ============================================================
+# TSAR — Conservative Blueprint
+# ============================================================
+# Low risk, steady returns. For capital preservation and
+# accounts that prioritize consistency over speed.
+#
+# Profile: New traders, large accounts, risk-averse investors
+# Target: 2-5% monthly, max 5% drawdown
+# Time commitment: Low (set-and-forget)
+
+blueprint:
+  name: "conservative"
+  display_name: "Conservative Growth"
+  description: >
+    Capital preservation strategy. Small, high-conviction trades with
+    tight risk management. Prioritizes consistency over speed.
+    Best for traders who value steady compounding.
+  target_audience:
+    experience: ["beginner", "intermediate"]
+    account_size_range_usd: [1000, 100000]
+    risk_tolerance: "low"
+    time_horizon: "weeks_to_months"
+  tags: ["low-risk", "steady", "beginner-friendly"]
+
+# --- Risk Profile ---
+risk:
+  max_risk_per_trade_pct: 0.01        # 1% per trade
+  max_portfolio_heat_pct: 0.03        # 3% total exposure
+  max_open_positions: 3
+  max_daily_trades: 5
+  max_drawdown_pause: 0.03            # Pause at 3% drawdown
+  max_drawdown_flatten: 0.05          # Flatten at 5% drawdown
+  kelly_fraction: 0.15                # Very conservative Kelly
+  min_rr_ratio: 2.5                   # Require 2.5:1 minimum
+  anti_revenge_cooldown_minutes: 120  # 2-hour cooldown
+
+# --- Strategy Mix ---
+strategies:
+  primary:
+    name: "mean_reversion"
+    allocation_pct: 70
+    overrides:
+      min_signal_score: 0.75          # Higher threshold
+      stop_loss_pct: 0.8              # Tighter stops
+      take_profit_pct: 2.0
+
+  secondary:
+    name: "tsar"
+    allocation_pct: 30
+    overrides:
+      min_signal_score: 0.80
+      session_overlap_only: true      # Only trade during overlaps
+
+# --- Sizing ---
+sizing:
+  method: "half_kelly"
+  base_allocation_pct: 50             # Only use 50% of Kelly suggestion
+  max_position_pct: 0.08              # 8% max per position
+  scale_in: false                     # No scaling in — full entry only
+
+# --- Time Filters ---
+time_filters:
+  preferred_sessions: ["london_new_york_overlap"]
+  avoid_sessions: ["sydney", "tokyo"]
+  blackout_before_news_minutes: 60    # Extra-wide news buffer
+  avoid_friday_afternoon: true
+
+# --- Asset Filters ---
+asset_filters:
+  allowed_classes: ["crypto"]
+  min_liquidity_usd: 500000           # High liquidity only
+  min_volume_24h_usd: 10000000
+  max_volatility_pct: 5.0             # Avoid highly volatile assets
+
+# --- Exit Rules (Tighter) ---
+exit_rules:
+  stop_loss:
+    type: "atr_multiple"
+    multiplier: 0.75                  # Tighter stops
+  take_profit:
+    type: "atr_multiple"
+    multiplier: 2.5
+  trailing_stop:
+    enabled: true
+    trigger_rr: 0.8                   # Trail early
+    atr_multiplier: 1.0
+  time_stop_hours: 24                 # Close stale trades
+
+# --- Notifications ---
+alerts:
+  on_entry: true
+  on_exit: true
+  on_stop_hit: true
+  daily_summary: true
+  drawdown_warning_pct: 0.02          # Warn at 2%

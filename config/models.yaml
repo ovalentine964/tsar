@@ -292,6 +292,19 @@ budget:
   monthly_limit_usd: 20.00
   alert_threshold_pct: 80  # Alert at 80% of budget
 
+# --- Cost-Effective Intelligence ---
+# ComplexityRouter uses these tiers to auto-select models.
+# Simple tasks → cheapest model, complex tasks → best model.
+# Override tiers in ComplexityRouter constructor if needed.
+cost_optimization:
+  enabled: true
+  # When budget drops below this %, auto-downgrade models
+  budget_downgrade_threshold_pct: 70
+  # When budget drops below this %, use only free models
+  budget_free_only_threshold_pct: 90
+  # Track cost per trade for ROI calculation
+  track_per_trade_cost: true
+
 # --- Circuit Breaker ---
 circuit_breaker:
   failure_threshold: 5       # Open after 5 consecutive failures

@@ -1,0 +1,126 @@
+# ============================================================
+# TSAR — Swing Blueprint
+# ============================================================
+# Multi-day holds. Captures larger moves with wider stops.
+# Lower frequency, higher conviction trades.
+#
+# Profile: Patient traders, medium-large accounts
+# Target: 5-20% per trade, 2-5 trades/week
+# Time commitment: Low (check daily)
+
+blueprint:
+  name: "swing"
+  display_name: "Swing Trading"
+  description: >
+    Multi-day swing trading strategy. Holds positions for days to
+    weeks, capturing larger trend moves. Wider stops and bigger
+    targets. Ideal for traders who can't monitor constantly.
+  target_audience:
+    experience: ["intermediate", "advanced"]
+    account_size_range_usd: [2000, 500000]
+    risk_tolerance: "medium"
+    time_horizon: "days_to_weeks"
+  tags: ["swing", "positional", "trend-following"]
+
+# --- Risk Profile ---
+risk:
+  max_risk_per_trade_pct: 0.025       # 2.5% per trade
+  max_portfolio_heat_pct: 0.08        # 8% total
+  max_open_positions: 5
+  max_daily_trades: 5                 # Low frequency
+  max_drawdown_pause: 0.07
+  max_drawdown_flatten: 0.15
+  kelly_fraction: 0.25
+  min_rr_ratio: 3.0                   # High R:R required
+  anti_revenge_cooldown_minutes: 240  # 4-hour cooldown
+  anti_overconfidence_win_streak: 3   # Lower threshold
+
+# --- Strategy Mix ---
+strategies:
+  primary:
+    name: "tsar"
+    allocation_pct: 50
+    overrides:
+      min_signal_score: 0.75          # High conviction
+      min_rr_ratio: 3.0
+      session_exit: false             # Don't close at session end
+
+  secondary:
+    name: "momentum_funding"
+    allocation_pct: 40
+    overrides:
+      min_signal_score: 0.70
+      trailing_stop_atr_mult: 2.5     # Wide trails
+      take_profit_atr_mult: 6.0       # Big targets
+
+  tertiary:
+    name: "mean_reversion"
+    allocation_pct: 10
+    overrides:
+      min_signal_score: 0.70
+      time_stop_hours: 72             # 3-day time stop
+
+# --- Sizing ---
+sizing:
+  method: "half_kelly"
+  base_allocation_pct: 80
+  max_position_pct: 0.15
+  scale_in: true
+  scale_in_levels: 3
+  scale_in_size_pct: 0.33
+
+# --- Time Filters ---
+time_filters:
+  preferred_sessions: ["london", "new_york", "london_new_york_overlap"]
+  avoid_sessions: []
+  blackout_before_news_minutes: 60
+  avoid_friday_afternoon: true        # Don't open Friday PM
+  weekend_hold: true                  # Allow weekend positions
+
+# --- Asset Filters ---
+asset_filters:
+  allowed_classes: ["crypto"]
+  min_liquidity_usd: 300000
+  min_volume_24h_usd: 5000000
+  max_volatility_pct: 10.0
+
+# --- Exit Rules (Wide) ---
+exit_rules:
+  stop_loss:
+    type: "structure_based"           # Based on S/R levels
+    atr_buffer_multiplier: 1.0        # Wide buffer
+  take_profit:
+    type: "rr_multiple"
+    targets:
+      - rr_multiple: 1.5
+        close_pct: 0.25
+      - rr_multiple: 3.0
+        close_pct: 0.35
+      - rr_multiple: 5.0
+        close_pct: 0.40
+  trailing_stop:
+    enabled: true
+    trigger_rr: 1.5                   # Trail after 1.5R
+    atr_multiplier: 2.5
+  time_stop_days: 14                  # 2-week max hold
+  breakeven:
+    trigger_rr: 1.0
+
+# --- Trend Filters ---
+trend_filters:
+  require_daily_trend: true           # Must align with D1 trend
+  min_adx: 20                         # Minimum trend strength
+  ema_alignment:
+    fast: 21
+    slow: 55
+    timeframes: ["D1", "H4"]
+
+# --- Notifications ---
+alerts:
+  on_entry: true
+  on_exit: true
+  on_stop_hit: true
+  on_take_profit: true
+  daily_summary: true
+  weekly_summary: true
+  drawdown_warning_pct: 0.04

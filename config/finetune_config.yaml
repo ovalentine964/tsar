@@ -1,0 +1,171 @@
+# ============================================================
+# TSAR — Post-Training / Fine-Tuning Configuration
+# ============================================================
+# Jensen's vision: "You can now also improve the AI model, the
+# large language model, inside the harness."
+#
+# This config controls the LoRA fine-tuning pipeline that learns
+# from every trade, turning experience into model improvements.
+# ============================================================
+
+# ── Base Model ────────────────────────────────────────────────
+# The model to fine-tune. Should match one of the models defined
+# in config/models.yaml for consistency.
+model:
+  base_model: "Qwen/Qwen2.5-7B-Instruct"
+  # Alternative models (uncomment to use):
+  # base_model: "meta-llama/Llama-3.1-8B-Instruct"
+  # base_model: "deepseek-ai/DeepSeek-R1-Distill-Qwen-7B"
+  max_context_tokens: 4096
+  trust_remote_code: true
+
+# ── LoRA Configuration ───────────────────────────────────────
+# Low-Rank Adaptation parameters. These control how the model
+# is modified during fine-tuning.
+#
+# rank: Dimension of the low-rank matrices. Higher = more
+#   expressive but more memory. 16 is a good default.
+# alpha: Scaling factor. Typically 2x the rank.
+# dropout: LoRA dropout for regularization.
+# target_modules: Which layers to adapt. These are the attention
+#   and MLP projection layers in transformer architectures.
+# use_qlora: Enable 4-bit quantized training for memory efficiency.
+#   Recommended for consumer GPUs (< 24GB VRAM).
+lora:
+  rank: 16
+  alpha: 32
+  dropout: 0.05
+  bias: "none"
+  target_modules:
+    - "q_proj"
+    - "k_proj"
+    - "v_proj"
+    - "o_proj"
+    - "gate_proj"
+    - "up_proj"
+    - "down_proj"
+  use_qlora: true
+
+# ── Training Hyperparameters ─────────────────────────────────
+# These control the fine-tuning process itself.
+#
+# epochs: Number of passes over the dataset. 3 is typical for
+#   small datasets (< 1000 examples). Increase for larger sets.
+# batch_size: Per-device batch size. Reduce if OOM.
+# gradient_accumulation_steps: Effective batch = batch_size * this.
+#   Use larger values for smoother gradients with small batch sizes.
+# learning_rate: Peak learning rate. 2e-4 is standard for LoRA.
+#   Reduce to 1e-4 if training is unstable.
+# warmup_ratio: Fraction of steps for learning rate warmup.
+# lr_scheduler: Learning rate schedule. 'cosine' is robust.
+# max_seq_length: Maximum sequence length for training examples.
+#   Longer sequences capture more context but use more memory.
+# gradient_checkpointing: Trade compute for memory. Enable for
+#   large models or limited VRAM.
+# max_grad_norm: Gradient clipping threshold.
+# optimizer: Optimizer choice. paged_adamw_8bit is memory-efficient.
+training:
+  epochs: 3
+  batch_size: 4
+  gradient_accumulation_steps: 4
+  learning_rate: 2.0e-4
+  weight_decay: 0.01
+  warmup_ratio: 0.1
+  lr_scheduler: "cosine"
+  logging_steps: 10
+  max_seq_length: 2048
+  gradient_checkpointing: true
+  max_grad_norm: 0.3
+  optimizer: "paged_adamw_8bit"
+  seed: 42
+
+# ── Dataset Generation Rules ─────────────────────────────────
+# Controls how training data is generated from trade history.
+#
+# min_trades: Minimum closed trades required to generate a dataset.
+#   Below this threshold, the pipeline skips (insufficient data).
+# lookback_days: How far back to look for trades.
+# balance_win_loss: Ensure equal representation of winning and
+#   losing trades to prevent model bias.
+# include_losing_trades: Include loss examples (highly recommended).
+# include_winning_trades: Include win examples.
+# max_examples_per_trade: Maximum training examples per trade
+#   (some trades generate multiple: reflection + counterfactual).
+dataset_generation:
+  min_trades: 20
+  lookback_days: 90
+  balance_win_loss: true
+  include_losing_trades: true
+  include_winning_trades: true
+  max_examples_per_trade: 3
+  # Example types to generate
+  example_types:
+    trade_reflection: true    # Trade outcome + reflection → instruction
+    lesson_application: true  # Lesson archive → instruction
+    pattern_recognition: true # Pattern library → instruction
+    counterfactual: true      # "What NOT to do" from losing trades
+
+# ── Evaluation Metrics ────────────────────────────────────────
+# Controls how the fine-tuned model is evaluated against the base.
+#
+# min_improvement_pct: Minimum overall improvement required to
+#   accept the fine-tuned model. 5% is conservative but safe.
+# max_regression_pct: Maximum allowed regression on any single
+#   dimension. If any metric regresses by more than this, reject.
+# test_size: Number of test scenarios for evaluation.
+# dimensions: Which quality dimensions to evaluate.
+evaluation:
+  min_improvement_pct: 5.0
+  max_regression_pct: 3.0
+  test_size: 50
+  dimensions:
+    - name: "directional_accuracy"
+      weight: 0.35
+      description: "Correct buy/sell/hold recommendations"
+    - name: "risk_awareness"
+      weight: 0.25
+      description: "Mentions of stop loss, position sizing, risk"
+    - name: "lesson_adherence"
+      weight: 0.25
+      description: "Applies known trading principles from archive"
+    - name: "response_quality"
+      weight: 0.15
+      description: "Coherence, specificity, actionability"
+
+# ── Pipeline Triggers ─────────────────────────────────────────
+# When to automatically run the post-training pipeline.
+#
+# auto_trigger: Enable automatic pipeline runs from the flywheel.
+# min_trades_between_runs: Minimum new trades since last run.
+# cooldown_hours: Minimum hours between pipeline runs.
+# max_runs_per_day: Safety limit on daily fine-tuning runs.
+triggers:
+  auto_trigger: true
+  min_trades_between_runs: 50
+  cooldown_hours: 6
+  max_runs_per_day: 2
+
+# ── Output Paths ──────────────────────────────────────────────
+# Where to save datasets, adapters, and deployment records.
+output_dir: "data/models"
+data_dir: "data"
+
+# ── Deployment ────────────────────────────────────────────────
+# Controls how fine-tuned models are deployed.
+#
+# auto_deploy: Automatically deploy accepted models.
+# merge_adapter: Merge LoRA adapter into base model for faster
+#   inference (recommended for production).
+# keep_last_n_adapters: Number of adapters to keep on disk.
+deployment:
+  auto_deploy: true
+  merge_adapter: false    # Keep adapter separate for flexibility
+  keep_last_n_adapters: 5
+
+# ── Safety Guards ─────────────────────────────────────────────
+# Prevent runaway training or degradation.
+safety:
+  max_training_hours: 4       # Kill training if it takes too long
+  min_dataset_quality: 0.3    # Min average example quality score
+  require_all_dimensions: false  # If true, ALL dimensions must improve
+  rollback_on_regression: true   # Auto-rollback if post-deploy metrics drop

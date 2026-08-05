@@ -1,0 +1,111 @@
+# ============================================================
+# TSAR — Aggressive Blueprint
+# ============================================================
+# High risk, high returns. For experienced traders who can
+# handle drawdowns and want maximum growth.
+#
+# Profile: Experienced traders, medium-large accounts
+# Target: 15-30% monthly, max 20% drawdown
+# Time commitment: High (active monitoring)
+
+blueprint:
+  name: "aggressive"
+  display_name: "Aggressive Growth"
+  description: >
+    High-growth strategy targeting maximum returns. Larger position
+    sizes, wider stops, and more aggressive entries. Only for
+    traders who can psychologically handle 15%+ drawdowns.
+  target_audience:
+    experience: ["advanced", "expert"]
+    account_size_range_usd: [10000, 1000000]
+    risk_tolerance: "high"
+    time_horizon: "hours_to_days"
+  tags: ["aggressive", "high-risk", "growth"]
+
+# --- Risk Profile ---
+risk:
+  max_risk_per_trade_pct: 0.03        # 3% per trade
+  max_portfolio_heat_pct: 0.10        # 10% total exposure
+  max_open_positions: 8
+  max_daily_trades: 20
+  max_drawdown_pause: 0.10            # Pause at 10% drawdown
+  max_drawdown_flatten: 0.20          # Flatten at 20% drawdown
+  kelly_fraction: 0.35                # More aggressive Kelly
+  min_rr_ratio: 1.5                   # Accept lower R:R for more trades
+  anti_revenge_cooldown_minutes: 30   # Shorter cooldown
+  anti_greed_sizing_factor: 0.85      # Higher greed cap
+
+# --- Strategy Mix ---
+strategies:
+  primary:
+    name: "momentum_funding"
+    allocation_pct: 50
+    overrides:
+      min_signal_score: 0.55
+      trailing_stop_atr_mult: 2.0     # Wider trails
+      take_profit_atr_mult: 5.0
+
+  secondary:
+    name: "tsar"
+    allocation_pct: 35
+    overrides:
+      min_signal_score: 0.60
+      session_overlap_mult: 2.0       # Bigger during overlaps
+
+  tertiary:
+    name: "mean_reversion"
+    allocation_pct: 15
+    overrides:
+      min_signal_score: 0.55
+
+# --- Sizing ---
+sizing:
+  method: "half_kelly"
+  base_allocation_pct: 100            # Full Kelly suggestion
+  max_position_pct: 0.20              # 20% per position
+  scale_in: true
+  scale_in_levels: 3
+  scale_in_size_pct: 0.33             # Equal thirds
+
+# --- Time Filters ---
+time_filters:
+  preferred_sessions: ["london", "new_york", "london_new_york_overlap", "tokyo"]
+  avoid_sessions: []
+  blackout_before_news_minutes: 15    # Narrow news buffer
+  avoid_friday_afternoon: false
+
+# --- Asset Filters ---
+asset_filters:
+  allowed_classes: ["crypto"]
+  min_liquidity_usd: 100000
+  min_volume_24h_usd: 1000000
+  max_volatility_pct: 15.0            # Accept high volatility
+
+# --- Exit Rules ---
+exit_rules:
+  stop_loss:
+    type: "atr_multiple"
+    multiplier: 1.5                   # Wider stops
+  take_profit:
+    type: "atr_multiple"
+    multiplier: 5.0                   # Bigger targets
+  trailing_stop:
+    enabled: true
+    trigger_rr: 1.5                   # Trail after 1.5R
+    atr_multiplier: 2.0
+  time_stop_hours: 72
+
+# --- Leverage (advanced only) ---
+leverage:
+  enabled: true
+  max_leverage: 3
+  margin_utilization_cap: 0.40
+
+# --- Notifications ---
+alerts:
+  on_entry: true
+  on_exit: true
+  on_stop_hit: true
+  on_take_profit: true
+  daily_summary: true
+  drawdown_warning_pct: 0.05
