@@ -798,11 +798,11 @@ class BacktestEngine:
 
         config = self._config
         pnl_values = [t.pnl for t in trades]
-        [t.pnl_pct for t in trades]
 
-        # Win/loss stats
+        # Win/loss stats — strictly positive = win, strictly negative = loss,
+        # zero PnL trades are breakeven (excluded from win/loss counts).
         winners = [p for p in pnl_values if p > 0]
-        losers = [p for p in pnl_values if p <= 0]
+        losers = [p for p in pnl_values if p < 0]
         total_trades = len(trades)
         winning_trades = len(winners)
         losing_trades = len(losers)
@@ -811,10 +811,12 @@ class BacktestEngine:
         avg_win = float(np.mean(winners)) if winners else 0.0
         avg_loss = float(np.mean(losers)) if losers else 0.0
 
-        # Profit factor
+        # Profit factor — cap at 1000.0 to avoid inf when no losing trades
         gross_profit = sum(winners) if winners else 0.0
         gross_loss = abs(sum(losers)) if losers else 0.0
-        profit_factor = gross_profit / gross_loss if gross_loss > 0 else float("inf")
+        profit_factor = gross_profit / gross_loss if gross_loss > 0 else (
+            1000.0 if gross_profit > 0 else 0.0
+        )
 
         # Expectancy
         expectancy = (win_rate * avg_win) - ((1 - win_rate) * abs(avg_loss))
@@ -861,7 +863,7 @@ class BacktestEngine:
                 else:
                     sortino_ratio = 0.0
             else:
-                sortino_ratio = float("inf") if np.mean(excess) > 0 else 0.0
+                sortino_ratio = 1000.0 if np.mean(excess) > 0 else 0.0
         else:
             sortino_ratio = 0.0
 
@@ -869,7 +871,7 @@ class BacktestEngine:
         max_dd, max_dd_duration = self._compute_max_drawdown(equity_curve)
 
         # Calmar ratio
-        calmar_ratio = cagr / abs(max_dd) if max_dd != 0 else float("inf")
+        calmar_ratio = cagr / abs(max_dd) if max_dd != 0 else (1000.0 if cagr > 0 else 0.0)
 
         # Average trade duration in bars
         durations = []

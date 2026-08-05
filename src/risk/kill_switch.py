@@ -67,6 +67,7 @@ class KillSwitch:
         redis_key: str | None = None,
         on_activate: Callable[[str], Awaitable[None]] | None = None,
         on_deactivate: Callable[[], Awaitable[None]] | None = None,
+        event_bus: Any | None = None,
     ) -> None:
         """Initialize the kill switch.
 
@@ -76,12 +77,16 @@ class KillSwitch:
             redis_key: Override Redis key (default: tsar:risk:kill_switch).
             on_activate: Async callback invoked on activation with reason.
             on_deactivate: Async callback invoked on deactivation.
+            event_bus: EventBus instance for publishing kill switch events
+                       to all agents. When set, activate() and deactivate()
+                       publish CloudEvents so agents are notified immediately.
         """
         self._redis = redis_client
         self._file_path = Path(file_path or KILL_SWITCH_FILE)
         self._redis_key = redis_key or KILL_SWITCH_REDIS_KEY
         self._on_activate = on_activate
         self._on_deactivate = on_deactivate
+        self._event_bus = event_bus
 
         # Ensure parent directory exists
         self._file_path.parent.mkdir(parents=True, exist_ok=True)
@@ -108,7 +113,23 @@ class KillSwitch:
         # 2. Write to Redis (SECONDARY)
         await self._write_redis(payload)
 
-        # 3. Invoke activation callback (cancel orders, flatten, notify)
+        # 3. Publish kill switch event to event bus (notify all agents)
+        if self._event_bus is not None:
+            try:
+                await self._event_bus.publish(
+                    event_type="tsar.risk.kill_switch.activated.v1",
+                    data={
+                        "active": True,
+                        "reason": reason,
+                        "activated_at": payload["activated_at"],
+                        "activated_at_human": payload["activated_at_human"],
+                    },
+                )
+                logger.info("Kill switch event published to event bus")
+            except Exception as e:
+                logger.error(f"Failed to publish kill switch event: {e}")
+
+        # 4. Invoke activation callback (cancel orders, flatten, notify)
         if self._on_activate:
             try:
                 await self._on_activate(reason)
@@ -133,7 +154,21 @@ class KillSwitch:
 
         logger.warning("KILL SWITCH DEACTIVATED — Gated Recovery Protocol engaged")
 
-        # 3. Invoke deactivation callback
+        # 3. Publish kill switch deactivated event to event bus
+        if self._event_bus is not None:
+            try:
+                await self._event_bus.publish(
+                    event_type="tsar.risk.kill_switch.deactivated.v1",
+                    data={
+                        "active": False,
+                        "reason": "deactivated",
+                    },
+                )
+                logger.info("Kill switch deactivated event published to event bus")
+            except Exception as e:
+                logger.error(f"Failed to publish kill switch deactivated event: {e}")
+
+        # 4. Invoke deactivation callback
         if self._on_deactivate:
             try:
                 await self._on_deactivate()

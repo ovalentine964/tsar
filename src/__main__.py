@@ -227,8 +227,14 @@ async def run_full_system(args: argparse.Namespace) -> None:
         await _flatten_positions(reason)
         logger.critical(f"🔴 KILL SWITCH activation complete: {reason}")
 
-    kill_switch = KillSwitch(on_activate=_on_kill_activate)
-    logger.info("✅ Risk engine ready (kill switch wired to cancel_orders + flatten_positions)")
+    # ── Create Event Bus ─────────────────────────────────────────
+    from src.comms.event_bus import get_shared_bus
+    event_bus = get_shared_bus()
+    logger.info("✅ Event bus initialized (shared singleton)")
+
+    # Re-create kill switch with event_bus wired for agent notifications
+    kill_switch = KillSwitch(on_activate=_on_kill_activate, event_bus=event_bus)
+    logger.info("✅ Kill switch wired to event bus for agent notifications")
 
     # ── Initialize Engines via Registry ──────────────────────────
     # Exchange gateway — always needed for real market data
@@ -393,6 +399,76 @@ async def run_full_system(args: argparse.Namespace) -> None:
 
     heartbeat_task = asyncio.create_task(_heartbeat_writer())
 
+    # ── Agent Health Monitor (connects watchdog to agent lifecycle) ──
+    # Critical agents whose failure should trigger the kill switch.
+    _CRITICAL_AGENTS = {"risk_guardian", "execution_sniper"}
+    _AGENT_STALE_THRESHOLD = 120.0  # seconds without heartbeat
+
+    async def _agent_health_monitor(interval: float = 15.0) -> None:
+        """Monitor critical agent health and trigger kill switch if they die.
+
+        The watchdog monitors process-level liveness (heartbeat file).
+        This task monitors agent-level liveness: if critical agents
+        (risk_guardian, execution_sniper) stop sending heartbeats,
+        we escalate to the kill switch.
+        """
+        # Track last-seen timestamps per agent name
+        agent_last_seen: dict[str, float] = {}
+        stale_counts: dict[str, int] = {}
+
+        while True:
+            try:
+                now = time.time()
+                orchestrator = agents.get("orchestrator")
+
+                if orchestrator and hasattr(orchestrator, "_last_health_check"):
+                    health_checks = orchestrator._last_health_check
+                    agent_map = orchestrator._agents if hasattr(orchestrator, "_agents") else {}
+
+                    for agent_name, agent in agent_map.items():
+                        if agent_name not in _CRITICAL_AGENTS:
+                            continue
+                        agent_id = agent.agent_id
+                        last_check = health_checks.get(agent_id, 0)
+                        age = now - last_check if last_check > 0 else now - agent._start_time if hasattr(agent, "_start_time") else interval * 2
+
+                        if age > _AGENT_STALE_THRESHOLD:
+                            stale_counts[agent_name] = stale_counts.get(agent_name, 0) + 1
+                            logger.warning(
+                                "⚠️ Agent health monitor: %s stale for %.0fs "
+                                "(stale_count=%d)",
+                                agent_name, age, stale_counts[agent_name],
+                            )
+                            # Trigger kill switch after 3 consecutive stale reads
+                            if stale_counts[agent_name] >= 3:
+                                reason = (
+                                    f"CRITICAL AGENT DOWN: {agent_name} has been "
+                                    f"unresponsive for >{age:.0f}s — "
+                                    f"triggering kill switch for safety"
+                                )
+                                logger.critical("🔴 %s", reason)
+                                await kill_switch.activate(reason=reason)
+                                stale_counts[agent_name] = 0  # reset to prevent re-triggering
+                        else:
+                            if stale_counts.get(agent_name, 0) > 0:
+                                logger.info(
+                                    "Agent health monitor: %s recovered "
+                                    "(was stale %d checks)",
+                                    agent_name, stale_counts[agent_name],
+                                )
+                            stale_counts[agent_name] = 0
+                            agent_last_seen[agent_name] = now
+
+            except asyncio.CancelledError:
+                break
+            except Exception as e:
+                logger.error("Agent health monitor error: %s", e)
+
+            await asyncio.sleep(interval)
+
+    agent_health_task = asyncio.create_task(_agent_health_monitor())
+    logger.info("✅ Agent health monitor started (critical agents: %s)", ", ".join(_CRITICAL_AGENTS))
+
     # ── Start Telegram Bot ───────────────────────────────────────
     telegram_task = None
     try:
@@ -423,6 +499,11 @@ async def run_full_system(args: argparse.Namespace) -> None:
     except asyncio.CancelledError:
         logger.info("\n⏹️  Shutting down...")
     finally:
+        # Stop agent health monitor
+        agent_health_task.cancel()
+        with contextlib.suppress(asyncio.CancelledError):
+            await agent_health_task
+
         # Stop heartbeat writer
         heartbeat_task.cancel()
         with contextlib.suppress(asyncio.CancelledError):

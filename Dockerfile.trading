@@ -1,0 +1,31 @@
+FROM python:3.12-slim
+
+WORKDIR /app
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    curl && rm -rf /var/lib/apt/lists/*
+
+COPY pyproject.toml .
+RUN pip install --no-cache-dir .
+
+COPY src/ ./src/
+COPY config/ ./config/
+
+RUN mkdir -p /app/data /app/logs
+
+ENV PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
+    TSAR_ENVIRONMENT=production \
+    TSAR_TRADING_MODE=paper \
+    TSAR_API_PORT=8000 \
+    TSAR_DATABASE_BACKEND=sqlite \
+    TSAR_DATABASE_PATH=/app/data/tsar.db \
+    TSAR_REDIS_ENABLED=false \
+    TSAR_OLLAMA_ENABLED=false
+
+EXPOSE 8000
+
+# FIXED: Start the full TSAR system (agents + API), not just the API
+# Original was: CMD ["python", "-m", "uvicorn", "src.api.app:app", ...]
+# That only started the API server — no trading agents!
+CMD ["python", "-m", "src", "--paper", "--host", "0.0.0.0", "--port", "8000"]

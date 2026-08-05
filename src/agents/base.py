@@ -84,6 +84,9 @@ class BaseAgent(ABC):
         self._task: asyncio.Task | None = None
         self._subscription_tasks: list[asyncio.Task] = []
 
+        # Kill switch awareness — set by event bus when kill switch activates
+        self._kill_switch_active = False
+
         # Heartbeat tracking
         self._last_heartbeat = 0.0
         self._heartbeat_interval = config.get("agents", {}).get("heartbeat_interval_s", 10)
@@ -216,6 +219,22 @@ class BaseAgent(ABC):
 
         # Initialize
         await self.on_initialize()
+
+        # Start kill switch event subscription
+        try:
+            from src.comms.event_bus import get_shared_bus
+            shared_bus = get_shared_bus()
+            shared_bus.subscribe(
+                "tsar.risk.kill_switch.activated.v1",
+                self._on_kill_switch_activated,
+            )
+            shared_bus.subscribe(
+                "tsar.risk.kill_switch.deactivated.v1",
+                self._on_kill_switch_deactivated,
+            )
+            logger.debug("%s subscribed to kill switch events", self.agent_id)
+        except Exception:
+            logger.debug("Kill switch event subscription not available")
 
         # Start stream subscriptions
         for stream in self.SUBSCRIBE_STREAMS:
@@ -370,6 +389,24 @@ class BaseAgent(ABC):
     # ═══════════════════════════════════════════════════════════════
     # HEALTH & HEARTBEAT
     # ═══════════════════════════════════════════════════════════════
+
+    async def _on_kill_switch_activated(self, data: dict[str, Any]) -> None:
+        """Handle kill switch activation event from the event bus.
+
+        Sets the internal flag so run_cycle() implementations can
+        check self._kill_switch_active and skip trading logic.
+        """
+        reason = data.get("reason", "unknown")
+        logger.critical(
+            "🔴 [%s] Kill switch ACTIVATED — stopping trading: %s",
+            self.agent_id, reason,
+        )
+        self._kill_switch_active = True
+
+    async def _on_kill_switch_deactivated(self, data: dict[str, Any]) -> None:
+        """Handle kill switch deactivation event from the event bus."""
+        logger.info("✅ [%s] Kill switch deactivated — trading may resume", self.agent_id)
+        self._kill_switch_active = False
 
     async def _heartbeat(self) -> None:
         """Send heartbeat if interval has elapsed."""

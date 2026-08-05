@@ -49,6 +49,12 @@ from src.strategy.cuopt_optimizer import (
     OptimizationResult,
     ParameterRange,
 )
+from src.strategy.vmpm.strategy import VMPMStrategy
+from src.strategy.vmpm.session_manager import SessionManager, SessionInfo
+from src.strategy.vmpm.fundamental_analyzer import FundamentalAnalyzer, FundamentalBias
+from src.strategy.vmpm.trend_detector import TrendDetector, TrendState
+from src.strategy.vmpm.level_mapper import LevelMapper, SRLevel as VMPMSRLevel, MappedLevels
+from src.strategy.vmpm.entry_pipeline import EntryPipeline, PipelineResult
 
 __all__: list[str] = [
     "MLScorer",
@@ -77,4 +83,16 @@ __all__: list[str] = [
     "OptimizationObjective",
     "OptimizationResult",
     "ParameterRange",
+    "VMPMStrategy",
+    "SessionManager",
+    "SessionInfo",
+    "FundamentalAnalyzer",
+    "FundamentalBias",
+    "TrendDetector",
+    "TrendState",
+    "LevelMapper",
+    "VMPMSRLevel",
+    "MappedLevels",
+    "EntryPipeline",
+    "PipelineResult",
 ]
