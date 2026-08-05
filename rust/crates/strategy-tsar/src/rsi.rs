@@ -1,6 +1,6 @@
 //! # RSI — Relative Strength Index (Wilder's Smoothing)
 //!
-//! Hot-path RSI computation and divergence detection for the VMPM strategy.
+//! Hot-path RSI computation and divergence detection for the TSAR strategy.
 //!
 //! This module replaces the Python `TechnicalIndicators.rsi()` and
 //! divergence scanning loops. The Wilder's smoothing variant is used

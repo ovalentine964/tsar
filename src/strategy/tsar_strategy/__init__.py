@@ -26,7 +26,7 @@ from src.strategy.tsar_strategy.fundamental_analyzer import FundamentalAnalyzer,
 from src.strategy.tsar_strategy.level_mapper import LevelMapper, MappedLevels, SRLevel
 from src.strategy.tsar_strategy.rsi_filter import RSIFilter, RSIResult, RSISignal, RSIState
 from src.strategy.tsar_strategy.session_manager import SessionInfo, SessionManager
-from src.strategy.tsar_strategy.strategy import TSARStrategy, VMPMStrategy
+from src.strategy.tsar_strategy.strategy import TSARStrategy
 from src.strategy.tsar_strategy.trend_detector import TrendDetector, TrendState
 
 __all__ = [
@@ -51,5 +51,5 @@ __all__ = [
     "StageResult",
     "CandlePattern",
     "TSARStrategy",
-    "VMPMStrategy",  # backward compat alias
+
 ]

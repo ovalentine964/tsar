@@ -1,13 +1,13 @@
 [package]
-name = "strategy-vmpm"
+name = "strategy-tsar"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
-description = "VMPM strategy components — RSI, candlestick patterns, S/R level mapping"
+description = "TSAR strategy components — RSI, candlestick patterns, S/R level mapping"
 
 [lib]
-name = "strategy_vmpm"
+name = "strategy_tsar"
 crate-type = ["cdylib", "rlib"]
 
 [dependencies]

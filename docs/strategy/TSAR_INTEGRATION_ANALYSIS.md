@@ -1,22 +1,22 @@
-# VMPM × TSAR Integration Analysis
+# TSAR × TSAR Integration Analysis
 
 **Date:** 2026-08-05  
-**Strategy:** Valentine Money Printing Machine (VMPM)  
+**Strategy:** Valentine Money Printing Machine (TSAR)  
 **Status:** ANALYSIS COMPLETE — Ready for Implementation Planning
 
 ---
 
 ## Executive Summary
 
-VMPM is a **multi-layer discretionary-style institutional trading system** that follows a strict hierarchy: Fundamental Bias → Trend Direction → S/R Mapping → Price Retest → RSI Confirmation → Candlestick Confirmation → Execution → Trade Management.
+TSAR is a **multi-layer discretionary-style institutional trading system** that follows a strict hierarchy: Fundamental Bias → Trend Direction → S/R Mapping → Price Retest → RSI Confirmation → Candlestick Confirmation → Execution → Trade Management.
 
-TSAR already has **~70% of the infrastructure** needed to implement VMPM. The remaining 30% requires new session awareness logic, enhanced multi-timeframe trend analysis with MA crossovers, Asian session level mapping, order block detection, and a VMPM-specific orchestration pipeline.
+TSAR already has **~70% of the infrastructure** needed to implement TSAR. The remaining 30% requires new session awareness logic, enhanced multi-timeframe trend analysis with MA crossovers, Asian session level mapping, order block detection, and a TSAR-specific orchestration pipeline.
 
-**Integration Verdict: HIGHLY COMPATIBLE** — VMPM's layered confirmation system maps naturally onto TSAR's agent pipeline architecture.
+**Integration Verdict: HIGHLY COMPATIBLE** — TSAR's layered confirmation system maps naturally onto TSAR's agent pipeline architecture.
 
 ---
 
-## 1. VMPM Strategy Evaluation
+## 1. TSAR Strategy Evaluation
 
 ### Strengths
 
@@ -46,23 +46,23 @@ TSAR already has **~70% of the infrastructure** needed to implement VMPM. The re
 
 ### Overall Assessment: **8.5/10**
 
-VMPM is a well-structured institutional-grade strategy. Its layered confirmation system is its greatest strength — each layer independently filters noise. The main risk is signal scarcity, which TSAR's multi-pair scanning and flywheel can mitigate.
+TSAR is a well-structured institutional-grade strategy. Its layered confirmation system is its greatest strength — each layer independently filters noise. The main risk is signal scarcity, which TSAR's multi-pair scanning and flywheel can mitigate.
 
 ---
 
-## 2. TSAR Agent Mapping for VMPM
+## 2. TSAR Agent Mapping for TSAR
 
-### VMPM Layer → TSAR Agent Mapping
+### TSAR Layer → TSAR Agent Mapping
 
 ```
-VMPM LAYER                    TSAR AGENT(S)                    STATUS
+TSAR LAYER                    TSAR AGENT(S)                    STATUS
 ─────────────────────────────────────────────────────────────────────────
 1. Fundamental Bias      →    FundamentalScorer + NewsGatekeeper    ✅ EXISTS
 2. Trend Direction       →    RegimeDetector + SignalScout          ✅ EXISTS (needs enhancement)
 3. S/R Mapping           →    MarketCartographer + SignalScout       ✅ EXISTS (needs enhancement)
 4. Price Retest          →    SignalScout (pullback logic)           ⚠️ PARTIAL
 5. RSI Confirmation      →    SignalScout (RSI factor)               ✅ EXISTS
-6. Candlestick Confirm   →    SignalScout + PatternRecognition       ✅ EXISTS (needs VMPM patterns)
+6. Candlestick Confirm   →    SignalScout + PatternRecognition       ✅ EXISTS (needs TSAR patterns)
 7. Execution             →    ExecutionSniper + RiskGuardian         ✅ EXISTS
 8. Trade Management      →    TradeManager                           ✅ EXISTS (needs trailing/partial)
 ```
@@ -72,19 +72,19 @@ VMPM LAYER                    TSAR AGENT(S)                    STATUS
 | Component | Type | Purpose |
 |-----------|------|---------|
 | **VMPSessionManager** | NEW tool | Session awareness (Sydney/Tokyo/London/NY windows, session-specific behavior) |
-| **VMPMTrendAnalyzer** | Enhancement to MultiTimeframeAnalyzer | 50 MA / 200 MA crossover + HH/HL/LH/LL structure on D1/H4/H1 |
+| **TSARTrendAnalyzer** | Enhancement to MultiTimeframeAnalyzer | 50 MA / 200 MA crossover + HH/HL/LH/LL structure on D1/H4/H1 |
 | **VMPOrderBlockDetector** | NEW tool or Enhancement to PatternRecognition | Identify order blocks (last opposing candle before BOS) |
-| **VMPMAsianLevelMapper** | NEW tool or Enhancement to MarketCartographer | Track Asian session high/low as S/R levels |
-| **VMPMCandlestickValidator** | Enhancement to PatternRecognition | VMPM-specific candlestick patterns (engulfing, pin bar at S/R) |
-| **VMPMOrchestrator** | NEW agent or Enhancement to Orchestrator | Wire all VMPM layers in correct hierarchy |
+| **TSARAsianLevelMapper** | NEW tool or Enhancement to MarketCartographer | Track Asian session high/low as S/R levels |
+| **TSARCandlestickValidator** | Enhancement to PatternRecognition | TSAR-specific candlestick patterns (engulfing, pin bar at S/R) |
+| **TSAROrchestrator** | NEW agent or Enhancement to Orchestrator | Wire all TSAR layers in correct hierarchy |
 
 ---
 
 ## 3. Session Awareness Implementation
 
-### 3.1 VMPM Session Windows (Kenyan Time → UTC)
+### 3.1 TSAR Session Windows (Kenyan Time → UTC)
 
-VMPM uses Kenyan time (EAT, UTC+3). Converting to UTC:
+TSAR uses Kenyan time (EAT, UTC+3). Converting to UTC:
 
 | Session | Kenyan (EAT) | UTC | Characteristics |
 |---------|-------------|-----|-----------------|
@@ -98,7 +98,7 @@ VMPM uses Kenyan time (EAT, UTC+3). Converting to UTC:
 
 Crypto trades 24/7, but volume patterns still follow traditional sessions:
 
-| Crypto Session | UTC | Volume Profile | VMPM Application |
+| Crypto Session | UTC | Volume Profile | TSAR Application |
 |---------------|-----|---------------|------------------|
 | Asia Session | 00:00-08:00 UTC | Low-Medium | Map Asian High/Low as S/R levels |
 | London Session | 08:00-16:00 UTC | High | Primary trend trading window |
@@ -111,14 +111,14 @@ Crypto trades 24/7, but volume patterns still follow traditional sessions:
 
 ```python
 """
-VMPM Session Manager — Track trading sessions and session-specific levels.
+TSAR Session Manager — Track trading sessions and session-specific levels.
 
 Tracks:
   - Current active session(s)
   - Asian session high/low (resets daily)
   - Session-specific liquidity profiles
   - Session transition alerts
-  - Best entry windows per VMPM rules
+  - Best entry windows per TSAR rules
 """
 
 from dataclasses import dataclass, field
@@ -143,7 +143,7 @@ class SessionState:
     entry_conviction_multiplier: float = 1.0
 
 class VMPSessionManager:
-    """Session awareness for VMPM strategy."""
+    """Session awareness for TSAR strategy."""
     
     # Session windows in UTC
     SESSIONS = {
@@ -199,7 +199,7 @@ class VMPSessionManager:
 
 ## 4. Multi-Timeframe Trend Analysis Implementation
 
-### 4.1 VMPM Trend Hierarchy
+### 4.1 TSAR Trend Hierarchy
 
 | Timeframe | Role | Analysis Method |
 |-----------|------|----------------|
@@ -225,7 +225,7 @@ BEARISH TREND:
 NO TREND / RANGING:
   - 50 MA and 200 MA are intertwined
   - No clear HH/HL or LH/LL structure
-  - VMPM says: DO NOT TRADE in ranging conditions
+  - TSAR says: DO NOT TRADE in ranging conditions
 ```
 
 ### 4.3 Implementation Enhancement
@@ -233,15 +233,15 @@ NO TREND / RANGING:
 **Enhance:** `src/tools/multi_timeframe.py`
 
 ```python
-class VMPMTrendAnalyzer:
-    """VMPM-specific multi-timeframe trend analysis."""
+class TSARTrendAnalyzer:
+    """TSAR-specific multi-timeframe trend analysis."""
     
-    def analyze_trend(self, symbol: str) -> VMPMTrendResult:
+    def analyze_trend(self, symbol: str) -> TSARTrendResult:
         """
-        Analyze trend across D1, H4, H1 using VMPM rules.
+        Analyze trend across D1, H4, H1 using TSAR rules.
         
         Returns:
-            VMPMTrendResult with:
+            TSARTrendResult with:
             - d1_trend: BULLISH | BEARISH | RANGING
             - h4_trend: BULLISH | BEARISH | RANGING
             - h1_trend: BULLISH | BEARISH | RANGING
@@ -259,7 +259,7 @@ class VMPMTrendAnalyzer:
             for t in [d1.trend, h4.trend, h1.trend]
         ) and d1.trend == h4.trend == h1.trend
         
-        return VMPMTrendResult(
+        return TSARTrendResult(
             d1_trend=d1.trend,
             h4_trend=h4.trend,
             h1_trend=h1.trend,
@@ -338,7 +338,7 @@ def _classify_structure(self, swings: list[SwingPoint]) -> Trend:
 
 ## 5. S/R Mapping Implementation
 
-### 5.1 VMPM S/R Level Types
+### 5.1 TSAR S/R Level Types
 
 | Level Type | Description | TSAR Source |
 |-----------|-------------|-------------|
@@ -354,7 +354,7 @@ def _classify_structure(self, swings: list[SwingPoint]) -> Trend:
 
 ```python
 """
-ORDER BLOCK DETECTION (VMPM Definition):
+ORDER BLOCK DETECTION (TSAR Definition):
 
 Bullish Order Block:
   1. Identify a Break of Structure (BOS) upward
@@ -384,7 +384,7 @@ class OrderBlock:
     test_count: int = 0
 
 class VMPOrderBlockDetector:
-    """Detect VMPM-defined order blocks."""
+    """Detect TSAR-defined order blocks."""
     
     def detect(self, df: pd.DataFrame, timeframe: str) -> list[OrderBlock]:
         """Find all valid order blocks in the data."""
@@ -430,11 +430,11 @@ class VMPOrderBlockDetector:
 ### 5.3 S/R Level Scoring
 
 ```python
-class VMPMSRMapper:
-    """Map and score all VMPM S/R levels."""
+class TSARSRMapper:
+    """Map and score all TSAR S/R levels."""
     
     def get_all_levels(self, symbol: str) -> list[SRLevel]:
-        """Get all S/R levels with VMPM scoring."""
+        """Get all S/R levels with TSAR scoring."""
         levels = []
         
         # 1. Asian session levels (today)
@@ -475,11 +475,11 @@ class VMPMSRMapper:
 
 ## 6. Fundamental Analysis Layer
 
-### 6.1 VMPM Fundamental → Crypto Adaptation
+### 6.1 TSAR Fundamental → Crypto Adaptation
 
-VMPM's fundamental layer uses forex-centric data (CPI, NFP, GDP, central bank decisions). For crypto, we need to map equivalent drivers:
+TSAR's fundamental layer uses forex-centric data (CPI, NFP, GDP, central bank decisions). For crypto, we need to map equivalent drivers:
 
-| VMPM Fundamental | Crypto Equivalent | TSAR Source |
+| TSAR Fundamental | Crypto Equivalent | TSAR Source |
 |-----------------|-------------------|-------------|
 | Central bank decisions | Fed rate decisions, FOMC minutes | EconomicCalendar (enhance) |
 | CPI / Inflation | CPI data (impacts crypto via risk appetite) | EconomicCalendar ✅ |
@@ -499,12 +499,12 @@ VMPM's fundamental layer uses forex-centric data (CPI, NFP, GDP, central bank de
 **Enhancement needed:**
 
 ```python
-class VMPMFundamentalLayer:
-    """VMPM-specific fundamental bias determination."""
+class TSARFundamentalLayer:
+    """TSAR-specific fundamental bias determination."""
     
     def get_bias(self, symbol: str) -> FundamentalBias:
         """
-        Determine fundamental bias for VMPM.
+        Determine fundamental bias for TSAR.
         
         Returns:
             FundamentalBias with:
@@ -552,8 +552,8 @@ class VMPMFundamentalLayer:
 ### 6.3 News Blackout Integration
 
 ```python
-# From VMPM: "Check economic calendar before every trade"
-# Already partially implemented in NewsGatekeeper, enhance for VMPM:
+# From TSAR: "Check economic calendar before every trade"
+# Already partially implemented in NewsGatekeeper, enhance for TSAR:
 
 NEWS_BLACKOUT_RULES = {
     "CRITICAL": {"pre_buffer_hours": 2, "post_buffer_min": 30},
@@ -564,32 +564,32 @@ NEWS_BLACKOUT_RULES = {
 
 ---
 
-## 7. Risk Management for VMPM
+## 7. Risk Management for TSAR
 
-### 7.1 VMPM-Specific Risk Rules
+### 7.1 TSAR-Specific Risk Rules
 
 | Rule | Parameter | Value | Rationale |
 |------|-----------|-------|-----------|
 | Risk per trade | `risk_per_trade_pct` | 1-2% | Standard for layered strategy |
-| Max daily loss | `daily_loss_limit_pct` | 3% | VMPM has fewer trades, so losses cluster |
+| Max daily loss | `daily_loss_limit_pct` | 3% | TSAR has fewer trades, so losses cluster |
 | Max drawdown | `max_drawdown_pct` | 8% | Wider than mean reversion (trend following) |
-| Max open positions | `max_open_positions` | 2-3 | VMPM signals are rare, don't dilute |
+| Max open positions | `max_open_positions` | 2-3 | TSAR signals are rare, don't dilute |
 | Min R:R | `min_risk_reward` | 2.5:1 | Higher than standard 2:1 (layered confirmation = higher win rate) |
 | Session position sizing | Dynamic | 0.5x-1.0x | Reduce size in low-conviction sessions |
 | News blackout | Hard gate | 0 entries | No trading 2h before CRITICAL events |
 | Trend misalignment | Hard gate | 0 entries | No trading against D1 trend |
 
-### 7.2 VMPM Position Sizing
+### 7.2 TSAR Position Sizing
 
 ```python
-def calculate_vmpm_position_size(
+def calculate_tsar_position_size(
     account_balance: float,
     signal: Signal,
     session_state: SessionState,
-    trend_result: VMPMTrendResult,
+    trend_result: TSARTrendResult,
 ) -> float:
     """
-    VMPM position sizing considers:
+    TSAR position sizing considers:
     1. Base risk (1-2% of account)
     2. Session conviction multiplier (0.5-1.0)
     3. Trend alignment bonus (1.0-1.2)
@@ -615,12 +615,12 @@ def calculate_vmpm_position_size(
     return position_value
 ```
 
-### 7.3 VMPM Trade Management
+### 7.3 TSAR Trade Management
 
 ```python
-# VMPM-specific exit rules layered on top of existing TradeManager:
+# TSAR-specific exit rules layered on top of existing TradeManager:
 
-VMPM_EXIT_RULES = {
+TSAR_EXIT_RULES = {
     # Trailing stop (from ENTRY_EXIT_OPTIMIZATION.md)
     "trailing_stop": {
         "initial": "1.5x ATR",
@@ -638,7 +638,7 @@ VMPM_EXIT_RULES = {
         {"at_rr": None, "size_pct": 30}, # 30% trailing (no fixed target)
     ],
     
-    # Time stop (VMPM trades should resolve within a session)
+    # Time stop (TSAR trades should resolve within a session)
     "time_stop_hours": 12,  # Close if no resolution within 12h
     
     # Session exit
@@ -648,20 +648,20 @@ VMPM_EXIT_RULES = {
 
 ---
 
-## 8. Backtesting Approach for VMPM
+## 8. Backtesting Approach for TSAR
 
 ### 8.1 Backtest Architecture
 
 ```
 ┌─────────────────────────────────────────────────────┐
-│              VMPM BACKTEST ENGINE                     │
+│              TSAR BACKTEST ENGINE                     │
 │                                                      │
 │  1. Load historical OHLCV (D1, H4, H1)              │
 │  2. Load historical economic calendar                │
 │  3. For each candle (H1 resolution):                │
 │     a. Check session → VMPSessionManager             │
-│     b. Check trend → VMPMTrendAnalyzer (D1/H4/H1)   │
-│     c. Map S/R → VMPMSRMapper (Asian, Daily, OBs)   │
+│     b. Check trend → TSARTrendAnalyzer (D1/H4/H1)   │
+│     c. Map S/R → TSARSRMapper (Asian, Daily, OBs)   │
 │     d. Check retest → price at S/R zone?             │
 │     e. Check RSI → RSI confirming at retest?         │
 │     f. Check candlestick → pattern at S/R?           │
@@ -688,13 +688,13 @@ VMPM_EXIT_RULES = {
 ### 8.3 Walk-Forward Validation
 
 ```python
-def walk_forward_vmpm(
-    strategy: VMPMStrategy,
+def walk_forward_tsar(
+    strategy: TSARStrategy,
     data: pd.DataFrame,
     windows: int = 5,
 ) -> WalkForwardResult:
     """
-    Walk-forward validation for VMPM.
+    Walk-forward validation for TSAR.
     
     Window 1: Train on months 1-6, test on month 7
     Window 2: Train on months 2-7, test on month 8
@@ -724,10 +724,10 @@ def walk_forward_vmpm(
         test_data = data.iloc[train_end:test_end]
         
         # Optimize on training data
-        optimized_params = optimize_vmpm_params(train_data)
+        optimized_params = optimize_tsar_params(train_data)
         
         # Test on out-of-sample data
-        result = run_vmpm_backtest(test_data, optimized_params)
+        result = run_tsar_backtest(test_data, optimized_params)
         results.append(result)
     
     return WalkForwardResult(results=results)
@@ -745,11 +745,11 @@ def walk_forward_vmpm(
 
 ---
 
-## 9. Best Currency Pairs for VMPM
+## 9. Best Currency Pairs for TSAR
 
-### 9.1 VMPM Pair Selection Criteria
+### 9.1 TSAR Pair Selection Criteria
 
-VMPM works best on pairs with:
+TSAR works best on pairs with:
 1. **High liquidity** — tight spreads, reliable fills
 2. **Clear trends** — respects MA structure
 3. **Session-driven behavior** — responds to London/NY volume
@@ -761,36 +761,36 @@ VMPM works best on pairs with:
 |------|-------|-----|
 | **Tier 1 (Primary)** | BTC/USDT, ETH/USDT | Highest liquidity, cleanest trends, best S/R respect |
 | **Tier 2 (Secondary)** | SOL/USDT, BNB/USDT | Good liquidity, trending behavior, institutional interest |
-| **Tier 3 (Forex Cross)** | EUR/USD, GBP/USD, USD/JPY | Original VMPM targets — forex pairs with session dynamics |
+| **Tier 3 (Forex Cross)** | EUR/USD, GBP/USD, USD/JPY | Original TSAR targets — forex pairs with session dynamics |
 | **Tier 4 (Commodity)** | XAU/USD (Gold) | Strong trends, respects S/R, session-driven |
 
 ### 9.3 Pair-Specific Adjustments
 
 | Pair | ATR Adjustment | Session Weight | Notes |
 |------|---------------|----------------|-------|
-| BTC/USDT | Standard | Full | Best for VMPM in crypto |
+| BTC/USDT | Standard | Full | Best for TSAR in crypto |
 | ETH/USDT | 0.9x | Full | Follows BTC, slightly tighter |
 | SOL/USDT | 1.2x | 0.9x | Higher volatility, reduce size |
-| EUR/USD | Standard | Full | Original VMPM target |
+| EUR/USD | Standard | Full | Original TSAR target |
 | XAU/USD | 0.8x | Full | Strong trends, tight ranges |
 
 ---
 
-## 10. How the Flywheel Improves VMPM Over Time
+## 10. How the Flywheel Improves TSAR Over Time
 
-### 10.1 VMPM Flywheel Cycle
+### 10.1 TSAR Flywheel Cycle
 
 ```
-TRADE (VMPM layered execution)
+TRADE (TSAR layered execution)
     │
     ▼
 OBSERVE (Track which layers confirmed/denied)
     │
     ▼
-REFLECT (Trade Philosopher analyzes VMPM-specific outcomes)
+REFLECT (Trade Philosopher analyzes TSAR-specific outcomes)
     │
     ▼
-EXTRACT (Shadow Account extracts VMPM rules)
+EXTRACT (Shadow Account extracts TSAR rules)
     │
     ├── "Asian session retests have 72% win rate"
     ├── "Order blocks on H4 have highest strength"
@@ -799,13 +799,13 @@ EXTRACT (Shadow Account extracts VMPM rules)
     ├── "Bearish order blocks tested 3+ times break 80% of the time"
     │
     ▼
-ADAPT (Strategy Geneticist mutates VMPM parameters)
+ADAPT (Strategy Geneticist mutates TSAR parameters)
     │
     ▼
-BETTER TRADE (Improved VMPM with validated parameters)
+BETTER TRADE (Improved TSAR with validated parameters)
 ```
 
-### 10.2 What the Flywheel Learns for VMPM
+### 10.2 What the Flywheel Learns for TSAR
 
 | Learning Area | Initial State | After 100 Trades | After 500 Trades |
 |--------------|---------------|-------------------|-------------------|
@@ -818,12 +818,12 @@ BETTER TRADE (Improved VMPM with validated parameters)
 | Best trading days | Tue-Thu | Tue-Thu (validated) | Tuesday 1.3x weight |
 | Optimal R:R | 2.5:1 | 3:1 for trend, 2:1 for range | Dynamic R:R by regime |
 
-### 10.3 VMPM Genome Representation
+### 10.3 TSAR Genome Representation
 
 ```python
 @dataclass
-class VMPMGenome:
-    """VMPM strategy genome for the Strategy Geneticist."""
+class TSARGenome:
+    """TSAR strategy genome for the Strategy Geneticist."""
     
     # RSI parameters
     rsi_oversold: float = 30.0      # Mutable
@@ -858,52 +858,52 @@ class VMPMGenome:
 ### 10.4 Post-Training Potential
 
 After 500+ trades, TSAR can:
-1. **Fine-tune DeepSeek-R1** on VMPM trade decision data (prompt → decision → outcome)
-2. **Build a VMPM-specific pattern classifier** from candlestick + S/R + session data
-3. **Create a VMPM signal quality predictor** that estimates win probability before entry
-4. **Develop pair-specific VMPM variants** optimized per asset
+1. **Fine-tune DeepSeek-R1** on TSAR trade decision data (prompt → decision → outcome)
+2. **Build a TSAR-specific pattern classifier** from candlestick + S/R + session data
+3. **Create a TSAR signal quality predictor** that estimates win probability before entry
+4. **Develop pair-specific TSAR variants** optimized per asset
 
 ---
 
 ## 11. Implementation Roadmap
 
-### Phase 1: Core VMPM Infrastructure (Weeks 1-2)
+### Phase 1: Core TSAR Infrastructure (Weeks 1-2)
 - [ ] `VMPSessionManager` — session tracking, Asian levels
-- [ ] `VMPMTrendAnalyzer` — 50/200 MA + swing structure on D1/H4/H1
+- [ ] `TSARTrendAnalyzer` — 50/200 MA + swing structure on D1/H4/H1
 - [ ] `VMPOrderBlockDetector` — order block identification
-- [ ] `VMPMSRMapper` — unified S/R with all level types
+- [ ] `TSARSRMapper` — unified S/R with all level types
 
 ### Phase 2: Signal Pipeline (Weeks 3-4)
-- [ ] `VMPMFundamentalLayer` — fundamental bias (crypto-adapted)
-- [ ] `VMPMCandlestickValidator` — pattern confirmation at S/R
-- [ ] VMPM signal scoring (7-layer confirmation)
+- [ ] `TSARFundamentalLayer` — fundamental bias (crypto-adapted)
+- [ ] `TSARCandlestickValidator` — pattern confirmation at S/R
+- [ ] TSAR signal scoring (7-layer confirmation)
 - [ ] Integration with existing Signal Scout pipeline
 
 ### Phase 3: Execution & Management (Weeks 5-6)
-- [ ] VMPM-specific position sizing
+- [ ] TSAR-specific position sizing
 - [ ] Trailing stop system (4-stage)
 - [ ] Partial exit system (40/30/30)
 - [ ] Session-aware trade management
 
 ### Phase 4: Backtesting & Validation (Weeks 7-8)
-- [ ] VMPM backtest engine
+- [ ] TSAR backtest engine
 - [ ] Walk-forward validation (5 windows)
 - [ ] Monte Carlo simulation
 - [ ] Parameter optimization
 
 ### Phase 5: Flywheel Integration (Weeks 9-10)
-- [ ] VMPM genome representation
-- [ ] Shadow Account VMPM rule extraction
-- [ ] Strategy Geneticist VMPM mutations
+- [ ] TSAR genome representation
+- [ ] Shadow Account TSAR rule extraction
+- [ ] Strategy Geneticist TSAR mutations
 - [ ] Live paper trading with flywheel feedback
 
 ---
 
-## 12. VMPM Pipeline Architecture (Final)
+## 12. TSAR Pipeline Architecture (Final)
 
 ```
 ┌──────────────────────────────────────────────────────────────────────────┐
-│                     VMPM PIPELINE IN TSAR                                │
+│                     TSAR PIPELINE IN TSAR                                │
 │                                                                          │
 │  ┌─────────────┐                                                         │
 │  │ FUNDAMENTAL │  Economic calendar, news, crypto metrics                │
@@ -948,7 +948,7 @@ After 500+ trades, TSAR can:
 │                                                                          │
 │  ┌──────────────────────────────────────────────────────────────────┐   │
 │  │                    FLYWHEEL (Continuous)                          │   │
-│  │  Trade → Observe → Reflect → Extract → Adapt → Better VMPM      │   │
+│  │  Trade → Observe → Reflect → Extract → Adapt → Better TSAR      │   │
 │  └──────────────────────────────────────────────────────────────────┘   │
 └──────────────────────────────────────────────────────────────────────────┘
 ```
@@ -961,7 +961,7 @@ After 500+ trades, TSAR can:
 |-----------|-------|---------|
 | Strategy Soundness | 8.5/10 | APPROVED — Layered confirmation is institutional-grade |
 | TSAR Compatibility | 9/10 | APPROVED — 70% infrastructure exists, 30% well-scoped |
-| Risk Management | 8/10 | APPROVED — Needs VMPM-specific sizing rules |
+| Risk Management | 8/10 | APPROVED — Needs TSAR-specific sizing rules |
 | Backtest Feasibility | 8.5/10 | APPROVED — Clear rules, deterministic enough to backtest |
 | Flywheel Potential | 9/10 | APPROVED — Many mutable parameters for optimization |
 | Implementation Effort | 7.5/10 | CONDITIONAL — 8-10 weeks for full implementation |
@@ -978,4 +978,4 @@ After 500+ trades, TSAR can:
 
 *"The layered confirmation system is the strategy's greatest strength. Each layer independently filters noise. By execution, probability is stacked 7 layers deep."*
 
-*Analysis complete. VMPM is ready for TSAR integration.*
+*Analysis complete. TSAR is ready for TSAR integration.*

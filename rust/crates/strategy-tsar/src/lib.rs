@@ -1,31 +1,31 @@
-//! # strategy-vmpm
+//! # strategy-tsar
 //!
-//! VMPM strategy components ported from Python to Rust for performance.
+//! TSAR strategy components ported from Python to Rust for performance.
 //!
 //! This crate provides:
 //! - **RSI computation** (Wilder's smoothing) — the hot path for indicator calculation
 //! - **Candlestick pattern detection** — engulfing, pin bar, doji
 //! - **Support/Resistance level mapping** — Asian range, order blocks, nearest level
 //!
-//! All functions are exposed to Python via PyO3 bindings as `strategy_vmpm.*`.
+//! All functions are exposed to Python via PyO3 bindings as `strategy_tsar.*`.
 //!
 //! ## Python Usage
 //!
 //! ```python
-//! import strategy_vmpm
+//! import strategy_tsar
 //!
 //! # RSI
-//! rsi_values = strategy_vmpm.compute_rsi(closes, period=14)
-//! divergence = strategy_vmpm.detect_divergence(prices, rsi_values, lookback=30)
+//! rsi_values = strategy_tsar.compute_rsi(closes, period=14)
+//! divergence = strategy_tsar.detect_divergence(prices, rsi_values, lookback=30)
 //!
 //! # Candlestick patterns
-//! pattern = strategy_vmpm.detect_engulfing(o, h, l, c, prev_o, prev_c)
-//! pin = strategy_vmpm.detect_pin_bar(o, h, l, c, wick_threshold=0.6)
+//! pattern = strategy_tsar.detect_engulfing(o, h, l, c, prev_o, prev_c)
+//! pin = strategy_tsar.detect_pin_bar(o, h, l, c, wick_threshold=0.6)
 //!
 //! # Levels
-//! high, low = strategy_vmpm.compute_asian_range(highs, lows, 0, 8)
-//! blocks = strategy_vmpm.detect_order_blocks(candles, lookback=5)
-//! level = strategy_vmpm.find_nearest_level(levels, price, "bid")
+//! high, low = strategy_tsar.compute_asian_range(highs, lows, 0, 8)
+//! blocks = strategy_tsar.detect_order_blocks(candles, lookback=5)
+//! level = strategy_tsar.find_nearest_level(levels, price, "bid")
 //! ```
 
 pub mod candlestick;
@@ -39,11 +39,11 @@ use pyo3::types::PyList;
 // PyO3 MODULE REGISTRATION
 // ═══════════════════════════════════════════════════════════════════════
 
-/// The `strategy_vmpm` Python extension module.
+/// The `strategy_tsar` Python extension module.
 ///
-/// Exposes all VMPM strategy functions as a native Python module.
+/// Exposes all TSAR strategy functions as a native Python module.
 #[pymodule]
-fn strategy_vmpm(m: &Bound<'_, PyModule>) -> PyResult<()> {
+fn strategy_tsar(m: &Bound<'_, PyModule>) -> PyResult<()> {
     // ── RSI ───────────────────────────────────────────────────────
     m.add_function(wrap_pyfunction!(py_compute_rsi, m)?)?;
     m.add_function(wrap_pyfunction!(py_detect_divergence, m)?)?;
@@ -63,7 +63,7 @@ fn strategy_vmpm(m: &Bound<'_, PyModule>) -> PyResult<()> {
     // ── Utility ───────────────────────────────────────────────────
     m.add_function(wrap_pyfunction!(version, m)?)?;
 
-    tracing::info!("strategy_vmpm module initialized");
+    tracing::info!("strategy_tsar module initialized");
     Ok(())
 }
 

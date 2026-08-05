@@ -1,14 +1,14 @@
-# VMPM — Valentine Money Printing Machine
+# TSAR — Valentine Money Printing Machine
 
 ## Overview
 
-VMPM is a multi-layer institutional trading strategy for the TSAR trading system. It combines session awareness, fundamental bias, multi-timeframe trend analysis, support/resistance mapping, and a structured entry pipeline to identify high-probability trading setups.
+TSAR is a multi-layer institutional trading strategy for the TSAR trading system. It combines session awareness, fundamental bias, multi-timeframe trend analysis, support/resistance mapping, and a structured entry pipeline to identify high-probability trading setups.
 
 ## Architecture
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│                    VMPMStrategy                              │
+│                    TSARStrategy                              │
 │  (extends BaseStrategy — registered in StrategyRegistry)     │
 ├─────────────────────────────────────────────────────────────┤
 │                                                              │
@@ -82,7 +82,7 @@ EXECUTE TRADE
 
 ## Components
 
-### VMPMSessionManager (`session_manager.py`)
+### TSARSessionManager (`session_manager.py`)
 Tracks the current trading session and its characteristics.
 
 - **Sessions**: Sydney (22:00-07:00), Tokyo (00:00-09:00), London (07:00-16:00), New York (12:00-21:00 UTC)
@@ -90,7 +90,7 @@ Tracks the current trading session and its characteristics.
 - **Score multiplier**: 1.5x during overlaps, 0.7x during low liquidity
 - **Favored pairs**: Each session has pairs that are most active
 
-### VMPMFundamentalAnalyzer (`fundamental_analyzer.py`)
+### TSARFundamentalAnalyzer (`fundamental_analyzer.py`)
 Economic calendar integration and directional bias scoring.
 
 - Integrates with TSAR's `MarketCalendar` tool for event data
@@ -98,7 +98,7 @@ Economic calendar integration and directional bias scoring.
 - Produces directional bias from consensus expectations
 - Calculates event risk score (0-1) based on proximity and severity
 
-### VMPMTrendDetector (`trend_detector.py`)
+### TSARTrendDetector (`trend_detector.py`)
 Multi-timeframe trend analysis using 50/200 MA and swing structure.
 
 - **MAs**: 50 SMA (fast) and 200 SMA (slow) on D1, H4, H1
@@ -106,7 +106,7 @@ Multi-timeframe trend analysis using 50/200 MA and swing structure.
 - **Structure**: HH/HL (bullish), LH/LL (bearish), mixed (neutral)
 - **Confluence**: Weighted score across timeframes (D1=0.5, H4=0.3, H1=0.2)
 
-### VMPMLevelMapper (`level_mapper.py`)
+### TSARLevelMapper (`level_mapper.py`)
 S/R level mapping from institutional-grade sources.
 
 - **Asian session**: Daily high/low from Asian trading hours
@@ -115,7 +115,7 @@ S/R level mapping from institutional-grade sources.
 - **Swing structure**: HH/HL/LH/LL levels from TrendDetector
 - **Strength weighting**: Order blocks (1.0) > Asian (0.9) > Daily (0.8) > Weekly (0.7) > Monthly (0.6) > Yearly (0.5)
 
-### VMPMEntryPipeline (`entry_pipeline.py`)
+### TSAREntryPipeline (`entry_pipeline.py`)
 The full entry logic sequence with scoring.
 
 | Stage | Weight | Description |
@@ -127,7 +127,7 @@ The full entry logic sequence with scoring.
 | RSI Filter | 0.15 | RSI supports direction (not overextended) |
 | Candlestick | 0.15 | Engulfing, pin bar, or star pattern |
 
-### VMPMStrategy (`strategy.py`)
+### TSARStrategy (`strategy.py`)
 Main strategy class extending TSAR's `BaseStrategy`.
 
 - Implements `check_entry()`, `check_exit()`, `get_risk_params()`
@@ -155,7 +155,7 @@ Main strategy class extending TSAR's `BaseStrategy`.
 
 ### Mutable Parameters (Genome-Evolvable)
 
-All parameters in `config/strategies/vmpm.yaml` under `mutable_parameters` can be evolved by the `StrategyGeneticist`:
+All parameters in `config/strategies/tsar.yaml` under `mutable_parameters` can be evolved by the `StrategyGeneticist`:
 
 - `ma_fast_period` (20-100, default 50)
 - `ma_slow_period` (100-300, default 200)
@@ -174,20 +174,20 @@ All parameters in `config/strategies/vmpm.yaml` under `mutable_parameters` can b
 
 ```python
 from src.strategy.registry import StrategyRegistry
-from src.strategy.vmpm.strategy import VMPMStrategy
+from src.strategy.tsar.strategy import TSARStrategy
 from src.strategy.genome import StrategyGenome
 
 # Load genome from YAML
-genome = StrategyGenome.from_yaml("config/strategies/vmpm.yaml")
+genome = StrategyGenome.from_yaml("config/strategies/tsar.yaml")
 
 # Register
 registry = StrategyRegistry()
-registry.register(VMPMStrategy(genome=genome))
+registry.register(TSARStrategy(genome=genome))
 ```
 
 ### 2. SignalScout Integration
 
-SignalScout calls `registry.generate_signals(data)` which invokes `VMPMStrategy.check_entry(data)` for each symbol.
+SignalScout calls `registry.generate_signals(data)` which invokes `TSARStrategy.check_entry(data)` for each symbol.
 
 The data dict must include:
 - `symbol`, `close`, `atr`, `rsi`, `volume_ratio`
@@ -203,7 +203,7 @@ signal = await strategy.analyze_async(symbol, gateway, pricing_engine)
 
 ### 3. RiskGuardian Validation
 
-VMPM signals pass through the standard RiskGuardian pipeline:
+TSAR signals pass through the standard RiskGuardian pipeline:
 
 1. Kill switch check
 2. Position size validation (max 10% of equity)
@@ -214,20 +214,20 @@ VMPM signals pass through the standard RiskGuardian pipeline:
 7. Symbol cooldown (30 min)
 8. Signal score threshold (≥ 0.70)
 
-VMPM's `get_risk_params()` returns all parameters the RiskGuardian needs.
+TSAR's `get_risk_params()` returns all parameters the RiskGuardian needs.
 
 ### 4. Flywheel Integration
 
-The `FlywheelOrchestrator` improves VMPM through the evolution loop:
+The `FlywheelOrchestrator` improves TSAR through the evolution loop:
 
-1. **TRADE**: VMPM generates signals → RiskGuardian approves → ExecutionSniper executes
+1. **TRADE**: TSAR generates signals → RiskGuardian approves → ExecutionSniper executes
 2. **OBSERVE**: Trade outcomes are tracked (win/loss, P&L, hold time)
 3. **REFLECT**: `ShadowExtractor` identifies patterns in winning vs losing trades
-4. **EXTRACT**: Rules are extracted (e.g., "VMPM performs better during London/NY overlap")
-5. **ADAPT**: `StrategyGeneticist` mutates the VMPM genome parameters
+4. **EXTRACT**: Rules are extracted (e.g., "TSAR performs better during London/NY overlap")
+5. **ADAPT**: `StrategyGeneticist` mutates the TSAR genome parameters
 6. **BETTER TRADE**: Updated genome is applied via `registry.apply_genome_weights()`
 
-Key flywheel targets for VMPM:
+Key flywheel targets for TSAR:
 - `min_signal_score` threshold (too high = missed trades, too low = bad trades)
 - `sr_proximity_pct` (tighter = fewer but better entries)
 - `session_overlap_mult` (boost/reduce overlap bias)
@@ -249,15 +249,15 @@ Key flywheel targets for VMPM:
 ## File Structure
 
 ```
-src/strategy/vmpm/
+src/strategy/tsar/
 ├── __init__.py              # Module exports
 ├── session_manager.py       # Session awareness & liquidity
 ├── fundamental_analyzer.py  # Economic calendar & bias
 ├── trend_detector.py        # Multi-TF trend with HH/HL/LH/LL
 ├── level_mapper.py          # S/R mapping (Asian, OBs, etc.)
 ├── entry_pipeline.py        # Full entry pipeline logic
-└── strategy.py              # Main VMPMStrategy class
+└── strategy.py              # Main TSARStrategy class
 
 config/strategies/
-└── vmpm.yaml                # Strategy genome config
+└── tsar.yaml                # Strategy genome config
 ```

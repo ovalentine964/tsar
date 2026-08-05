@@ -1,7 +1,7 @@
 """
-Tests for VMPM (Valentine Money Printing Machine) strategy components.
+Tests for TSAR (Valentine Money Printing Machine) strategy components.
 
-Run with: pytest tests/strategy/test_vmpm.py -v
+Run with: pytest tests/strategy/test_tsar_strategy.py -v
 """
 
 from __future__ import annotations
@@ -11,25 +11,25 @@ from datetime import UTC, datetime, time as dt_time, timedelta
 
 import pytest
 
-from src.strategy.vmpm.session_manager import (
+from src.strategy.tsar_strategy.session_manager import (
     SessionManager,
     SessionInfo,
     Session,
     LiquidityLevel,
 )
-from src.strategy.vmpm.fundamental_analyzer import (
+from src.strategy.tsar_strategy.fundamental_analyzer import (
     FundamentalAnalyzer,
     FundamentalBias,
     BiasDirection,
     UpcomingEvent,
 )
-from src.strategy.vmpm.trend_detector import (
+from src.strategy.tsar_strategy.trend_detector import (
     TrendDetector,
     TrendState,
     TrendDirection,
     SwingType,
 )
-from src.strategy.vmpm.level_mapper import (
+from src.strategy.tsar_strategy.level_mapper import (
     LevelMapper,
     SRLevel,
     LevelType,
@@ -37,13 +37,13 @@ from src.strategy.vmpm.level_mapper import (
     MappedLevels,
     OrderBlock,
 )
-from src.strategy.vmpm.entry_pipeline import (
+from src.strategy.tsar_strategy.entry_pipeline import (
     EntryPipeline,
     PipelineResult,
     PipelineStage,
     CandlePattern,
 )
-from src.strategy.vmpm.strategy import VMPMStrategy
+from src.strategy.tsar_strategy.strategy import TSARStrategy
 from src.strategy.genome import StrategyGenome
 
 
@@ -87,7 +87,7 @@ def sample_ohlcv() -> list[dict[str, float]]:
 def genome() -> StrategyGenome:
     """Create a test genome."""
     return StrategyGenome(
-        name="vmpm",
+        name="tsar",
         params={
             "ma_fast_period": 50,
             "ma_slow_period": 200,
@@ -277,7 +277,7 @@ class TestEntryPipeline:
         )
 
     def _make_trend(self, direction=TrendDirection.BULLISH, aligned=True):
-        from src.strategy.vmpm.trend_detector import TimeframeTrend
+        from src.strategy.tsar_strategy.trend_detector import TimeframeTrend
         tf = TimeframeTrend(
             timeframe="D1", direction=direction, ma_fast=1.09, ma_slow=1.08,
             ma_spread_pct=0.9, ma_slope=0.1, price_vs_ma="above_fast",
@@ -397,20 +397,20 @@ class TestEntryPipeline:
 
 
 # ═══════════════════════════════════════════════════════════════
-# VMPMStrategy Tests
+# TSARStrategy Tests
 # ═══════════════════════════════════════════════════════════════
 
 
-class TestVMPMStrategy:
+class TestTSARStrategy:
     def test_strategy_name(self, genome):
         """Strategy should have correct name."""
-        strat = VMPMStrategy(genome=genome)
-        assert strat.NAME == "vmpm"
+        strat = TSARStrategy(genome=genome)
+        assert strat.NAME == "tsar"
         assert strat.VERSION == "1.0.0"
 
     def test_risk_params(self, genome):
         """Risk params should be properly configured."""
-        strat = VMPMStrategy(genome=genome)
+        strat = TSARStrategy(genome=genome)
         params = strat.get_risk_params()
         assert params["risk_per_trade_pct"] == 0.015
         assert params["min_score"] == 0.70
@@ -419,13 +419,13 @@ class TestVMPMStrategy:
 
     def test_check_entry_insufficient_data(self, genome):
         """Should return None with insufficient data."""
-        strat = VMPMStrategy(genome=genome)
+        strat = TSARStrategy(genome=genome)
         result = strat.check_entry({"close": 100, "atr": 1.0})
         assert result is None
 
     def test_check_entry_with_full_data(self, genome):
         """Should process full data without errors."""
-        strat = VMPMStrategy(genome=genome)
+        strat = TSARStrategy(genome=genome)
         random.seed(42)
         closes = [100 + i * 0.5 + random.uniform(-0.3, 0.3) for i in range(250)]
         ohlcv = [
@@ -452,7 +452,7 @@ class TestVMPMStrategy:
 
     def test_check_exit_long_stop_loss(self, genome):
         """Should trigger stop loss for long positions."""
-        strat = VMPMStrategy(genome=genome)
+        strat = TSARStrategy(genome=genome)
         exit_signal = strat.check_exit(
             position={"side": "buy", "entry_price": 100.0, "stop_loss": 99.0},
             data={"close": 98.5, "atr": 0.5, "d1_closes": [100.0] * 250},
@@ -462,7 +462,7 @@ class TestVMPMStrategy:
 
     def test_check_exit_short_stop_loss(self, genome):
         """Should trigger stop loss for short positions."""
-        strat = VMPMStrategy(genome=genome)
+        strat = TSARStrategy(genome=genome)
         exit_signal = strat.check_exit(
             position={"side": "sell", "entry_price": 100.0, "stop_loss": 101.0},
             data={"close": 101.5, "atr": 0.5, "d1_closes": [100.0] * 250},
@@ -475,11 +475,11 @@ class TestVMPMStrategy:
         import os
         yaml_path = os.path.join(
             os.path.dirname(__file__),
-            "..", "..", "config", "strategies", "vmpm.yaml",
+            "..", "..", "config", "strategies", "tsar.yaml",
         )
         if os.path.exists(yaml_path):
             genome = StrategyGenome.from_yaml(yaml_path)
-            assert genome.name == "vmpm"
+            assert genome.name == "tsar"
             assert "ma_fast_period" in genome.params
             assert "min_signal_score" in genome.params
 
@@ -522,10 +522,10 @@ class TestFundamentalAnalyzer:
 # ═══════════════════════════════════════════════════════════════
 
 
-class TestVMPMIntegration:
+class TestTSARIntegration:
     def test_full_pipeline_with_genome(self, genome):
-        """Test the full VMPM pipeline from genome to signal."""
-        strat = VMPMStrategy(genome=genome)
+        """Test the full TSAR pipeline from genome to signal."""
+        strat = TSARStrategy(genome=genome)
 
         random.seed(42)
         closes = [100 + i * 0.3 + random.uniform(-0.1, 0.1) for i in range(250)]

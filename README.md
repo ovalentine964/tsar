@@ -260,7 +260,7 @@ python3 -c "from src.strategy.tsar_strategy.strategy import TSARStrategy; print(
 python3 -m src.strategy.backtest_engine --strategy tsar --config config/strategies/tsar.yaml
 
 # 3. Run 27 unit tests
-pytest tests/strategy/test_vmpm.py -v
+pytest tests/strategy/test_tsar.py -v
 
 # 4. View strategy genome
 cat config/strategies/tsar.yaml

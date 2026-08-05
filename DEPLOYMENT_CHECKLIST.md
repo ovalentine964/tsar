@@ -1,7 +1,7 @@
-# TSAR VMPM Deployment Checklist — $10 Binance Paper Trading
+# TSAR TSAR Deployment Checklist — $10 Binance Paper Trading
 
 **Target:** Render.com (starter plan)  
-**Strategy:** VMPM (Valentine Money Printing Machine)  
+**Strategy:** TSAR (Valentine Money Printing Machine)  
 **Mode:** Paper trading on Binance testnet  
 **Budget:** $10 capital, ~$7/mo hosting  
 
@@ -32,9 +32,9 @@
   # NOT: CMD ["python", "-m", "uvicorn", ...]
   ```
 
-- [ ] **Verify VMPM strategy is registered**
+- [ ] **Verify TSAR strategy is registered**
   ```bash
-  grep -r "VMPMStrategy" src/strategy/__init__.py
+  grep -r "TSARStrategy" src/strategy/__init__.py
   # Should show import statement
   ```
 
@@ -83,9 +83,9 @@
   - Check logs for: `🏰 TSAR v0.2.0 — PAPER MODE`
   - Check logs for: `📝 Paper execution engine: balance=$10.00`
 
-- [ ] **VMPM strategy is active**
-  - Check logs for: `VMPMStrategy` initialization
-  - Check logs for: `VMPM_STATUS=ACTIVE`
+- [ ] **TSAR strategy is active**
+  - Check logs for: `TSARStrategy` initialization
+  - Check logs for: `TSAR_STATUS=ACTIVE`
 
 - [ ] **All 13 agents started**
   - Check logs for: `✅ Created 13 agents`
@@ -141,7 +141,7 @@
 ### No trades executing
 1. Verify `TSAR_TRADING_MODE=paper` (not `live`)
 2. Check `EXCHANGE_SANDBOX=true` for testnet
-3. VMPM requires 7-layer confirmation — trades are infrequent by design
+3. TSAR requires 7-layer confirmation — trades are infrequent by design
 4. Check if kill switch is active: look for `🔴 KILL SWITCH`
 
 ### High memory usage
@@ -165,7 +165,7 @@
 | `render.yaml` | Render deployment blueprint |
 | `.env.render` | Env var template for Render |
 | `Dockerfile.trading` | Trading system Docker image |
-| `config/strategies/vmpm.yaml` | VMPM strategy genome |
+| `config/strategies/tsar.yaml` | TSAR strategy genome |
 | `config/tsar.yaml` | Main TSAR configuration |
-| `src/strategy/vmpm/` | VMPM strategy implementation |
-| `src/agents/vmpm_strategy_router.py` | Regime-aware VMPM router |
+| `src/strategy/tsar/` | TSAR strategy implementation |
+| `src/agents/tsar_strategy_router.py` | Regime-aware TSAR router |

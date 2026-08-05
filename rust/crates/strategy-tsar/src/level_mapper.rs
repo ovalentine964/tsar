@@ -1,6 +1,6 @@
 //! # Level Mapper — Support/Resistance Level Computation
 //!
-//! Computes key price levels for the VMPM strategy:
+//! Computes key price levels for the TSAR strategy:
 //!
 //! - **Asian Range**: High/low of the Asian trading session
 //! - **Order Blocks**: Institutional supply/demand zones identified by

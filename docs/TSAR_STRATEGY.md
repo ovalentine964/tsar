@@ -624,13 +624,13 @@ The TSAR Strategy has **27 unit tests** covering all pipeline components:
 
 ```bash
 # Run all TSAR Strategy tests
-pytest tests/strategy/test_vmpm.py -v
+pytest tests/strategy/test_tsar.py -v
 
 # Run with coverage
-pytest tests/strategy/test_vmpm.py -v --cov=src/strategy/tsar_strategy --cov=src/strategy/vmpm
+pytest tests/strategy/test_tsar.py -v --cov=src/strategy/tsar_strategy --cov=src/strategy/tsar
 
 # Run specific test
-pytest tests/strategy/test_vmpm.py::TestTSARStrategy::test_full_pipeline_with_genome -v
+pytest tests/strategy/test_tsar.py::TestTSARStrategy::test_full_pipeline_with_genome -v
 ```
 
 ---
@@ -659,7 +659,7 @@ The canonical genome file is at `config/strategies/tsar.yaml`. Key configuration
 
 - [Architecture Overview](ARCHITECTURE.md) — System architecture
 - [Genome Evolution](../src/strategy/genome.py) — StrategyGenome implementation
-- [Strategy Router](../src/agents/vmpm_strategy_router.py) — Regime-aware routing
+- [Strategy Router](../src/agents/tsar_strategy_router.py) — Regime-aware routing
 - [Risk Management](../config/risk.yaml) — Canonical risk parameters
 - [Backtest Engine](../src/strategy/backtest_engine.py) — Walk-forward implementation
 

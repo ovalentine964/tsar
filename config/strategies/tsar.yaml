@@ -7,7 +7,7 @@
 #
 # Pipeline: News → Trend → S/R → Retest → RSI → Candlestick → Execute
 #
-# This is the canonical genome for the TSAR Strategy (formerly VMPM).
+# This is the canonical genome for the TSAR Strategy .
 # Parameters below are evolved by the StrategyGeneticist agent
 # through mutation and fitness evaluation.
 #

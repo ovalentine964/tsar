@@ -1,5 +1,5 @@
 """
-Smoke tests for VMPM (Valentine Money Printing Machine) strategy.
+Smoke tests for TSAR (Valentine Money Printing Machine) strategy.
 
 Tests each component individually and the full pipeline integration.
 """
@@ -11,49 +11,49 @@ from datetime import UTC, datetime
 
 import pytest
 
-from src.strategy.vmpm.session_manager import (
+from src.strategy.tsar_strategy.session_manager import (
     SessionManager,
     SessionInfo,
     Session,
     LiquidityLevel,
 )
-from src.strategy.vmpm.fundamental_analyzer import (
+from src.strategy.tsar_strategy.fundamental_analyzer import (
     FundamentalAnalyzer,
     FundamentalBias,
     BiasDirection,
     UpcomingEvent,
 )
-from src.strategy.vmpm.trend_detector import (
+from src.strategy.tsar_strategy.trend_detector import (
     TrendDetector,
     TrendState,
     TrendDirection,
     SwingType,
 )
-from src.strategy.vmpm.level_mapper import (
+from src.strategy.tsar_strategy.level_mapper import (
     LevelMapper,
     SRLevel,
     LevelType,
     LevelSide,
     MappedLevels,
 )
-from src.strategy.vmpm.rsi_filter import (
+from src.strategy.tsar_strategy.rsi_filter import (
     RSIFilter,
     RSIResult,
     RSISignal,
     RSIState,
 )
-from src.strategy.vmpm.candlestick_confirmer import (
+from src.strategy.tsar_strategy.candlestick_confirmer import (
     CandlestickConfirmer,
     CandleResult,
     CandlePattern,
 )
-from src.strategy.vmpm.entry_pipeline import (
+from src.strategy.tsar_strategy.entry_pipeline import (
     EntryPipeline,
     PipelineResult,
     PipelineStage,
     StageResult,
 )
-from src.strategy.vmpm.strategy import VMPMStrategy
+from src.strategy.tsar_strategy.strategy import TSARStrategy
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -521,21 +521,21 @@ class TestEntryPipeline:
 
 
 # ═══════════════════════════════════════════════════════════════
-# 7. VMPMStrategy Smoke Tests
+# 7. TSARStrategy Smoke Tests
 # ═══════════════════════════════════════════════════════════════
 
 
-class TestVMPMStrategy:
+class TestTSARStrategy:
     def test_instantiation(self):
-        """VMPMStrategy should instantiate without errors."""
-        s = VMPMStrategy()
-        assert s.NAME == "vmpm"
+        """TSARStrategy should instantiate without errors."""
+        s = TSARStrategy()
+        assert s.NAME == "tsar"
         assert s.VERSION == "1.0.0"
         assert repr(s)
 
     def test_risk_params(self):
         """Risk params should be a dict with expected keys."""
-        s = VMPMStrategy()
+        s = TSARStrategy()
         params = s.get_risk_params()
         assert isinstance(params, dict)
         assert "risk_per_trade_pct" in params
@@ -543,13 +543,13 @@ class TestVMPMStrategy:
 
     def test_check_entry_insufficient_data(self):
         """Should return None with insufficient data."""
-        s = VMPMStrategy()
+        s = TSARStrategy()
         result = s.check_entry({"symbol": "EUR/USD", "close": 100, "atr": 1.0})
         assert result is None
 
     def test_check_entry_with_full_data(self):
         """Should process full data without errors (signal or None)."""
-        s = VMPMStrategy()
+        s = TSARStrategy()
         closes = _make_uptrend_data(250)
         ohlcv = _make_ohlcv_from_closes(closes)
 
@@ -573,7 +573,7 @@ class TestVMPMStrategy:
 
     def test_check_entry_signal_structure(self):
         """If signal is returned, it should have the expected structure."""
-        s = VMPMStrategy()
+        s = TSARStrategy()
         # Create data with a clear bullish engulfing at the end
         base_closes = _make_uptrend_data(248)
         ohlcv = _make_ohlcv_from_closes(base_closes)
@@ -616,7 +616,7 @@ class TestVMPMStrategy:
 
     def test_check_exit_buy_stop_loss(self):
         """Should trigger stop loss for long positions."""
-        s = VMPMStrategy()
+        s = TSARStrategy()
         exit_signal = s.check_exit(
             position={"side": "buy", "entry_price": 100.0, "stop_loss": 99.0, "take_profit": 103.0},
             data={"close": 98.5, "atr": 0.5, "closes": [100.0] * 15},
@@ -626,7 +626,7 @@ class TestVMPMStrategy:
 
     def test_check_exit_sell_stop_loss(self):
         """Should trigger stop loss for short positions."""
-        s = VMPMStrategy()
+        s = TSARStrategy()
         exit_signal = s.check_exit(
             position={"side": "sell", "entry_price": 100.0, "stop_loss": 101.0, "take_profit": 97.0},
             data={"close": 101.5, "atr": 0.5, "closes": [100.0] * 15},
@@ -636,7 +636,7 @@ class TestVMPMStrategy:
 
     def test_check_exit_take_profit(self):
         """Should trigger take profit."""
-        s = VMPMStrategy()
+        s = TSARStrategy()
         exit_signal = s.check_exit(
             position={"side": "buy", "entry_price": 100.0, "stop_loss": 99.0, "take_profit": 103.0},
             data={"close": 103.5, "atr": 0.5, "closes": [100.0] * 15},
@@ -646,7 +646,7 @@ class TestVMPMStrategy:
 
     def test_check_exit_no_exit(self):
         """Should return None when no exit condition is met."""
-        s = VMPMStrategy()
+        s = TSARStrategy()
         exit_signal = s.check_exit(
             position={"side": "buy", "entry_price": 100.0, "stop_loss": 98.0, "take_profit": 105.0},
             data={"close": 101.0, "atr": 0.5, "closes": [100.0] * 15},
@@ -655,7 +655,7 @@ class TestVMPMStrategy:
 
     def test_daily_counter_tracking(self):
         """Strategy should track daily trade count."""
-        s = VMPMStrategy()
+        s = TSARStrategy()
         assert s._daily_trade_count == 0
 
 
@@ -722,10 +722,10 @@ class TestFundamentalAnalyzer:
 # ═══════════════════════════════════════════════════════════════
 
 
-class TestVMPMIntegration:
+class TestTSARIntegration:
     def test_full_pipeline_uptrend(self):
-        """Full VMPM pipeline with uptrend data should not crash."""
-        s = VMPMStrategy()
+        """Full TSAR pipeline with uptrend data should not crash."""
+        s = TSARStrategy()
         closes = _make_uptrend_data(250)
         ohlcv = _make_ohlcv_from_closes(closes)
 
@@ -749,8 +749,8 @@ class TestVMPMIntegration:
         assert result is None or isinstance(result, dict)
 
     def test_full_pipeline_downtrend(self):
-        """Full VMPM pipeline with downtrend data should not crash."""
-        s = VMPMStrategy()
+        """Full TSAR pipeline with downtrend data should not crash."""
+        s = TSARStrategy()
         closes = _make_downtrend_data(250)
         ohlcv = _make_ohlcv_from_closes(closes)
 

@@ -1,6 +1,6 @@
 //! # Candlestick Pattern Detection
 //!
-//! High-performance candlestick pattern recognition for the VMPM strategy.
+//! High-performance candlestick pattern recognition for the TSAR strategy.
 //!
 //! Replaces the Python `CandlestickPatterns` class with pure Rust implementations
 //! that run 10-100x faster on large datasets (batch processing of thousands of candles).

@@ -43,13 +43,13 @@ from src.strategy.monte_carlo import (
     MonteCarloSimulator,
     PercentileDistribution,
 )
-from src.strategy.vmpm.entry_pipeline import EntryPipeline, PipelineResult
-from src.strategy.vmpm.fundamental_analyzer import FundamentalAnalyzer, FundamentalBias
-from src.strategy.vmpm.level_mapper import LevelMapper, MappedLevels
-from src.strategy.vmpm.level_mapper import SRLevel as VMPMSRLevel
-from src.strategy.vmpm.session_manager import SessionInfo, SessionManager
-from src.strategy.vmpm.strategy import VMPMStrategy
-from src.strategy.vmpm.trend_detector import TrendDetector, TrendState
+from src.strategy.tsar_strategy.entry_pipeline import EntryPipeline, PipelineResult
+from src.strategy.tsar_strategy.fundamental_analyzer import FundamentalAnalyzer, FundamentalBias
+from src.strategy.tsar_strategy.level_mapper import LevelMapper, MappedLevels
+from src.strategy.tsar_strategy.level_mapper import SRLevel as TSARSRLevel
+from src.strategy.tsar_strategy.session_manager import SessionInfo, SessionManager
+from src.strategy.tsar_strategy.strategy import TSARStrategy
+from src.strategy.tsar_strategy.trend_detector import TrendDetector, TrendState
 from src.strategy.walk_forward import (
     WalkForwardConfig,
     WalkForwardResult,
@@ -84,7 +84,7 @@ __all__: list[str] = [
     "OptimizationObjective",
     "OptimizationResult",
     "ParameterRange",
-    "VMPMStrategy",
+    "TSARStrategy",
     "SessionManager",
     "SessionInfo",
     "FundamentalAnalyzer",
@@ -92,7 +92,7 @@ __all__: list[str] = [
     "TrendDetector",
     "TrendState",
     "LevelMapper",
-    "VMPMSRLevel",
+    "TSARSRLevel",
     "MappedLevels",
     "EntryPipeline",
     "PipelineResult",

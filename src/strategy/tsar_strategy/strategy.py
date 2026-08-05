@@ -469,14 +469,3 @@ class TSARStrategy(BaseStrategy):
             logger.exception("TSAR analyze_async failed for %s", symbol)
             return None
 
-
-# Backward compatibility alias
-class VMPMStrategy(TSARStrategy):
-    """Backward compatibility alias for TSARStrategy.
-
-    .. deprecated:: 2.0.0
-        Use :class:`TSARStrategy` instead. This alias exists so that
-        legacy code importing ``VMPMStrategy`` continues to work.
-    """
-
-    pass
