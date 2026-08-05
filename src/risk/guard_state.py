@@ -40,14 +40,10 @@ from typing import Any
 
 logger = logging.getLogger(__name__)
 
-DEFAULT_DB_PATH = os.environ.get(
-    "TSAR_GUARD_STATE_DB", "./data/guard_state.db"
-)
+DEFAULT_DB_PATH = os.environ.get("TSAR_GUARD_STATE_DB", "./data/guard_state.db")
 
 # JSON file fallback — survives even if SQLite DB is corrupted
-DEFAULT_JSON_PATH = os.environ.get(
-    "TSAR_GUARD_STATE_JSON", "./data/guard_state.json"
-)
+DEFAULT_JSON_PATH = os.environ.get("TSAR_GUARD_STATE_JSON", "./data/guard_state.json")
 
 
 class GuardStatePersistence:
@@ -229,8 +225,11 @@ class GuardStatePersistence:
         Persists the reset to all storage layers.
         """
         keys = [
-            "consecutive_losses", "consecutive_wins",
-            "cooldown_until", "last_loss_time", "trade_history",
+            "consecutive_losses",
+            "consecutive_wins",
+            "cooldown_until",
+            "last_loss_time",
+            "trade_history",
         ]
         for key in keys:
             self._delete(key)
@@ -293,9 +292,7 @@ class GuardStatePersistence:
             return
 
         try:
-            cursor = self._conn.execute(
-                "SELECT key, value FROM guard_state"
-            )
+            cursor = self._conn.execute("SELECT key, value FROM guard_state")
             for key, value_str in cursor:
                 try:
                     self._memory_cache[key] = json.loads(value_str)
@@ -393,10 +390,8 @@ class GuardStatePersistence:
 
         # 3. Redis
         if self._redis:
-            try:
+            with contextlib.suppress(Exception):
                 self._redis.delete(f"{self._redis_prefix}{key}")
-            except Exception:
-                pass
 
     # ------------------------------------------------------------------
     # JSON file persistence (fallback — survives SQLite corruption)
@@ -445,9 +440,7 @@ class GuardStatePersistence:
             state = payload.get("state", {})
             if isinstance(state, dict):
                 self._memory_cache.update(state)
-                logger.info(
-                    f"GuardState: loaded {len(state)} keys from JSON fallback"
-                )
+                logger.info(f"GuardState: loaded {len(state)} keys from JSON fallback")
         except Exception as e:
             logger.error(f"GuardState: failed to load JSON fallback: {e}")
 

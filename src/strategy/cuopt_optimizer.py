@@ -21,15 +21,19 @@ GPU: NVIDIA GPU with CUDA 12.x+
 from __future__ import annotations
 
 import asyncio
-import logging
+from collections.abc import Callable
 from dataclasses import dataclass, field
-from typing import Any, Callable
+from typing import TYPE_CHECKING, Any
 
 from src.utils.logging import get_logger
+
+if TYPE_CHECKING:
+    import numpy as np
 
 logger = get_logger(__name__)
 
 # ── cuOpt availability check ────────────────────────────────
+
 
 def _check_cuopt_available() -> bool:
     """Check if cuOpt is available with a working GPU.
@@ -59,6 +63,7 @@ CUOPT_AVAILABLE = _check_cuopt_available()
 if CUOPT_AVAILABLE:
     import cupy as cp
     from cuopt import Optimizer as CuOptOptimizer
+
     logger.info("cuopt_available", msg="GPU-accelerated optimization enabled")
 else:
     cp = None  # type: ignore[assignment]
@@ -299,8 +304,7 @@ class CuOptStrategyOptimizer:
             def gpu_fitness(params_gpu: Any) -> Any:
                 params_cpu = cp.asnumpy(params_gpu)
                 param_dict = {
-                    self._parameters[i].name: float(params_cpu[i])
-                    for i in range(num_params)
+                    self._parameters[i].name: float(params_cpu[i]) for i in range(num_params)
                 }
                 # Run fitness evaluation (backtest)
                 objectives = fitness_fn(param_dict)
@@ -333,8 +337,7 @@ class CuOptStrategyOptimizer:
             # Extract best parameters
             best_params_cpu = cp.asnumpy(result.best_solution)
             best_params = {
-                self._parameters[i].name: float(best_params_cpu[i])
-                for i in range(num_params)
+                self._parameters[i].name: float(best_params_cpu[i]) for i in range(num_params)
             }
 
             # Round integer parameters
@@ -379,7 +382,6 @@ class CuOptStrategyOptimizer:
         max_iterations: int,
     ) -> OptimizationResult:
         """Scipy differential evolution fallback."""
-        import numpy as np
         from scipy.optimize import differential_evolution
 
         def _run() -> OptimizationResult:
@@ -418,8 +420,7 @@ class CuOptStrategyOptimizer:
             )
 
             best_params = {
-                self._parameters[i].name: float(result.x[i])
-                for i in range(len(self._parameters))
+                self._parameters[i].name: float(result.x[i]) for i in range(len(self._parameters))
             }
 
             # Round integer parameters
@@ -528,14 +529,9 @@ class CuOptStrategyOptimizer:
             scores: list[float] = []
 
             for _ in range(pop_size):
-                params = [
-                    random.uniform(lo, hi) for lo, hi in bounds
-                ]
+                params = [random.uniform(lo, hi) for lo, hi in bounds]
                 population.append(params)
-                param_dict = {
-                    self._parameters[i].name: params[i]
-                    for i in range(num_params)
-                }
+                param_dict = {self._parameters[i].name: params[i] for i in range(num_params)}
                 scores.append(_score(param_dict))
 
             best_idx = max(range(pop_size), key=lambda i: scores[i])
@@ -556,10 +552,7 @@ class CuOptStrategyOptimizer:
 
                 # Generate tunneling neighbor
                 candidate = _tunnel_move(current, T)
-                param_dict = {
-                    self._parameters[i].name: candidate[i]
-                    for i in range(num_params)
-                }
+                param_dict = {self._parameters[i].name: candidate[i] for i in range(num_params)}
                 candidate_score = _score(param_dict)
 
                 # Quantum acceptance criterion:
@@ -597,8 +590,7 @@ class CuOptStrategyOptimizer:
 
             # Final evaluation
             final_params = {
-                self._parameters[i].name: float(best_params[i])
-                for i in range(num_params)
+                self._parameters[i].name: float(best_params[i]) for i in range(num_params)
             }
             for p in self._parameters:
                 if p.param_type == "int":
@@ -611,7 +603,7 @@ class CuOptStrategyOptimizer:
                 best_score=best_score,
                 objectives=final_objectives,
                 iterations=iterations,
-                converged=T < T_min * 10,
+                converged=T_min * 10 > T,
                 method="simulated_quantum_annealing",
                 metadata={
                     "gpu_accelerated": False,

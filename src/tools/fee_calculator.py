@@ -32,30 +32,30 @@ logger = logging.getLogger(__name__)
 
 # Spot trading fee tiers (maker, taker)
 SPOT_FEE_TIERS: dict[str, tuple[float, float]] = {
-    "vip0":   (0.001000, 0.001000),  # 0.10% / 0.10%
-    "vip1":   (0.000900, 0.001000),  # 0.09% / 0.10%
-    "vip2":   (0.000800, 0.001000),  # 0.08% / 0.10%
-    "vip3":   (0.000420, 0.000600),  # 0.042% / 0.06%
-    "vip4":   (0.000420, 0.000540),  # 0.042% / 0.054%
-    "vip5":   (0.000360, 0.000480),  # 0.036% / 0.048%
-    "vip6":   (0.000300, 0.000400),  # 0.030% / 0.040%
-    "vip7":   (0.000240, 0.000320),  # 0.024% / 0.032%
-    "vip8":   (0.000180, 0.000240),  # 0.018% / 0.024%
-    "vip9":   (0.000120, 0.000180),  # 0.012% / 0.018%
+    "vip0": (0.001000, 0.001000),  # 0.10% / 0.10%
+    "vip1": (0.000900, 0.001000),  # 0.09% / 0.10%
+    "vip2": (0.000800, 0.001000),  # 0.08% / 0.10%
+    "vip3": (0.000420, 0.000600),  # 0.042% / 0.06%
+    "vip4": (0.000420, 0.000540),  # 0.042% / 0.054%
+    "vip5": (0.000360, 0.000480),  # 0.036% / 0.048%
+    "vip6": (0.000300, 0.000400),  # 0.030% / 0.040%
+    "vip7": (0.000240, 0.000320),  # 0.024% / 0.032%
+    "vip8": (0.000180, 0.000240),  # 0.018% / 0.024%
+    "vip9": (0.000120, 0.000180),  # 0.012% / 0.018%
 }
 
 # Futures trading fee tiers (maker, taker)
 FUTURES_FEE_TIERS: dict[str, tuple[float, float]] = {
-    "vip0":   (0.000200, 0.000500),  # 0.02% / 0.05%
-    "vip1":   (0.000160, 0.000400),  # 0.016% / 0.04%
-    "vip2":   (0.000140, 0.000350),  # 0.014% / 0.035%
-    "vip3":   (0.000100, 0.000300),  # 0.010% / 0.03%
-    "vip4":   (0.000080, 0.000280),  # 0.008% / 0.028%
-    "vip5":   (0.000060, 0.000250),  # 0.006% / 0.025%
-    "vip6":   (0.000040, 0.000220),  # 0.004% / 0.022%
-    "vip7":   (0.000020, 0.000200),  # 0.002% / 0.020%
-    "vip8":   (0.000000, 0.000180),  # 0.000% / 0.018%
-    "vip9":   (0.000000, 0.000150),  # 0.000% / 0.015%
+    "vip0": (0.000200, 0.000500),  # 0.02% / 0.05%
+    "vip1": (0.000160, 0.000400),  # 0.016% / 0.04%
+    "vip2": (0.000140, 0.000350),  # 0.014% / 0.035%
+    "vip3": (0.000100, 0.000300),  # 0.010% / 0.03%
+    "vip4": (0.000080, 0.000280),  # 0.008% / 0.028%
+    "vip5": (0.000060, 0.000250),  # 0.006% / 0.025%
+    "vip6": (0.000040, 0.000220),  # 0.004% / 0.022%
+    "vip7": (0.000020, 0.000200),  # 0.002% / 0.020%
+    "vip8": (0.000000, 0.000180),  # 0.000% / 0.018%
+    "vip9": (0.000000, 0.000150),  # 0.000% / 0.015%
 }
 
 # BNB discount
@@ -169,8 +169,7 @@ class FeeCalculator:
     """
 
     description = (
-        "Fee calculator: Binance fee tiers, BNB discount, "
-        "fee-aware Kelly sizing, net R:R analysis"
+        "Fee calculator: Binance fee tiers, BNB discount, fee-aware Kelly sizing, net R:R analysis"
     )
 
     def __init__(self, config: dict[str, Any] | None = None) -> None:
@@ -202,8 +201,11 @@ class FeeCalculator:
         """
         if notional <= 0:
             return FeeResult(
-                fee_amount=0.0, fee_rate=0.0, notional=0.0,
-                is_taker=is_taker, tier=tier or self._default_tier,
+                fee_amount=0.0,
+                fee_rate=0.0,
+                notional=0.0,
+                is_taker=is_taker,
+                tier=tier or self._default_tier,
             )
 
         t = (tier or self._default_tier).lower()
@@ -224,7 +226,7 @@ class FeeCalculator:
 
         # Apply BNB discount
         if bnb:
-            fee_amount *= (1.0 - BNB_DISCOUNT)
+            fee_amount *= 1.0 - BNB_DISCOUNT
 
         return FeeResult(
             fee_amount=round(fee_amount, 8),
@@ -300,8 +302,12 @@ class FeeCalculator:
         """
         if entry_price <= 0 or stop_loss <= 0 or take_profit <= 0:
             return NetRiskRewardResult(
-                gross_rr=0.0, net_rr=0.0, fee_cost=0.0, fee_drag=0.0,
-                meets_min_rr=False, min_rr_threshold=self._min_rr_after_fees,
+                gross_rr=0.0,
+                net_rr=0.0,
+                fee_cost=0.0,
+                fee_drag=0.0,
+                meets_min_rr=False,
+                min_rr_threshold=self._min_rr_after_fees,
             )
 
         risk_per_unit = abs(entry_price - stop_loss)
@@ -309,8 +315,12 @@ class FeeCalculator:
 
         if risk_per_unit == 0:
             return NetRiskRewardResult(
-                gross_rr=0.0, net_rr=0.0, fee_cost=0.0, fee_drag=0.0,
-                meets_min_rr=False, min_rr_threshold=self._min_rr_after_fees,
+                gross_rr=0.0,
+                net_rr=0.0,
+                fee_cost=0.0,
+                fee_drag=0.0,
+                meets_min_rr=False,
+                min_rr_threshold=self._min_rr_after_fees,
             )
 
         gross_rr = reward_per_unit / risk_per_unit
@@ -410,8 +420,10 @@ class FeeCalculator:
         """
         if price <= 0:
             return BreakEvenResult(
-                break_even_pct=0.0, break_even_price_long=0.0,
-                break_even_price_short=0.0, fee_cost=0.0,
+                break_even_pct=0.0,
+                break_even_price_long=0.0,
+                break_even_price_short=0.0,
+                fee_cost=0.0,
             )
 
         rt = self.calculate_round_trip_fee(price, tier, use_bnb=use_bnb)
@@ -477,6 +489,6 @@ class FeeCalculator:
         rate = taker_rate if is_taker else maker_rate
 
         if bnb:
-            rate *= (1.0 - BNB_DISCOUNT)
+            rate *= 1.0 - BNB_DISCOUNT
 
         return round(rate, 8)

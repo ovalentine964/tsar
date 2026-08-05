@@ -16,9 +16,8 @@ from __future__ import annotations
 import logging
 import time
 from collections import deque
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from enum import StrEnum
-from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -27,9 +26,9 @@ class FlashCrashState(StrEnum):
     """Current state of the flash crash detector."""
 
     NORMAL = "NORMAL"
-    WARNING = "WARNING"       # Price velocity elevated, approaching threshold
+    WARNING = "WARNING"  # Price velocity elevated, approaching threshold
     CRASH_DETECTED = "CRASH"  # Flash crash confirmed — kill switch
-    RECOVERING = "RECOVERING" # Price stabilizing after crash
+    RECOVERING = "RECOVERING"  # Price stabilizing after crash
 
 
 @dataclass(frozen=True)
@@ -37,7 +36,7 @@ class FlashCrashConfig:
     """Immutable configuration for flash crash detection."""
 
     # Core thresholds
-    price_drop_pct: float = 0.05         # 5% drop triggers crash
+    price_drop_pct: float = 0.05  # 5% drop triggers crash
     price_drop_window_seconds: int = 60  # ...within 60 seconds
     warning_threshold_pct: float = 0.03  # 3% drop triggers warning
 
@@ -46,8 +45,8 @@ class FlashCrashConfig:
     recovery_max_volatility_pct: float = 0.01  # <1%波动 during recovery window
 
     # Historical pattern matching
-    pattern_window_size: int = 10        # Track last N price points for pattern
-    velocity_smoothing_window: int = 5   # Rolling window for velocity smoothing
+    pattern_window_size: int = 10  # Track last N price points for pattern
+    velocity_smoothing_window: int = 5  # Rolling window for velocity smoothing
 
     # Cooldown after crash recovery
     post_crash_cooldown_seconds: int = 300  # 5 min cooldown after recovery
@@ -138,9 +137,7 @@ class FlashCrashDetector:
 
         # Initialize tracking for new symbols
         if symbol not in self._price_history:
-            self._price_history[symbol] = deque(
-                maxlen=self._config.pattern_window_size * 10
-            )
+            self._price_history[symbol] = deque(maxlen=self._config.pattern_window_size * 10)
             self._states[symbol] = FlashCrashState.NORMAL
             self._crash_events[symbol] = None
             self._recovery_start[symbol] = None
@@ -210,7 +207,7 @@ class FlashCrashDetector:
             return 0.0
 
         # Build current velocity profile
-        recent = list(history)[-self._config.velocity_smoothing_window:]
+        recent = list(history)[-self._config.velocity_smoothing_window :]
         current_profile = []
         for i in range(1, len(recent)):
             dt = recent[i].timestamp - recent[i - 1].timestamp
@@ -395,9 +392,7 @@ class FlashCrashDetector:
                 )
 
                 # Set cooldown
-                self._cooldown_until[symbol] = (
-                    now + self._config.post_crash_cooldown_seconds
-                )
+                self._cooldown_until[symbol] = now + self._config.post_crash_cooldown_seconds
                 self._recovery_start[symbol] = None
                 return FlashCrashState.NORMAL
 
@@ -476,9 +471,7 @@ class FlashCrashDetector:
             return 0.0
 
         window_start = now - self._config.recovery_stability_seconds
-        recent_prices = [
-            p.price for p in history if p.timestamp >= window_start
-        ]
+        recent_prices = [p.price for p in history if p.timestamp >= window_start]
 
         if len(recent_prices) < 2:
             return 0.0

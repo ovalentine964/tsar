@@ -142,7 +142,14 @@ class StrategyGenome:
             config["mutable_parameters"] = mutable_section
 
         # Preserve non-mutable sections
-        for key in ("entry_rules", "exit_rules", "sizing", "risk_constraints", "backtesting", "retirement_gates"):
+        for key in (
+            "entry_rules",
+            "exit_rules",
+            "sizing",
+            "risk_constraints",
+            "backtesting",
+            "retirement_gates",
+        ):
             if key in self.metadata:
                 config[key] = self.metadata[key]
 

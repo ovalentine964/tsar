@@ -37,7 +37,7 @@ from src.comms.subscriber import EventSubscriber
 
 # ── Domain Tools (Tools-to-Agents Wiring) ──────────────────────────
 from src.tools.knowledge import KnowledgeTools
-from src.tools.monitoring import PnLTracker, WinRateTracker, AlertGenerator
+from src.tools.monitoring import AlertGenerator, PnLTracker, WinRateTracker
 from src.tools.portfolio import PortfolioTools
 
 logger = logging.getLogger(__name__)
@@ -81,8 +81,8 @@ class Orchestrator(BaseAgent):
         self._flywheel_orchestrator = None
 
         # Pipeline state
-        self._scan_interval = config.get("agents", {}).get("orchestrator", {}).get(
-            "scan_interval_s", 300
+        self._scan_interval = (
+            config.get("agents", {}).get("orchestrator", {}).get("scan_interval_s", 300)
         )  # 5 minutes
         self._last_scan_time: float = 0
         self._pipeline_running = False
@@ -119,20 +119,23 @@ class Orchestrator(BaseAgent):
         self._load_agent_registry()
 
         # Create and start enabled agents
-        enabled_agents = self.config.get("agents", {}).get("enabled", [
-            "signal_scout",
-            "risk_guardian",
-            "execution_sniper",
-            "execution_tracker",
-            "strategy_geneticist",
-            "flywheel_orchestrator",
-            "information_agent",
-            "market_cartographer",
-            "macro_agent",
-            "regime_detector",
-            "sentiment_agent",
-            "trade_philosopher",
-        ])
+        enabled_agents = self.config.get("agents", {}).get(
+            "enabled",
+            [
+                "signal_scout",
+                "risk_guardian",
+                "execution_sniper",
+                "execution_tracker",
+                "strategy_geneticist",
+                "flywheel_orchestrator",
+                "information_agent",
+                "market_cartographer",
+                "macro_agent",
+                "regime_detector",
+                "sentiment_agent",
+                "trade_philosopher",
+            ],
+        )
 
         # Shared pub/sub for all agents
         publisher = EventPublisher()
@@ -161,7 +164,8 @@ class Orchestrator(BaseAgent):
 
         logger.info(
             "🏰 Orchestrator ready: %d agents active, scan interval=%ds",
-            len(self._agents), self._scan_interval,
+            len(self._agents),
+            self._scan_interval,
         )
 
     async def on_shutdown(self) -> None:
@@ -338,6 +342,7 @@ class Orchestrator(BaseAgent):
 
             # Genome mutator for proposing strategy mutations
             from src.knowledge.strategy_genomes import StrategyGenomes
+
             genomes = StrategyGenomes(db_path)
             mutator_config = MutatorConfig(
                 min_confidence=shadow_config.get("min_confidence", 0.6),
@@ -388,7 +393,8 @@ class Orchestrator(BaseAgent):
 
             logger.info(
                 "Shadow extraction: %d rules from %d trades (%d winners)",
-                len(extraction.rules), extraction.source_trade_count,
+                len(extraction.rules),
+                extraction.source_trade_count,
                 extraction.winning_trade_count,
             )
 
@@ -417,7 +423,8 @@ class Orchestrator(BaseAgent):
             passed = [r for r in validated if r.validation_status == "passed"]
             logger.info(
                 "Rule validation: %d/%d passed",
-                len(passed), len(validated),
+                len(passed),
+                len(validated),
             )
 
             # Publish validation events
@@ -445,7 +452,8 @@ class Orchestrator(BaseAgent):
             proposals = await self._genome_mutator.propose_mutations(passed)
             logger.info(
                 "Genome mutations: %d proposals from %d validated rules",
-                len(proposals), len(passed),
+                len(proposals),
+                len(passed),
             )
 
             # Step 4: Publish proposals for Strategy Geneticist
@@ -459,9 +467,10 @@ class Orchestrator(BaseAgent):
                 )
 
             logger.info(
-                "🔄 Shadow extraction cycle complete: "
-                "%d rules → %d validated → %d proposals",
-                len(extraction.rules), len(passed), len(proposals),
+                "🔄 Shadow extraction cycle complete: %d rules → %d validated → %d proposals",
+                len(extraction.rules),
+                len(passed),
+                len(proposals),
             )
 
         except Exception as e:
@@ -474,7 +483,9 @@ class Orchestrator(BaseAgent):
         flywheel's trade monitoring, enabling automatic flywheel
         activation after trade completions.
         """
-        if self._flywheel_orchestrator and hasattr(self._flywheel_orchestrator, "_on_trade_executed"):
+        if self._flywheel_orchestrator and hasattr(
+            self._flywheel_orchestrator, "_on_trade_executed"
+        ):
             try:
                 await self._flywheel_orchestrator._on_trade_executed(data)
             except Exception as e:
@@ -539,9 +550,9 @@ class Orchestrator(BaseAgent):
 
         # ── Shadow Extraction Cycle ───────────────────────────────
         if self._shadow_extractor:
-            shadow_interval = self.config.get("shadow_extractor", {}).get(
-                "cycle_interval_hours", 24
-            ) * 3600
+            shadow_interval = (
+                self.config.get("shadow_extractor", {}).get("cycle_interval_hours", 24) * 3600
+            )
             if now - self._last_shadow_extraction >= shadow_interval:
                 self._last_shadow_extraction = now
                 await self._run_shadow_extraction()
@@ -564,7 +575,9 @@ class Orchestrator(BaseAgent):
             if now - last_check > heartbeat_timeout:
                 logger.warning(
                     "⚠️ Agent %s (%s) missed heartbeat (last=%.0fs ago)",
-                    name, agent_id, now - last_check,
+                    name,
+                    agent_id,
+                    now - last_check,
                 )
             else:
                 health = self._agent_health.get(agent_id, {})
@@ -572,7 +585,9 @@ class Orchestrator(BaseAgent):
                 if errors > 0:
                     logger.info(
                         "Agent %s: %d errors, last_cycle=%.1fms",
-                        name, errors, health.get("last_cycle_time_ms", 0),
+                        name,
+                        errors,
+                        health.get("last_cycle_time_ms", 0),
                     )
 
     async def _log_pipeline_status(self) -> None:
@@ -600,19 +615,18 @@ class Orchestrator(BaseAgent):
             Comprehensive health status dict.
         """
         base_health = super().get_health()
-        base_health.update({
-            "agents": {
-                name: agent.get_health()
-                for name, agent in self._agents.items()
-            },
-            "pipeline": {
-                "cycles_completed": self._cycles_completed,
-                "signals_processed": self._signals_processed,
-                "trades_executed": self._trades_executed,
-                "trades_failed": self._trades_failed,
-                "scan_interval_s": self._scan_interval,
-            },
-        })
+        base_health.update(
+            {
+                "agents": {name: agent.get_health() for name, agent in self._agents.items()},
+                "pipeline": {
+                    "cycles_completed": self._cycles_completed,
+                    "signals_processed": self._signals_processed,
+                    "trades_executed": self._trades_executed,
+                    "trades_failed": self._trades_failed,
+                    "scan_interval_s": self._scan_interval,
+                },
+            }
+        )
         return base_health
 
     async def add_agent(self, name: str) -> bool:

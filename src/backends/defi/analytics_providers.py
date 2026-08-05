@@ -17,10 +17,10 @@ Providers:
 
 from __future__ import annotations
 
-import asyncio
+import contextlib
 import logging
 import time
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import Any, Protocol, runtime_checkable
 
@@ -211,10 +211,18 @@ class GlassnodeClient:
 
     # Map our symbols to Glassnode asset codes
     _ASSET_MAP: dict[str, str] = {
-        "BTC": "BTC", "ETH": "ETH", "LTC": "LTC",
-        "BCH": "BCH", "XRP": "XRP", "ADA": "ADA",
-        "DOT": "DOT", "SOL": "SOL", "DOGE": "DOGE",
-        "AVAX": "AVAX", "MATIC": "MATIC", "LINK": "LINK",
+        "BTC": "BTC",
+        "ETH": "ETH",
+        "LTC": "LTC",
+        "BCH": "BCH",
+        "XRP": "XRP",
+        "ADA": "ADA",
+        "DOT": "DOT",
+        "SOL": "SOL",
+        "DOGE": "DOGE",
+        "AVAX": "AVAX",
+        "MATIC": "MATIC",
+        "LINK": "LINK",
     }
 
     def __init__(self, api_key: str, config: dict[str, Any] | None = None) -> None:
@@ -243,7 +251,12 @@ class GlassnodeClient:
             client = await self._get_client()
             resp = await client.get(
                 f"{self.BASE_URL}/market/price_usd_close",
-                params={"a": "BTC", "i": "24h", "s": int(time.time()) - 86400, "u": int(time.time())},
+                params={
+                    "a": "BTC",
+                    "i": "24h",
+                    "s": int(time.time()) - 86400,
+                    "u": int(time.time()),
+                },
                 timeout=10,
             )
             return resp.status_code == 200
@@ -531,10 +544,15 @@ class NansenClient:
     BASE_URL = "https://api.nansen.ai/v1"
 
     _CHAIN_MAP: dict[str, str] = {
-        "ETH": "ethereum", "BSC": "bsc", "POLYGON": "polygon",
-        "ARBITRUM": "arbitrum", "OPTIMISM": "optimism",
-        "AVALANCHE": "avalanche", "FANTOM": "fantom",
-        "SOLANA": "solana", "BASE": "base",
+        "ETH": "ethereum",
+        "BSC": "bsc",
+        "POLYGON": "polygon",
+        "ARBITRUM": "arbitrum",
+        "OPTIMISM": "optimism",
+        "AVALANCHE": "avalanche",
+        "FANTOM": "fantom",
+        "SOLANA": "solana",
+        "BASE": "base",
     }
 
     def __init__(self, api_key: str, config: dict[str, Any] | None = None) -> None:
@@ -666,7 +684,9 @@ class NansenClient:
             logger.warning("Nansen whale wallets failed: %s", exc)
             return []
 
-    async def get_token_god_mode(self, token_address: str, chain: str = "ethereum") -> dict[str, Any]:
+    async def get_token_god_mode(
+        self, token_address: str, chain: str = "ethereum"
+    ) -> dict[str, Any]:
         """Get Token God Mode data — comprehensive token analytics.
 
         Returns holder distribution, smart money activity, and flow analysis.
@@ -718,7 +738,8 @@ class CryptoQuantClient:
     BASE_URL = "https://api.cryptoquant.com/v1"
 
     _ASSET_MAP: dict[str, str] = {
-        "BTC": "btc", "ETH": "eth",
+        "BTC": "btc",
+        "ETH": "eth",
     }
 
     def __init__(self, api_key: str, config: dict[str, Any] | None = None) -> None:
@@ -995,10 +1016,8 @@ class DeFiLlamaClient:
             chain_tvl = 0.0
             for chain_name, tvl_val in chain_tvls.items():
                 if not chain_name.endswith("-borrowed") and not chain_name.endswith("-staking"):
-                    try:
+                    with contextlib.suppress(TypeError, ValueError):
                         chain_tvl = max(chain_tvl, float(tvl_val))
-                    except (TypeError, ValueError):
-                        pass
 
             # Calculate changes from historical
             try:
@@ -1090,17 +1109,19 @@ class DeFiLlamaClient:
                 except (TypeError, ValueError):
                     mcap = 0.0
 
-                results.append(ProtocolTVL(
-                    protocol=p.get("slug", p.get("name", "unknown")),
-                    chain=", ".join(p.get("chains", [])[:3]),
-                    tvl_usd=tvl,
-                    tvl_change_1d=round(change_1d, 2),
-                    tvl_change_7d=round(change_7d, 2),
-                    tvl_change_30d=round(change_30d, 2),
-                    mcap_tvl_ratio=round(mcap / tvl if tvl > 0 else 0, 4),
-                    source="defillama",
-                    timestamp=datetime.now(UTC),
-                ))
+                results.append(
+                    ProtocolTVL(
+                        protocol=p.get("slug", p.get("name", "unknown")),
+                        chain=", ".join(p.get("chains", [])[:3]),
+                        tvl_usd=tvl,
+                        tvl_change_1d=round(change_1d, 2),
+                        tvl_change_7d=round(change_7d, 2),
+                        tvl_change_30d=round(change_30d, 2),
+                        mcap_tvl_ratio=round(mcap / tvl if tvl > 0 else 0, 4),
+                        source="defillama",
+                        timestamp=datetime.now(UTC),
+                    )
+                )
 
             results.sort(key=lambda x: x.tvl_usd, reverse=True)
             self._cache.set(cache_key, results)
@@ -1174,22 +1195,24 @@ class DeFiLlamaClient:
                 elif exposure == "multi":
                     il_risk = "low"
 
-                results.append(YieldPool(
-                    protocol=pool.get("project", "unknown"),
-                    chain=pool_chain,
-                    pool_id=pool.get("pool", ""),
-                    symbol=symbol,
-                    tvl_usd=tvl,
-                    apy=round(apy, 2),
-                    apy_base=round(float(pool.get("apyBase", 0) or 0), 2),
-                    apy_reward=round(float(pool.get("apyReward", 0) or 0), 2),
-                    il_risk=il_risk,
-                    stable_pool=stable,
-                    exposure=exposure,
-                    pool_meta=pool.get("poolMeta", ""),
-                    source="defillama",
-                    timestamp=datetime.now(UTC),
-                ))
+                results.append(
+                    YieldPool(
+                        protocol=pool.get("project", "unknown"),
+                        chain=pool_chain,
+                        pool_id=pool.get("pool", ""),
+                        symbol=symbol,
+                        tvl_usd=tvl,
+                        apy=round(apy, 2),
+                        apy_base=round(float(pool.get("apyBase", 0) or 0), 2),
+                        apy_reward=round(float(pool.get("apyReward", 0) or 0), 2),
+                        il_risk=il_risk,
+                        stable_pool=stable,
+                        exposure=exposure,
+                        pool_meta=pool.get("poolMeta", ""),
+                        source="defillama",
+                        timestamp=datetime.now(UTC),
+                    )
+                )
 
             results.sort(key=lambda x: x.apy, reverse=True)
             self._cache.set(cache_key, results)
@@ -1309,17 +1332,18 @@ class DeFiLlamaClient:
             for s in data[:20]:  # Top 20 stablecoins
                 chains = s.get("chainCirculating", {})
                 total_circ = sum(
-                    float(c.get("current", {}).get("peggedUSD", 0))
-                    for c in chains.values()
+                    float(c.get("current", {}).get("peggedUSD", 0)) for c in chains.values()
                 )
 
-                results.append({
-                    "name": s.get("name", ""),
-                    "symbol": s.get("symbol", ""),
-                    "circulating_usd": total_circ,
-                    "price": float(s.get("price", 1.0) or 1.0),
-                    "chains": list(chains.keys())[:5],
-                })
+                results.append(
+                    {
+                        "name": s.get("name", ""),
+                        "symbol": s.get("symbol", ""),
+                        "circulating_usd": total_circ,
+                        "price": float(s.get("price", 1.0) or 1.0),
+                        "chains": list(chains.keys())[:5],
+                    }
+                )
 
             self._cache.set(cache_key, results)
             return results
@@ -1347,13 +1371,26 @@ class CoinGeckoFallback:
     BASE_URL = "https://api.coingecko.com/api/v3"
 
     _COIN_IDS: dict[str, str] = {
-        "BTC": "bitcoin", "ETH": "ethereum", "SOL": "solana",
-        "BNB": "binancecoin", "XRP": "ripple", "ADA": "cardano",
-        "DOGE": "dogecoin", "DOT": "polkadot", "AVAX": "avalanche-2",
-        "MATIC": "matic-network", "LINK": "chainlink", "UNI": "uniswap",
-        "ATOM": "cosmos", "NEAR": "near", "ARB": "arbitrum",
-        "OP": "optimism", "APT": "aptos", "SUI": "sui",
-        "FIL": "filecoin", "LTC": "litecoin",
+        "BTC": "bitcoin",
+        "ETH": "ethereum",
+        "SOL": "solana",
+        "BNB": "binancecoin",
+        "XRP": "ripple",
+        "ADA": "cardano",
+        "DOGE": "dogecoin",
+        "DOT": "polkadot",
+        "AVAX": "avalanche-2",
+        "MATIC": "matic-network",
+        "LINK": "chainlink",
+        "UNI": "uniswap",
+        "ATOM": "cosmos",
+        "NEAR": "near",
+        "ARB": "arbitrum",
+        "OP": "optimism",
+        "APT": "aptos",
+        "SUI": "sui",
+        "FIL": "filecoin",
+        "LTC": "litecoin",
     }
 
     def __init__(self, config: dict[str, Any] | None = None) -> None:
@@ -1374,9 +1411,7 @@ class CoinGeckoFallback:
         """CoinGecko is always available (free, rate-limited)."""
         try:
             client = await self._get_client()
-            resp = await client.get(
-                f"{self.BASE_URL}/ping", timeout=10
-            )
+            resp = await client.get(f"{self.BASE_URL}/ping", timeout=10)
             return resp.status_code == 200
         except Exception:
             return False
@@ -1517,10 +1552,8 @@ class FallbackChain:
     async def close(self) -> None:
         """Close all provider clients."""
         for p in self._providers:
-            try:
+            with contextlib.suppress(Exception):
                 await p.close()
-            except Exception:
-                pass
 
     # ── Exchange Flows ───────────────────────────────────────────────
 

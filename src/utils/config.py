@@ -57,15 +57,22 @@ except ImportError:
                             value = cls_val.default
                         elif cls_val.default_factory is not None:
                             value = cls_val.default_factory()
-                    elif cls_val is not None and not isinstance(cls_val, (classmethod, staticmethod, property)):
+                    elif cls_val is not None and not isinstance(
+                        cls_val, (classmethod, staticmethod, property)
+                    ):
                         value = cls_val
-                if isinstance(value, dict) and hasattr(annotation, "__mro__") and BaseModel in annotation.__mro__:
+                if (
+                    isinstance(value, dict)
+                    and hasattr(annotation, "__mro__")
+                    and BaseModel in annotation.__mro__
+                ):
                     value = annotation(**value)
                 setattr(self, name, value)
 
     def field_validator(*args: Any, **kwargs: Any) -> Any:  # type: ignore[misc]
         def decorator(fn: Any) -> Any:
             return fn
+
         return decorator
 
 
@@ -160,6 +167,7 @@ class StrategyConfig(BaseModel):
 
 class MEVConfig(BaseModel):
     """MEV protection and oracle configuration."""
+
     enabled: bool = Field(default=True)
     chain: str = Field(default="ethereum")
 
@@ -174,14 +182,16 @@ class MEVConfig(BaseModel):
 
     # Oracle contract addresses (Ethereum mainnet)
     oracle_rpc_url: str = Field(default="")
-    chainlink_feeds: dict[str, str] = Field(default={
-        "ETH/USD": "0x5f4eC3Df9cbd43714FE2740f5E3616155c5b8419",
-        "BTC/USD": "0xF4030086522a5bEEa4988F8cA5B36dbC97BeE88c",
-        "USDC/USD": "0x8fFfFfd4AfB6115b954Bd326cbe7B4BA576818f6",
-        "USDT/USD": "0x3E7d1eAB13ad0104d2750B8863b489D65364e32D",
-        "SOL/USD": "0x4ffC43a60e009B551865A93d232E33Fce9f01507",
-        "LINK/USD": "0x2c1d072e956AFFC0D435Cb7AC38EF18d24d9127c",
-    })
+    chainlink_feeds: dict[str, str] = Field(
+        default={
+            "ETH/USD": "0x5f4eC3Df9cbd43714FE2740f5E3616155c5b8419",
+            "BTC/USD": "0xF4030086522a5bEEa4988F8cA5B36dbC97BeE88c",
+            "USDC/USD": "0x8fFfFfd4AfB6115b954Bd326cbe7B4BA576818f6",
+            "USDT/USD": "0x3E7d1eAB13ad0104d2750B8863b489D65364e32D",
+            "SOL/USD": "0x4ffC43a60e009B551865A93d232E33Fce9f01507",
+            "LINK/USD": "0x2c1d072e956AFFC0D435Cb7AC38EF18d24d9127c",
+        }
+    )
     pyth_hermes_url: str = Field(default="https://hermes.pyth.network")
     pyth_enabled: bool = Field(default=True)
 
@@ -200,6 +210,7 @@ class MEVConfig(BaseModel):
 
 class TSARConfig(BaseModel):
     """Top-level TSAR configuration."""
+
     environment: str = Field(default="development")
     trading_mode: str = Field(default="paper")
     database: DatabaseConfig = Field(default=DatabaseConfig())
@@ -238,7 +249,7 @@ def _apply_env_overrides(config_dict: dict[str, Any]) -> dict[str, Any]:
     for env_key, env_val in os.environ.items():
         if not env_key.startswith(_ENV_PREFIX):
             continue
-        key = env_key[len(_ENV_PREFIX):].replace("__", ".").lower()
+        key = env_key[len(_ENV_PREFIX) :].replace("__", ".").lower()
         parts = key.split(".")
         current: Any = config_dict
         for part in parts[:-1]:

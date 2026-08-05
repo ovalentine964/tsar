@@ -17,7 +17,6 @@ Usage::
 from __future__ import annotations
 
 import logging
-import time
 from typing import Any
 
 logger = logging.getLogger(__name__)
@@ -278,9 +277,7 @@ class TSARMetrics:
         status: str = "filled",
     ) -> None:
         """Record a completed trade across all relevant metrics."""
-        self.trades_total.labels(
-            symbol=symbol, side=side, strategy=strategy, status=status
-        ).inc()
+        self.trades_total.labels(symbol=symbol, side=side, strategy=strategy, status=status).inc()
         self.trade_pnl.labels(symbol=symbol, strategy=strategy).set(pnl)
         if slippage_bps > 0:
             self.trade_slippage_bps.labels(symbol=symbol).observe(slippage_bps)

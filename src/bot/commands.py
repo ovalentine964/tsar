@@ -38,8 +38,6 @@ import json
 import logging
 import os
 import secrets as _secrets
-from datetime import UTC, datetime
-from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -108,10 +106,7 @@ async def handle_command(command: str, args: list[str]) -> str:
     if handler:
         return await handler(args)
 
-    return (
-        f"Unknown command: {command}\n\n"
-        f"Available: {', '.join(COMMANDS.keys())}"
-    )
+    return f"Unknown command: {command}\n\nAvailable: {', '.join(COMMANDS.keys())}"
 
 
 # ═══════════════════════════════════════════════════════════════════════
@@ -141,7 +136,7 @@ async def _handle_config(_args: list[str]) -> str:
         return "\n".join(lines)
 
     lines.append("<b>Credentials:</b>")
-    for key, info in status.items():
+    for _key, info in status.items():
         check = "✅" if info["configured"] else "❌"
         masked = info["masked"] if info["configured"] else "not set"
         lines.append(f"  {check} {info['label']}: <code>{masked}</code>")
@@ -170,9 +165,9 @@ async def _handle_config(_args: list[str]) -> str:
 
 async def _handle_status(_args: list[str]) -> str:
     """Build system status from real subsystems."""
-    from src.risk.kill_switch import KillSwitch
+    from src.bot.credentials import get_credential_status, has_credentials
     from src.knowledge.trade_memory import TradeMemory
-    from src.bot.credentials import has_credentials, get_credential_status
+    from src.risk.kill_switch import KillSwitch
 
     db_path = _get_db_path()
     ks = KillSwitch()
@@ -321,9 +316,7 @@ async def _handle_trade(args: list[str]) -> str:
         ks = KillSwitch()
         await ks.activate("telegram_command")
         return (
-            "🛑 <b>Trading stopped</b>\n\n"
-            "All trading has been halted.\n"
-            "Use /trade start to resume."
+            "🛑 <b>Trading stopped</b>\n\nAll trading has been halted.\nUse /trade start to resume."
         )
 
     return (
@@ -391,8 +384,8 @@ async def _handle_positions(_args: list[str]) -> str:
 
 async def _handle_risk(_args: list[str]) -> str:
     """Get real risk state from KillSwitch and TradeMemory."""
-    from src.risk.kill_switch import KillSwitch
     from src.knowledge.trade_memory import TradeMemory
+    from src.risk.kill_switch import KillSwitch
 
     db_path = _get_db_path()
     ks = KillSwitch()
@@ -494,10 +487,7 @@ async def _handle_regime(_args: list[str]) -> str:
                 wr = regime.get("win_rate", 0)
                 count = regime.get("trade_count", 0)
                 pnl_emoji = "🟢" if pnl >= 0 else "🔴"
-                lines.append(
-                    f"• {name}: {pnl_emoji} P&L {pnl:.2f} | "
-                    f"WR {wr:.0%} | Trades {count}"
-                )
+                lines.append(f"• {name}: {pnl_emoji} P&L {pnl:.2f} | WR {wr:.0%} | Trades {count}")
     except Exception:
         pass
 
@@ -578,10 +568,7 @@ async def _handle_performance(_args: list[str]) -> str:
                 wr = s.get("win_rate", 0)
                 count = s.get("trade_count", 0)
                 emoji = "🟢" if pnl >= 0 else "🔴"
-                lines.append(
-                    f"• {name}: {emoji} {pnl:.2f} USDT | "
-                    f"WR {wr:.0%} | {count} trades"
-                )
+                lines.append(f"• {name}: {emoji} {pnl:.2f} USDT | WR {wr:.0%} | {count} trades")
 
         # Recent lessons
         lessons = kt.get_recent_lessons(days=7, limit=3)
@@ -721,7 +708,7 @@ async def _handle_discuss(args: list[str]) -> str:
         # Reasoning
         reasoning = trade.get("reasoning", "")
         if reasoning:
-            lines.append(f"\n<b>Reasoning:</b>")
+            lines.append("\n<b>Reasoning:</b>")
             lines.append(f"• {reasoning}")
 
         # Reflection / Lesson
@@ -733,7 +720,7 @@ async def _handle_discuss(args: list[str]) -> str:
                 except (json.JSONDecodeError, TypeError):
                     reflection = {"lesson": reflection}
 
-            lines.append(f"\n<b>Lesson:</b>")
+            lines.append("\n<b>Lesson:</b>")
             lines.append(f"• {reflection.get('lesson', 'N/A')}")
 
             outcome = reflection.get("outcome", "")
@@ -757,7 +744,7 @@ async def _handle_discuss(args: list[str]) -> str:
             query = f"{symbol} {side_label} {trade.get('strategy', '')}"
             similar = kt.vector_search_trades(query, limit=3)
             if similar:
-                lines.append(f"\n<b>Similar Past Trades:</b>")
+                lines.append("\n<b>Similar Past Trades:</b>")
                 for s in similar:
                     s_id = s.get("trade_id", "?")
                     s_score = s.get("score", 0)
@@ -817,7 +804,7 @@ async def _handle_why(args: list[str]) -> str:
 
         # Signal reasoning
         if reasoning:
-            lines.append(f"\n<b>Signal Reasoning:</b>")
+            lines.append("\n<b>Signal Reasoning:</b>")
             for part in reasoning.split("|"):
                 part = part.strip()
                 if part:
@@ -825,7 +812,7 @@ async def _handle_why(args: list[str]) -> str:
 
         # Technical indicators at time of trade
         if metadata:
-            lines.append(f"\n<b>Indicators at Entry:</b>")
+            lines.append("\n<b>Indicators at Entry:</b>")
             indicator_keys = [
                 ("rsi", "RSI"),
                 ("atr", "ATR"),
@@ -846,14 +833,14 @@ async def _handle_why(args: list[str]) -> str:
             # Score breakdown
             breakdown = metadata.get("score_breakdown", {})
             if breakdown:
-                lines.append(f"\n<b>Signal Score:</b>")
+                lines.append("\n<b>Signal Score:</b>")
                 for comp, score in breakdown.items():
                     lines.append(f"• {comp}: {score:.3f}")
 
             # Patterns
             patterns = metadata.get("patterns_detected", [])
             if patterns:
-                lines.append(f"\n<b>Patterns Detected:</b>")
+                lines.append("\n<b>Patterns Detected:</b>")
                 for p in patterns:
                     lines.append(f"• {p}")
 
@@ -861,14 +848,12 @@ async def _handle_why(args: list[str]) -> str:
         try:
             patterns = kt.get_active_patterns()
             if patterns:
-                lines.append(f"\n<b>Pattern Library Matches:</b>")
+                lines.append("\n<b>Pattern Library Matches:</b>")
                 for p in patterns[:3]:
                     name = p.get("name", "unknown")
                     conf = p.get("confidence", 0)
                     win_rate = p.get("win_rate", 0)
-                    lines.append(
-                        f"• {name}: conf={conf:.0%}, win_rate={win_rate:.0%}"
-                    )
+                    lines.append(f"• {name}: conf={conf:.0%}, win_rate={win_rate:.0%}")
         except Exception:
             pass
 

@@ -22,10 +22,9 @@ All data fetched from free/public APIs with caching.
 
 from __future__ import annotations
 
-import asyncio
 import logging
 import time
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from enum import StrEnum
 from typing import Any
@@ -375,7 +374,8 @@ class MarketCalendar:
 
         # Filter high impact
         high_impact = tuple(
-            e for e in all_events
+            e
+            for e in all_events
             if e.impact in (EventImpact.CRITICAL.value, EventImpact.HIGH.value)
         )
 
@@ -439,26 +439,34 @@ class MarketCalendar:
         events: list[MarketEvent] = []
 
         for e in _KNOWN_ECONOMIC_EVENTS:
-            events.append(MarketEvent(
-                event=e["event"],
-                category=e["category"].value if hasattr(e["category"], "value") else str(e["category"]),
-                impact=e["impact"].value if hasattr(e["impact"], "value") else str(e["impact"]),
-                currency="USD",
-                typical_impact=e.get("typical_impact", ""),
-                watch_for=e.get("watch_for", ""),
-                source="known_catalog",
-            ))
+            events.append(
+                MarketEvent(
+                    event=e["event"],
+                    category=e["category"].value
+                    if hasattr(e["category"], "value")
+                    else str(e["category"]),
+                    impact=e["impact"].value if hasattr(e["impact"], "value") else str(e["impact"]),
+                    currency="USD",
+                    typical_impact=e.get("typical_impact", ""),
+                    watch_for=e.get("watch_for", ""),
+                    source="known_catalog",
+                )
+            )
 
         for e in _KNOWN_CRYPTO_EVENTS:
-            events.append(MarketEvent(
-                event=e["event"],
-                category=e["category"].value if hasattr(e["category"], "value") else str(e["category"]),
-                impact=e["impact"].value if hasattr(e["impact"], "value") else str(e["impact"]),
-                date=e.get("next_occurrence", ""),
-                typical_impact=e.get("typical_impact", ""),
-                watch_for=e.get("watch_for", ""),
-                source="known_catalog",
-            ))
+            events.append(
+                MarketEvent(
+                    event=e["event"],
+                    category=e["category"].value
+                    if hasattr(e["category"], "value")
+                    else str(e["category"]),
+                    impact=e["impact"].value if hasattr(e["impact"], "value") else str(e["impact"]),
+                    date=e.get("next_occurrence", ""),
+                    typical_impact=e.get("typical_impact", ""),
+                    watch_for=e.get("watch_for", ""),
+                    source="known_catalog",
+                )
+            )
 
         return tuple(events)
 
@@ -578,18 +586,20 @@ class MarketCalendar:
                 except ValueError:
                     pass
 
-                events.append(MarketEvent(
-                    event=title,
-                    category=category,
-                    impact=impact,
-                    date=date_str,
-                    time=time_str,
-                    currency=item.get("country", "USD"),
-                    previous=str(item.get("previous", "")),
-                    forecast=str(item.get("forecast", "")),
-                    actual=str(item.get("actual", "")),
-                    source="forexfactory",
-                ))
+                events.append(
+                    MarketEvent(
+                        event=title,
+                        category=category,
+                        impact=impact,
+                        date=date_str,
+                        time=time_str,
+                        currency=item.get("country", "USD"),
+                        previous=str(item.get("previous", "")),
+                        forecast=str(item.get("forecast", "")),
+                        actual=str(item.get("actual", "")),
+                        source="forexfactory",
+                    )
+                )
 
         except Exception as exc:
             logger.warning("ForexFactory fetch failed: %s", exc)
@@ -598,15 +608,17 @@ class MarketCalendar:
         if not events:
             logger.info("Using known events catalog as fallback")
             for known in _KNOWN_ECONOMIC_EVENTS:
-                events.append(MarketEvent(
-                    event=known["event"],
-                    category=known["category"].value,
-                    impact=known["impact"].value,
-                    currency="USD",
-                    typical_impact=known.get("typical_impact", ""),
-                    watch_for=known.get("watch_for", ""),
-                    source="known_catalog",
-                ))
+                events.append(
+                    MarketEvent(
+                        event=known["event"],
+                        category=known["category"].value,
+                        impact=known["impact"].value,
+                        currency="USD",
+                        typical_impact=known.get("typical_impact", ""),
+                        watch_for=known.get("watch_for", ""),
+                        source="known_catalog",
+                    )
+                )
 
         return events
 
@@ -638,15 +650,17 @@ class MarketCalendar:
                 except (ValueError, TypeError):
                     pass
 
-            events.append(MarketEvent(
-                event=known["event"],
-                category=known["category"].value,
-                impact=known["impact"].value,
-                date=next_occ,
-                typical_impact=known.get("typical_impact", ""),
-                watch_for=known.get("watch_for", ""),
-                source="known_catalog",
-            ))
+            events.append(
+                MarketEvent(
+                    event=known["event"],
+                    category=known["category"].value,
+                    impact=known["impact"].value,
+                    date=next_occ,
+                    typical_impact=known.get("typical_impact", ""),
+                    watch_for=known.get("watch_for", ""),
+                    source="known_catalog",
+                )
+            )
 
         # Try to fetch dynamic token unlock data
         try:
@@ -665,9 +679,7 @@ class MarketCalendar:
 
         return events
 
-    async def _fetch_token_unlocks(
-        self, client: httpx.AsyncClient
-    ) -> list[MarketEvent]:
+    async def _fetch_token_unlocks(self, client: httpx.AsyncClient) -> list[MarketEvent]:
         """Fetch upcoming token unlock events from CoinGecko or similar."""
         events: list[MarketEvent] = []
 
@@ -680,23 +692,31 @@ class MarketCalendar:
 
             # SOL quarterly unlock schedule (approximate)
             sol_unlock_dates = [
-                "2025-03-01", "2025-06-01", "2025-09-01", "2025-12-01",
-                "2026-03-01", "2026-06-01", "2026-09-01", "2026-12-01",
+                "2025-03-01",
+                "2025-06-01",
+                "2025-09-01",
+                "2025-12-01",
+                "2026-03-01",
+                "2026-06-01",
+                "2026-09-01",
+                "2026-12-01",
             ]
 
             for date_str in sol_unlock_dates:
                 try:
                     dt = datetime.fromisoformat(date_str).replace(tzinfo=UTC)
                     if dt > now and dt < now + timedelta(days=90):
-                        events.append(MarketEvent(
-                            event="SOL Token Unlock (Estimated)",
-                            category=EventCategory.TOKEN_UNLOCK.value,
-                            impact=EventImpact.MEDIUM.value,
-                            date=date_str,
-                            typical_impact="Potential selling pressure. Monitor unlock size vs daily volume.",
-                            watch_for="Unlock % of circulating supply, holder distribution",
-                            source="known_schedule",
-                        ))
+                        events.append(
+                            MarketEvent(
+                                event="SOL Token Unlock (Estimated)",
+                                category=EventCategory.TOKEN_UNLOCK.value,
+                                impact=EventImpact.MEDIUM.value,
+                                date=date_str,
+                                typical_impact="Potential selling pressure. Monitor unlock size vs daily volume.",
+                                watch_for="Unlock % of circulating supply, holder distribution",
+                                source="known_schedule",
+                            )
+                        )
                 except ValueError:
                     pass
 
@@ -705,9 +725,7 @@ class MarketCalendar:
 
         return events
 
-    async def _fetch_halving_countdown(
-        self, client: httpx.AsyncClient
-    ) -> MarketEvent | None:
+    async def _fetch_halving_countdown(self, client: httpx.AsyncClient) -> MarketEvent | None:
         """Fetch Bitcoin halving countdown data."""
         try:
             # Bitcoin halving is every 210,000 blocks
@@ -744,9 +762,13 @@ class MarketCalendar:
             return EventCategory.MONETARY_POLICY.value
         elif any(kw in title_lower for kw in ["cpi", "consumer price", "inflation", "pce"]):
             return EventCategory.INFLATION.value
-        elif any(kw in title_lower for kw in ["payroll", "employment", "jobless", "unemployment", "nfp"]):
+        elif any(
+            kw in title_lower for kw in ["payroll", "employment", "jobless", "unemployment", "nfp"]
+        ):
             return EventCategory.EMPLOYMENT.value
-        elif any(kw in title_lower for kw in ["gdp", "gross domestic", "retail sales", "pmi", "ism"]):
+        elif any(
+            kw in title_lower for kw in ["gdp", "gross domestic", "retail sales", "pmi", "ism"]
+        ):
             return EventCategory.GDP.value
         else:
             return EventCategory.OTHER.value
@@ -846,7 +868,7 @@ class MarketCalendar:
             # In production, this checks the live calendar
 
         # Check cached calendar
-        cached = self._get_cached(f"calendar:14:True")
+        cached = self._get_cached("calendar:14:True")
         if cached:
             snapshot: CalendarSnapshot = cached
             for event in snapshot.all_events:
@@ -896,7 +918,7 @@ class MarketCalendar:
                         pass
 
         # Check cached live calendar for more precise adjustment
-        cached = self._get_cached(f"calendar:14:True")
+        cached = self._get_cached("calendar:14:True")
         if cached:
             snapshot: CalendarSnapshot = cached
             if snapshot.event_risk_score > 0.7:

@@ -49,6 +49,7 @@ class MutationProposal:
     This is the output of GenomeMutator — a concrete proposal
     that the Strategy Geneticist can accept or reject.
     """
+
     proposal_id: str = field(default_factory=_ulid)
     source_rule_id: str = ""
     target_genome_id: str | None = None
@@ -72,6 +73,7 @@ class MutationProposal:
 @dataclass
 class MutatorConfig:
     """Configuration for the GenomeMutator."""
+
     min_confidence: float = 0.6
     min_sharpe: float = 0.5
     min_win_rate: float = 0.45
@@ -82,10 +84,10 @@ class MutatorConfig:
     # Diversity pressure settings
     diversity_enabled: bool = True
     similarity_threshold: float = 0.8  # Genomes >80% similar are penalized
-    diversity_bonus: float = 0.15      # Bonus for unique proposals
-    min_diverse_proposals: int = 2     # At least N proposals must be from different strategy types
-    max_similar_proposals: int = 2     # Max proposals targeting same genome
-    phenotype_penalty: float = 0.3     # Score penalty for phenotypically similar genomes
+    diversity_bonus: float = 0.15  # Bonus for unique proposals
+    min_diverse_proposals: int = 2  # At least N proposals must be from different strategy types
+    max_similar_proposals: int = 2  # Max proposals targeting same genome
+    phenotype_penalty: float = 0.3  # Score penalty for phenotypically similar genomes
 
 
 # ═══════════════════════════════════════════════════════════════════════
@@ -135,7 +137,8 @@ class GenomeMutator:
         """
         # Filter to only passed, high-confidence rules
         candidates = [
-            r for r in validated_rules
+            r
+            for r in validated_rules
             if r.validation_status == "passed"
             and r.confidence >= self._config.min_confidence
             and r.sharpe >= self._config.min_sharpe
@@ -151,7 +154,9 @@ class GenomeMutator:
         candidates.sort(key=lambda r: r.expectancy, reverse=True)
 
         proposals: list[MutationProposal] = []
-        for rule in candidates[: self._config.max_proposals_per_run * 2]:  # Generate extra for diversity filtering
+        for rule in candidates[
+            : self._config.max_proposals_per_run * 2
+        ]:  # Generate extra for diversity filtering
             try:
                 proposal = await self._propose_for_rule(rule)
                 if proposal:
@@ -176,9 +181,7 @@ class GenomeMutator:
         )
         return proposals
 
-    async def _propose_for_rule(
-        self, rule: ValidatedRule
-    ) -> MutationProposal | None:
+    async def _propose_for_rule(self, rule: ValidatedRule) -> MutationProposal | None:
         """Create a mutation proposal for a single validated rule.
 
         If the rule was derived from losing trades (action='avoid'),
@@ -262,9 +265,7 @@ class GenomeMutator:
                 avg_loss_pct=round(avg_loss, 2),
             )
         except Exception as e:
-            logger.error(
-                "Failed to apply loss-weighted lesson: %s", e
-            )
+            logger.error("Failed to apply loss-weighted lesson: %s", e)
 
     def _find_matching_genome(self, rule: ValidatedRule) -> StrategyGenome | None:
         """Find the best matching genome for a rule.
@@ -358,7 +359,9 @@ class GenomeMutator:
 
         proposal = MutationProposal(
             source_rule_id=rule.rule_id,
-            target_genome_name=f"shadow_{rule.symbol}_{rule.action}" if rule.symbol else f"shadow_{rule.action}",
+            target_genome_name=f"shadow_{rule.symbol}_{rule.action}"
+            if rule.symbol
+            else f"shadow_{rule.action}",
             mutation_type="new_genome",
             change_description=f"New genome from shadow rule: {rule.description}",
             proposed_entry_rules=json.dumps(rule.conditions),
@@ -493,7 +496,9 @@ class GenomeMutator:
 
             # ── Penalty 1: Too many proposals for same genome ──
             if count >= self._config.max_similar_proposals:
-                penalty = self._config.phenotype_penalty * (count - self._config.max_similar_proposals + 1)
+                penalty = self._config.phenotype_penalty * (
+                    count - self._config.max_similar_proposals + 1
+                )
                 base_score -= penalty
                 logger.debug(
                     "diversity_penalty_genome",
@@ -505,7 +510,9 @@ class GenomeMutator:
             # ── Penalty 2: Phenotypic similarity ──
             similarity = self._compute_phenotype_similarity(p, proposals)
             if similarity > self._config.similarity_threshold:
-                penalty = self._config.phenotype_penalty * (similarity - self._config.similarity_threshold)
+                penalty = self._config.phenotype_penalty * (
+                    similarity - self._config.similarity_threshold
+                )
                 base_score -= penalty
                 logger.debug(
                     "diversity_penalty_phenotype",
@@ -530,7 +537,7 @@ class GenomeMutator:
         seen_genomes: set[str] = set()
 
         # First pass: pick one from each mutation type
-        for score, prop in scored:
+        for _score, prop in scored:
             if prop.mutation_type not in seen_types:
                 selected.append(prop)
                 seen_types.add(prop.mutation_type)
@@ -539,7 +546,7 @@ class GenomeMutator:
                 break
 
         # Second pass: fill remaining slots by score
-        for score, prop in scored:
+        for _score, prop in scored:
             if prop in selected:
                 continue
             selected.append(prop)
@@ -567,8 +574,7 @@ class GenomeMutator:
         Returns 0.0 (unique) to 1.0 (identical).
         """
         target_tokens = set(
-            (target.proposed_entry_rules or "").split()
-            + (target.proposed_exit_rules or "").split()
+            (target.proposed_entry_rules or "").split() + (target.proposed_exit_rules or "").split()
         )
         if not target_tokens:
             return 0.0
@@ -589,4 +595,3 @@ class GenomeMutator:
             max_sim = max(max_sim, sim)
 
         return max_sim
-

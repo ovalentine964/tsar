@@ -45,6 +45,7 @@ class BudgetExceededError(Exception):
             f"of ${limit_usd:.4f} limit. Halting LLM calls."
         )
 
+
 if TYPE_CHECKING:
     from collections.abc import AsyncIterator
 
@@ -185,7 +186,8 @@ class BudgetGuard:
             BudgetExceededError: If the call would exceed a budget limit.
         """
         import datetime as _dt
-        now = _dt.datetime.now(_dt.timezone.utc)
+
+        now = _dt.datetime.now(_dt.UTC)
         today = now.strftime("%Y-%m-%d")
         month = now.strftime("%Y-%m")
 
@@ -225,7 +227,8 @@ class BudgetGuard:
             BudgetExceededError: If budget is already exceeded.
         """
         import datetime as _dt
-        now = _dt.datetime.now(_dt.timezone.utc)
+
+        now = _dt.datetime.now(_dt.UTC)
         today = now.strftime("%Y-%m-%d")
         month = now.strftime("%Y-%m")
 
@@ -282,12 +285,17 @@ def _create_provider(name: str, provider_cfg: dict[str, Any]) -> LLMProvider:
         RuntimeError: Ollama disabled by config.
     """
     import os
+
     ptype = provider_cfg.get("type", name)
 
     if name == "ollama" or ptype == "ollama":
         # Check if Ollama is enabled via config or env var
         ollama_enabled = provider_cfg.get("enabled", True)
-        if not ollama_enabled and os.environ.get("TSAR_ENABLE_OLLAMA", "").strip() not in ("1", "true", "yes"):
+        if not ollama_enabled and os.environ.get("TSAR_ENABLE_OLLAMA", "").strip() not in (
+            "1",
+            "true",
+            "yes",
+        ):
             raise RuntimeError(
                 "Ollama is disabled (requires too much RAM for free-tier). "
                 "Set TSAR_ENABLE_OLLAMA=1 to enable."
@@ -436,13 +444,14 @@ class ModelRouter:
                 breaker.record_failure()
                 logger.warning(
                     "Provider %s failed for %s: %s — trying fallback",
-                    provider_name, task_type, exc,
+                    provider_name,
+                    task_type,
+                    exc,
                 )
                 continue
 
         raise RuntimeError(
-            f"All providers failed for task_type={task_type}. "
-            f"Last error: {last_error}"
+            f"All providers failed for task_type={task_type}. Last error: {last_error}"
         )
 
     async def stream(
@@ -503,7 +512,9 @@ class ModelRouter:
                 breaker.record_failure()
                 logger.warning(
                     "Provider %s stream failed for %s: %s — trying fallback",
-                    provider_name, task_type, exc,
+                    provider_name,
+                    task_type,
+                    exc,
                 )
                 continue
 
@@ -611,9 +622,7 @@ class ModelRouter:
         """Load config from the default path."""
         import os
 
-        config_path = os.path.join(
-            os.path.dirname(__file__), "..", "..", "config", "models.yaml"
-        )
+        config_path = os.path.join(os.path.dirname(__file__), "..", "..", "config", "models.yaml")
         config_path = os.path.normpath(config_path)
         with open(config_path) as f:
             return yaml.safe_load(f)

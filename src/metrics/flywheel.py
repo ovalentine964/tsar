@@ -132,8 +132,7 @@ class FlywheelHealthScore:
             key=lambda x: x[1]["score"],
         )
         result["weakest"] = [
-            {"name": name, "score": vals["score"]}
-            for name, vals in sorted_components[:3]
+            {"name": name, "score": vals["score"]} for name, vals in sorted_components[:3]
         ]
 
         return result
@@ -284,7 +283,9 @@ class FlywheelHealthScore:
         components["knowledge_density"] = min(1.0, total_lessons / 50.0)  # 50 lessons = full score
 
         # Pattern discovery rate
-        components["pattern_discovery_rate"] = min(1.0, total_patterns / 20.0)  # 20 patterns = full score
+        components["pattern_discovery_rate"] = min(
+            1.0, total_patterns / 20.0
+        )  # 20 patterns = full score
 
         return components
 

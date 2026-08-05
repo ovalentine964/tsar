@@ -251,15 +251,17 @@ class RiskManagementTools:
     testing, margin requirements, and risk-adjusted return metrics.
     """
 
-    description = "Risk management: correlation, exposure, VaR, stress testing, margin, risk-adjusted returns"
+    description = (
+        "Risk management: correlation, exposure, VaR, stress testing, margin, risk-adjusted returns"
+    )
 
     def __init__(self, config: dict[str, Any] | None = None) -> None:
         self._config = config or {}
         # Exposure limits (from config or defaults)
         self._max_total_exposure_pct = self._config.get("max_total_exposure_pct", 2.0)  # 200% gross
-        self._max_single_asset_pct = self._config.get("max_single_asset_pct", 0.30)   # 30%
-        self._max_sector_pct = self._config.get("max_sector_pct", 0.50)               # 50%
-        self._max_leverage = self._config.get("max_leverage", 3.0)                     # 3x
+        self._max_single_asset_pct = self._config.get("max_single_asset_pct", 0.30)  # 30%
+        self._max_sector_pct = self._config.get("max_sector_pct", 0.50)  # 50%
+        self._max_leverage = self._config.get("max_leverage", 3.0)  # 3x
 
     # ── Portfolio Correlation Matrix ─────────────────────────────────
 
@@ -282,8 +284,12 @@ class RiskManagementTools:
         """
         if not returns:
             return CorrelationMatrixResult(
-                symbols=(), matrix={}, avg_correlation=0,
-                max_correlation=0, min_correlation=0, diversification_score=1,
+                symbols=(),
+                matrix={},
+                avg_correlation=0,
+                max_correlation=0,
+                min_correlation=0,
+                diversification_score=1,
             )
 
         symbols = list(returns.keys())
@@ -296,7 +302,11 @@ class RiskManagementTools:
         for s1 in symbols:
             matrix[s1] = {}
             for s2 in symbols:
-                val = float(corr_df.loc[s1, s2]) if s1 in corr_df.index and s2 in corr_df.columns else 0.0
+                val = (
+                    float(corr_df.loc[s1, s2])
+                    if s1 in corr_df.index and s2 in corr_df.columns
+                    else 0.0
+                )
                 matrix[s1][s2] = round(val, 4)
                 if s1 < s2:  # Avoid double counting
                     correlations.append(val)
@@ -339,10 +349,15 @@ class RiskManagementTools:
         """
         if not positions:
             return ExposureResult(
-                total_exposure_usd=0, long_exposure_usd=0, short_exposure_usd=0,
-                net_exposure_usd=0, gross_exposure_usd=0,
-                exposure_by_asset={}, exposure_by_sector={},
-                leverage=0, concentration_risk=0,
+                total_exposure_usd=0,
+                long_exposure_usd=0,
+                short_exposure_usd=0,
+                net_exposure_usd=0,
+                gross_exposure_usd=0,
+                exposure_by_asset={},
+                exposure_by_sector={},
+                leverage=0,
+                concentration_risk=0,
             )
 
         long_usd = 0.0
@@ -410,25 +425,25 @@ class RiskManagementTools:
 
         # Check leverage
         if exposure.leverage > self._max_leverage:
-            violations.append(
-                f"Leverage {exposure.leverage:.2f}x > max {self._max_leverage:.1f}x"
-            )
+            violations.append(f"Leverage {exposure.leverage:.2f}x > max {self._max_leverage:.1f}x")
 
         # Check per-asset concentration
         for asset, notional in exposure.exposure_by_asset.items():
-            asset_pct = notional / exposure.total_exposure_usd if exposure.total_exposure_usd > 0 else 0
+            asset_pct = (
+                notional / exposure.total_exposure_usd if exposure.total_exposure_usd > 0 else 0
+            )
             if asset_pct > self._max_single_asset_pct:
                 violations.append(
                     f"Asset {asset} concentration {asset_pct:.1%} > max {self._max_single_asset_pct:.1%}"
                 )
             elif asset_pct > self._max_single_asset_pct * 0.8:
-                warnings.append(
-                    f"Asset {asset} concentration {asset_pct:.1%} approaching max"
-                )
+                warnings.append(f"Asset {asset} concentration {asset_pct:.1%} approaching max")
 
         # Check per-sector concentration
         for sector, notional in exposure.exposure_by_sector.items():
-            sector_pct = notional / exposure.total_exposure_usd if exposure.total_exposure_usd > 0 else 0
+            sector_pct = (
+                notional / exposure.total_exposure_usd if exposure.total_exposure_usd > 0 else 0
+            )
             if sector_pct > self._max_sector_pct:
                 violations.append(
                     f"Sector {sector} concentration {sector_pct:.1%} > max {self._max_sector_pct:.1%}"
@@ -468,15 +483,16 @@ class RiskManagementTools:
         """
         if returns.empty or portfolio_value <= 0:
             return VaRResult(
-                var_95=0, var_99=0, cvar_95=0, cvar_99=0,
-                method=method, holding_period=holding_period,
+                var_95=0,
+                var_99=0,
+                cvar_95=0,
+                cvar_99=0,
+                method=method,
+                holding_period=holding_period,
             )
 
         # Scale returns for holding period
-        if holding_period > 1:
-            scaled_returns = returns * math.sqrt(holding_period)
-        else:
-            scaled_returns = returns
+        scaled_returns = returns * math.sqrt(holding_period) if holding_period > 1 else returns
 
         if method == "parametric":
             mu = float(scaled_returns.mean())
@@ -491,6 +507,7 @@ class RiskManagementTools:
 
             # CVaR (expected shortfall) for normal distribution
             from scipy.stats import norm
+
             cvar_95 = portfolio_value * (mu - sigma * norm.pdf(z_95) / 0.05)
             cvar_99 = portfolio_value * (mu - sigma * norm.pdf(z_99) / 0.01)
 
@@ -502,8 +519,8 @@ class RiskManagementTools:
             var_99 = portfolio_value * float(sorted_returns[int(n * 0.01)])
 
             # CVaR = average of returns below VaR
-            cvar_95 = portfolio_value * float(np.mean(sorted_returns[:int(n * 0.05)]))
-            cvar_99 = portfolio_value * float(np.mean(sorted_returns[:int(n * 0.01)]))
+            cvar_95 = portfolio_value * float(np.mean(sorted_returns[: int(n * 0.05)]))
+            cvar_99 = portfolio_value * float(np.mean(sorted_returns[: int(n * 0.01)]))
 
         return VaRResult(
             var_95=round(abs(var_95), 2),
@@ -585,10 +602,7 @@ class RiskManagementTools:
                 shock = shocks.get(base, shocks.get("default", -0.20))
 
                 # Long positions lose on negative shocks, shorts gain
-                if side == "buy":
-                    impact = notional * shock
-                else:
-                    impact = notional * (-shock)
+                impact = notional * shock if side == "buy" else notional * -shock
 
                 total_impact += impact
 
@@ -604,15 +618,17 @@ class RiskManagementTools:
                 months_to_recover = abs(impact_pct) / 5
                 recovery_days = int(months_to_recover * 30)
 
-            results.append(StressTestResult(
-                scenario=name,
-                description=desc,
-                portfolio_impact_usd=round(total_impact, 2),
-                portfolio_impact_pct=round(impact_pct, 2),
-                worst_position=worst_symbol,
-                worst_position_loss=round(worst_loss, 2),
-                recovery_estimate_days=recovery_days,
-            ))
+            results.append(
+                StressTestResult(
+                    scenario=name,
+                    description=desc,
+                    portfolio_impact_usd=round(total_impact, 2),
+                    portfolio_impact_pct=round(impact_pct, 2),
+                    worst_position=worst_symbol,
+                    worst_position_loss=round(worst_loss, 2),
+                    recovery_estimate_days=recovery_days,
+                )
+            )
 
         return results
 
@@ -693,9 +709,16 @@ class RiskManagementTools:
         """
         if len(equity_curve) < 2:
             return RiskAdjustedReturns(
-                total_return=0, annualized_return=0, volatility=0,
-                sharpe_ratio=0, sortino_ratio=0, calmar_ratio=0,
-                max_drawdown=0, win_rate=0, profit_factor=0, expectancy=0,
+                total_return=0,
+                annualized_return=0,
+                volatility=0,
+                sharpe_ratio=0,
+                sortino_ratio=0,
+                calmar_ratio=0,
+                max_drawdown=0,
+                win_rate=0,
+                profit_factor=0,
+                expectancy=0,
             )
 
         eq = np.array(equity_curve, dtype=float)
@@ -704,9 +727,16 @@ class RiskManagementTools:
 
         if len(returns) < 2:
             return RiskAdjustedReturns(
-                total_return=0, annualized_return=0, volatility=0,
-                sharpe_ratio=0, sortino_ratio=0, calmar_ratio=0,
-                max_drawdown=0, win_rate=0, profit_factor=0, expectancy=0,
+                total_return=0,
+                annualized_return=0,
+                volatility=0,
+                sharpe_ratio=0,
+                sortino_ratio=0,
+                calmar_ratio=0,
+                max_drawdown=0,
+                win_rate=0,
+                profit_factor=0,
+                expectancy=0,
             )
 
         # Total return
@@ -723,13 +753,21 @@ class RiskManagementTools:
         # Sharpe ratio
         daily_rf = risk_free_rate / trading_days_per_year
         excess = returns - daily_rf
-        sharpe = float(np.mean(excess) / np.std(excess, ddof=1) * math.sqrt(trading_days_per_year)) if np.std(excess) > 0 else 0
+        sharpe = (
+            float(np.mean(excess) / np.std(excess, ddof=1) * math.sqrt(trading_days_per_year))
+            if np.std(excess) > 0
+            else 0
+        )
 
         # Sortino ratio
         downside = excess[excess < 0]
         if len(downside) > 0:
             downside_dev = float(np.std(downside, ddof=1))
-            sortino = float(np.mean(excess) / downside_dev * math.sqrt(trading_days_per_year)) if downside_dev > 0 else 0
+            sortino = (
+                float(np.mean(excess) / downside_dev * math.sqrt(trading_days_per_year))
+                if downside_dev > 0
+                else 0
+            )
         else:
             sortino = float("inf") if np.mean(excess) > 0 else 0
 
@@ -836,10 +874,7 @@ class RiskManagementTools:
             reason = "Normal operation"
 
         # Trading permissions and size multiplier
-        if level == "RED":
-            trading_allowed = False
-            multiplier = 0.0
-        elif level == "ORANGE":
+        if level == "RED" or level == "ORANGE":
             trading_allowed = False
             multiplier = 0.0
         elif level == "YELLOW":

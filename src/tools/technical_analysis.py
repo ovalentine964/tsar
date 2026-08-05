@@ -23,13 +23,13 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
-from datetime import UTC, datetime
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import numpy as np
 import pandas as pd
 
-from src.interfaces.types import OHLCV
+if TYPE_CHECKING:
+    from src.interfaces.types import OHLCV
 
 logger = logging.getLogger(__name__)
 
@@ -275,13 +275,14 @@ class TechnicalAnalysisTools:
         c = pd.Series(closes, dtype=float)
 
         import pandas_ta as ta
+
         adx_df = ta.adx(h, l, c, length=period)
 
         if adx_df is None or adx_df.dropna(how="all").empty:
             return ADXResult(adx=0, plus_di=0, minus_di=0, trend_strength="no_trend")
 
         adx_val = float(adx_df.iloc[-1, 0])  # ADX column
-        plus_di = float(adx_df.iloc[-1, 1])   # +DI column
+        plus_di = float(adx_df.iloc[-1, 1])  # +DI column
         minus_di = float(adx_df.iloc[-1, 2])  # -DI column
 
         # Categorize trend strength
@@ -332,8 +333,12 @@ class TechnicalAnalysisTools:
         """
         if len(highs) < k_period:
             return StochasticResult(
-                k_line=(), d_line=(), current_k=50, current_d=50,
-                signal="neutral", crossover="none",
+                k_line=(),
+                d_line=(),
+                current_k=50,
+                current_d=50,
+                signal="neutral",
+                crossover="none",
             )
 
         h = pd.Series(highs, dtype=float)
@@ -341,12 +346,17 @@ class TechnicalAnalysisTools:
         c = pd.Series(closes, dtype=float)
 
         import pandas_ta as ta
+
         stoch = ta.stoch(h, l, c, k=k_period, d=d_period, smooth_k=smooth_k)
 
         if stoch is None or stoch.dropna(how="all").empty:
             return StochasticResult(
-                k_line=(), d_line=(), current_k=50, current_d=50,
-                signal="neutral", crossover="none",
+                k_line=(),
+                d_line=(),
+                current_k=50,
+                current_d=50,
+                signal="neutral",
+                crossover="none",
             )
 
         k_values = tuple(stoch.iloc[:, 0].dropna().tolist())
@@ -401,8 +411,12 @@ class TechnicalAnalysisTools:
         """
         if not ohlcv:
             return VWAPResult(
-                vwap=0, upper_band=0, lower_band=0,
-                upper_band_2=0, lower_band_2=0, price_position="at",
+                vwap=0,
+                upper_band=0,
+                lower_band=0,
+                upper_band_2=0,
+                lower_band_2=0,
+                price_position="at",
             )
 
         # Typical price * volume
@@ -479,10 +493,14 @@ class TechnicalAnalysisTools:
         if len(highs) < senkou_b_period:
             price = closes[-1] if closes else 0
             return IchimokuResult(
-                tenkan_sen=price, kijun_sen=price,
-                senkou_span_a=price, senkou_span_b=price,
-                chikou_span=price, cloud_color="thin",
-                price_vs_cloud="inside", signal="neutral",
+                tenkan_sen=price,
+                kijun_sen=price,
+                senkou_span_a=price,
+                senkou_span_b=price,
+                chikou_span=price,
+                cloud_color="thin",
+                price_vs_cloud="inside",
+                signal="neutral",
             )
 
         h = np.array(highs, dtype=float)
@@ -573,8 +591,12 @@ class TechnicalAnalysisTools:
         """
         if len(ohlcv) < 5:
             return FibonacciLevels(
-                swing_high=0, swing_low=0, direction="neutral",
-                levels={}, nearest_level=0, nearest_level_name="",
+                swing_high=0,
+                swing_low=0,
+                direction="neutral",
+                levels={},
+                nearest_level=0,
+                nearest_level_name="",
             )
 
         recent = ohlcv[-lookback:] if len(ohlcv) > lookback else ohlcv
@@ -708,10 +730,10 @@ class TechnicalAnalysisTools:
         points: list[tuple[int, float]] = []
         for i in range(window, len(data) - window):
             if point_type == "high":
-                if data[i] == max(data[i - window: i + window + 1]):
+                if data[i] == max(data[i - window : i + window + 1]):
                     points.append((i, float(data[i])))
             else:
-                if data[i] == min(data[i - window: i + window + 1]):
+                if data[i] == min(data[i - window : i + window + 1]):
                     points.append((i, float(data[i])))
         return points
 
@@ -738,7 +760,7 @@ class TechnicalAnalysisTools:
             return None
 
         # Neckline support between the two highs
-        neckline = float(np.min(closes[h1_idx:h2_idx + 1]))
+        neckline = float(np.min(closes[h1_idx : h2_idx + 1]))
         current = float(closes[-1])
 
         # Breakdown below neckline
@@ -750,7 +772,7 @@ class TechnicalAnalysisTools:
                 confidence=0.7,
                 target_price=round(target, 8),
                 description=f"Double top at {h1_price:.2f}/{h2_price:.2f}, "
-                           f"neckline {neckline:.2f}, target {target:.2f}",
+                f"neckline {neckline:.2f}, target {target:.2f}",
             )
 
         return PatternResult(
@@ -781,7 +803,7 @@ class TechnicalAnalysisTools:
         if pct_diff > 0.02:
             return None
 
-        neckline = float(np.max(closes[l1_idx:l2_idx + 1]))
+        neckline = float(np.max(closes[l1_idx : l2_idx + 1]))
         current = float(closes[-1])
 
         if current > neckline:
@@ -792,7 +814,7 @@ class TechnicalAnalysisTools:
                 confidence=0.7,
                 target_price=round(target, 8),
                 description=f"Double bottom at {l1_price:.2f}/{l2_price:.2f}, "
-                           f"neckline {neckline:.2f}, target {target:.2f}",
+                f"neckline {neckline:.2f}, target {target:.2f}",
             )
 
         return PatternResult(
@@ -848,7 +870,7 @@ class TechnicalAnalysisTools:
                 confidence=0.75,
                 target_price=round(target, 8),
                 description=f"H&S: head={h_price:.2f}, shoulders={ls_price:.2f}/{rs_price:.2f}, "
-                           f"neckline={neckline:.2f}, target={target:.2f}",
+                f"neckline={neckline:.2f}, target={target:.2f}",
             )
 
         return PatternResult(
@@ -887,7 +909,7 @@ class TechnicalAnalysisTools:
                 confidence=0.6,
                 target_price=round(high_prices[-1] + (high_prices[-1] - low_prices[0]), 8),
                 description=f"Ascending triangle: resistance={high_prices[-1]:.2f}, "
-                           f"rising support from {low_prices[0]:.2f} to {low_prices[-1]:.2f}",
+                f"rising support from {low_prices[0]:.2f} to {low_prices[-1]:.2f}",
             )
 
         # Descending: falling highs, flat bottom
@@ -898,7 +920,7 @@ class TechnicalAnalysisTools:
                 confidence=0.6,
                 target_price=round(low_prices[-1] - (high_prices[0] - low_prices[-1]), 8),
                 description=f"Descending triangle: support={low_prices[-1]:.2f}, "
-                           f"falling resistance from {high_prices[0]:.2f} to {high_prices[-1]:.2f}",
+                f"falling resistance from {high_prices[0]:.2f} to {high_prices[-1]:.2f}",
             )
 
         # Symmetric: converging highs and lows
@@ -909,8 +931,8 @@ class TechnicalAnalysisTools:
                 confidence=0.5,
                 target_price=round((high_prices[-1] + low_prices[-1]) / 2, 8),
                 description=f"Symmetric triangle: converging from "
-                           f"{high_prices[0]:.2f}/{low_prices[0]:.2f} to "
-                           f"{high_prices[-1]:.2f}/{low_prices[-1]:.2f}",
+                f"{high_prices[0]:.2f}/{low_prices[0]:.2f} to "
+                f"{high_prices[-1]:.2f}/{low_prices[-1]:.2f}",
             )
 
         return None
@@ -956,87 +978,109 @@ class TechnicalAnalysisTools:
 
             # Doji
             if body / total_range < 0.1:
-                patterns.append(CandlestickPattern(
-                    pattern="doji",
-                    direction="neutral",
-                    reliability=0.5,
-                    bar_index=i,
-                    description="Doji — indecision, potential reversal",
-                ))
+                patterns.append(
+                    CandlestickPattern(
+                        pattern="doji",
+                        direction="neutral",
+                        reliability=0.5,
+                        bar_index=i,
+                        description="Doji — indecision, potential reversal",
+                    )
+                )
 
             # Hammer (bullish reversal)
-            if (lower_shadow > body * 2 and upper_shadow < body * 0.5
-                    and c_prev.close < c_prev.open):
-                patterns.append(CandlestickPattern(
-                    pattern="hammer",
-                    direction="bullish",
-                    reliability=0.65,
-                    bar_index=i,
-                    description="Hammer — bullish reversal signal after downtrend",
-                ))
+            if lower_shadow > body * 2 and upper_shadow < body * 0.5 and c_prev.close < c_prev.open:
+                patterns.append(
+                    CandlestickPattern(
+                        pattern="hammer",
+                        direction="bullish",
+                        reliability=0.65,
+                        bar_index=i,
+                        description="Hammer — bullish reversal signal after downtrend",
+                    )
+                )
 
             # Inverted Hammer
-            if (upper_shadow > body * 2 and lower_shadow < body * 0.5
-                    and c_prev.close < c_prev.open):
-                patterns.append(CandlestickPattern(
-                    pattern="inverted_hammer",
-                    direction="bullish",
-                    reliability=0.55,
-                    bar_index=i,
-                    description="Inverted Hammer — potential bullish reversal",
-                ))
+            if upper_shadow > body * 2 and lower_shadow < body * 0.5 and c_prev.close < c_prev.open:
+                patterns.append(
+                    CandlestickPattern(
+                        pattern="inverted_hammer",
+                        direction="bullish",
+                        reliability=0.55,
+                        bar_index=i,
+                        description="Inverted Hammer — potential bullish reversal",
+                    )
+                )
 
             # Bullish Engulfing
-            if (c_prev.close < c_prev.open  # Previous bearish
-                    and c.close > c.open  # Current bullish
-                    and c.open <= c_prev.close  # Open below prev close
-                    and c.close >= c_prev.open):  # Close above prev open
-                patterns.append(CandlestickPattern(
-                    pattern="bullish_engulfing",
-                    direction="bullish",
-                    reliability=0.7,
-                    bar_index=i,
-                    description="Bullish Engulfing — strong reversal signal",
-                ))
+            if (
+                c_prev.close < c_prev.open  # Previous bearish
+                and c.close > c.open  # Current bullish
+                and c.open <= c_prev.close  # Open below prev close
+                and c.close >= c_prev.open
+            ):  # Close above prev open
+                patterns.append(
+                    CandlestickPattern(
+                        pattern="bullish_engulfing",
+                        direction="bullish",
+                        reliability=0.7,
+                        bar_index=i,
+                        description="Bullish Engulfing — strong reversal signal",
+                    )
+                )
 
             # Bearish Engulfing
-            if (c_prev.close > c_prev.open  # Previous bullish
-                    and c.close < c.open  # Current bearish
-                    and c.open >= c_prev.close  # Open above prev close
-                    and c.close <= c_prev.open):  # Close below prev open
-                patterns.append(CandlestickPattern(
-                    pattern="bearish_engulfing",
-                    direction="bearish",
-                    reliability=0.7,
-                    bar_index=i,
-                    description="Bearish Engulfing — strong reversal signal",
-                ))
+            if (
+                c_prev.close > c_prev.open  # Previous bullish
+                and c.close < c.open  # Current bearish
+                and c.open >= c_prev.close  # Open above prev close
+                and c.close <= c_prev.open
+            ):  # Close below prev open
+                patterns.append(
+                    CandlestickPattern(
+                        pattern="bearish_engulfing",
+                        direction="bearish",
+                        reliability=0.7,
+                        bar_index=i,
+                        description="Bearish Engulfing — strong reversal signal",
+                    )
+                )
 
             # Morning Star (bullish reversal, 3-candle)
-            if (c_prev2.close < c_prev2.open  # First bearish
-                    and abs(c_prev.close - c_prev.open) < (c_prev2.high - c_prev2.low) * 0.3  # Middle small
-                    and c.close > c.open  # Third bullish
-                    and c.close > (c_prev2.open + c_prev2.close) / 2):
-                patterns.append(CandlestickPattern(
-                    pattern="morning_star",
-                    direction="bullish",
-                    reliability=0.75,
-                    bar_index=i,
-                    description="Morning Star — strong bullish reversal",
-                ))
+            if (
+                c_prev2.close < c_prev2.open  # First bearish
+                and abs(c_prev.close - c_prev.open)
+                < (c_prev2.high - c_prev2.low) * 0.3  # Middle small
+                and c.close > c.open  # Third bullish
+                and c.close > (c_prev2.open + c_prev2.close) / 2
+            ):
+                patterns.append(
+                    CandlestickPattern(
+                        pattern="morning_star",
+                        direction="bullish",
+                        reliability=0.75,
+                        bar_index=i,
+                        description="Morning Star — strong bullish reversal",
+                    )
+                )
 
             # Evening Star (bearish reversal, 3-candle)
-            if (c_prev2.close > c_prev2.open  # First bullish
-                    and abs(c_prev.close - c_prev.open) < (c_prev2.high - c_prev2.low) * 0.3  # Middle small
-                    and c.close < c.open  # Third bearish
-                    and c.close < (c_prev2.open + c_prev2.close) / 2):
-                patterns.append(CandlestickPattern(
-                    pattern="evening_star",
-                    direction="bearish",
-                    reliability=0.75,
-                    bar_index=i,
-                    description="Evening Star — strong bearish reversal",
-                ))
+            if (
+                c_prev2.close > c_prev2.open  # First bullish
+                and abs(c_prev.close - c_prev.open)
+                < (c_prev2.high - c_prev2.low) * 0.3  # Middle small
+                and c.close < c.open  # Third bearish
+                and c.close < (c_prev2.open + c_prev2.close) / 2
+            ):
+                patterns.append(
+                    CandlestickPattern(
+                        pattern="evening_star",
+                        direction="bearish",
+                        reliability=0.75,
+                        bar_index=i,
+                        description="Evening Star — strong bearish reversal",
+                    )
+                )
 
         return patterns
 
@@ -1065,8 +1109,11 @@ class TechnicalAnalysisTools:
         """
         if len(prices) < lookback or len(indicator_values) < lookback:
             return DivergenceResult(
-                divergence_type="none", indicator=indicator_name,
-                price_action="", indicator_action="", strength=0,
+                divergence_type="none",
+                indicator=indicator_name,
+                price_action="",
+                indicator_action="",
+                strength=0,
             )
 
         p = np.array(prices[-lookback:])
@@ -1078,9 +1125,9 @@ class TechnicalAnalysisTools:
         price_lows: list[tuple[int, float]] = []
 
         for i in range(window, len(p) - window):
-            if p[i] == max(p[i - window: i + window + 1]):
+            if p[i] == max(p[i - window : i + window + 1]):
                 price_highs.append((i, float(p[i])))
-            if p[i] == min(p[i - window: i + window + 1]):
+            if p[i] == min(p[i - window : i + window + 1]):
                 price_lows.append((i, float(p[i])))
 
         # Check for bearish divergence: higher price high, lower indicator high
@@ -1122,8 +1169,11 @@ class TechnicalAnalysisTools:
                     )
 
         return DivergenceResult(
-            divergence_type="none", indicator=indicator_name,
-            price_action="", indicator_action="", strength=0,
+            divergence_type="none",
+            indicator=indicator_name,
+            price_action="",
+            indicator_action="",
+            strength=0,
         )
 
     # ── Multi-Timeframe Confluence ───────────────────────────────────

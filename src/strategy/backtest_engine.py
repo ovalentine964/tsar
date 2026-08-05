@@ -68,10 +68,10 @@ class BacktestConfig:
     risk_free_rate: float = 0.04
     trading_days_per_year: int = 365
     max_open_positions: int = 1
-    min_notional: float = 10.0       # Binance minimum notional
-    min_quantity: float = 0.00001    # Minimum base asset quantity
-    min_price_tick: float = 0.01     # Minimum price increment
-    use_micro_mode: bool = False     # $10 capital mode
+    min_notional: float = 10.0  # Binance minimum notional
+    min_quantity: float = 0.00001  # Minimum base asset quantity
+    min_price_tick: float = 0.01  # Minimum price increment
+    use_micro_mode: bool = False  # $10 capital mode
 
     @classmethod
     def micro_mode(cls, capital: float = 10.0) -> BacktestConfig:
@@ -86,13 +86,13 @@ class BacktestConfig:
         """
         return cls(
             initial_capital=capital,
-            position_size_pct=1.0,        # Full allocation with $10
-            commission_bps=10.0,          # Binance 0.1% taker fee
-            slippage_bps=5.0,             # Conservative slippage
+            position_size_pct=1.0,  # Full allocation with $10
+            commission_bps=10.0,  # Binance 0.1% taker fee
+            slippage_bps=5.0,  # Conservative slippage
             risk_free_rate=0.04,
             trading_days_per_year=365,
-            max_open_positions=1,         # Only 1 position with $10
-            min_notional=10.0,            # Binance minimum
+            max_open_positions=1,  # Only 1 position with $10
+            min_notional=10.0,  # Binance minimum
             min_quantity=0.00001,
             min_price_tick=0.01,
             use_micro_mode=True,
@@ -372,7 +372,7 @@ class BacktestEngine:
             "timestamp": bar.timestamp,
             "bar_index": index,
             "closes": recent_closes,
-            "ohlcv_recent": ohlcv[max(0, index - 99): index + 1],
+            "ohlcv_recent": ohlcv[max(0, index - 99) : index + 1],
             # Indicators
             "ema_fast": ema_fast,
             "ema_slow": ema_slow,
@@ -484,10 +484,7 @@ class BacktestEngine:
                 plus_di = 0.0
                 minus_di = 0.0
             di_sum = plus_di + minus_di
-            if di_sum > 0:
-                dx = abs(plus_di - minus_di) / di_sum * 100.0
-            else:
-                dx = 0.0
+            dx = abs(plus_di - minus_di) / di_sum * 100.0 if di_sum > 0 else 0.0
             dx_values.append(dx)
         if not dx_values:
             return 0.0
@@ -498,18 +495,22 @@ class BacktestEngine:
         return adx_val
 
     @staticmethod
-    def _bollinger(closes: list[float], period: int = 20, num_std: float = 2.0) -> tuple[float, float, float]:
+    def _bollinger(
+        closes: list[float], period: int = 20, num_std: float = 2.0
+    ) -> tuple[float, float, float]:
         """Compute Bollinger Bands (upper, middle, lower)."""
         window = closes[-period:] if len(closes) >= period else closes
         if not window:
             return 0.0, 0.0, 0.0
         middle = sum(window) / len(window)
         variance = sum((x - middle) ** 2 for x in window) / len(window)
-        std = variance ** 0.5
+        std = variance**0.5
         return middle + num_std * std, middle, middle - num_std * std
 
     @staticmethod
-    def _macd(closes: list[float], fast: int = 12, slow: int = 26, signal: int = 9) -> tuple[float, float, float]:
+    def _macd(
+        closes: list[float], fast: int = 12, slow: int = 26, signal: int = 9
+    ) -> tuple[float, float, float]:
         """Compute MACD (line, signal, histogram)."""
         if len(closes) < slow:
             return 0.0, 0.0, 0.0
@@ -525,7 +526,9 @@ class BacktestEngine:
         ema_slow_series = _ema_series(closes, slow)
         # Align: slow EMA starts later
         offset = slow - fast
-        macd_line_series = [ema_fast_series[offset + i] - ema_slow_series[i] for i in range(len(ema_slow_series))]
+        macd_line_series = [
+            ema_fast_series[offset + i] - ema_slow_series[i] for i in range(len(ema_slow_series))
+        ]
         if len(macd_line_series) < signal:
             return macd_line_series[-1] if macd_line_series else 0.0, 0.0, 0.0
         signal_series = _ema_series(macd_line_series, signal)
@@ -564,25 +567,29 @@ class BacktestEngine:
 
             # RSI oversold → buy signal
             if rsi < 30:
-                signals.append({
-                    "type": "rsi_oversold",
-                    "side": "buy",
-                    "score": min(1.0, (30 - rsi) / 15),
-                    "bar_index": i,
-                    "price": data["close"],
-                    "rsi": rsi,
-                })
+                signals.append(
+                    {
+                        "type": "rsi_oversold",
+                        "side": "buy",
+                        "score": min(1.0, (30 - rsi) / 15),
+                        "bar_index": i,
+                        "price": data["close"],
+                        "rsi": rsi,
+                    }
+                )
 
             # RSI overbought → sell signal
             if rsi > 70:
-                signals.append({
-                    "type": "rsi_overbought",
-                    "side": "sell",
-                    "score": min(1.0, (rsi - 70) / 15),
-                    "bar_index": i,
-                    "price": data["close"],
-                    "rsi": rsi,
-                })
+                signals.append(
+                    {
+                        "type": "rsi_overbought",
+                        "side": "sell",
+                        "score": min(1.0, (rsi - 70) / 15),
+                        "bar_index": i,
+                        "price": data["close"],
+                        "rsi": rsi,
+                    }
+                )
 
             # EMA crossover detection
             if i >= 56:
@@ -593,28 +600,32 @@ class BacktestEngine:
                 # Bullish crossover: fast crosses above slow
                 if prev_fast <= prev_slow and ema_fast > ema_slow:
                     spread = (ema_fast - ema_slow) / ema_slow if ema_slow > 0 else 0
-                    signals.append({
-                        "type": "ema_bullish_crossover",
-                        "side": "buy",
-                        "score": min(1.0, spread * 50),
-                        "bar_index": i,
-                        "price": data["close"],
-                        "ema_fast": ema_fast,
-                        "ema_slow": ema_slow,
-                    })
+                    signals.append(
+                        {
+                            "type": "ema_bullish_crossover",
+                            "side": "buy",
+                            "score": min(1.0, spread * 50),
+                            "bar_index": i,
+                            "price": data["close"],
+                            "ema_fast": ema_fast,
+                            "ema_slow": ema_slow,
+                        }
+                    )
 
                 # Bearish crossover: fast crosses below slow
                 if prev_fast >= prev_slow and ema_fast < ema_slow:
                     spread = (ema_slow - ema_fast) / ema_slow if ema_slow > 0 else 0
-                    signals.append({
-                        "type": "ema_bearish_crossover",
-                        "side": "sell",
-                        "score": min(1.0, spread * 50),
-                        "bar_index": i,
-                        "price": data["close"],
-                        "ema_fast": ema_fast,
-                        "ema_slow": ema_slow,
-                    })
+                    signals.append(
+                        {
+                            "type": "ema_bearish_crossover",
+                            "side": "sell",
+                            "score": min(1.0, spread * 50),
+                            "bar_index": i,
+                            "price": data["close"],
+                            "ema_fast": ema_fast,
+                            "ema_slow": ema_slow,
+                        }
+                    )
 
         return signals
 
@@ -666,16 +677,17 @@ class BacktestEngine:
 
         # Round price to tick size
         if config.min_price_tick > 0:
-            entry_price = round(
-                entry_price / config.min_price_tick
-            ) * config.min_price_tick
+            entry_price = round(entry_price / config.min_price_tick) * config.min_price_tick
 
         # Check minimum notional
         actual_notional = quantity * entry_price
         if actual_notional < config.min_notional:
             logger.debug(
                 "Position skipped: notional %.2f below minimum %.2f (qty=%.8f @ %.2f)",
-                actual_notional, config.min_notional, quantity, entry_price,
+                actual_notional,
+                config.min_notional,
+                quantity,
+                entry_price,
             )
             return None
 
@@ -683,7 +695,8 @@ class BacktestEngine:
         if actual_notional > capital * 1.01:  # 1% tolerance
             logger.debug(
                 "Position skipped: notional %.2f exceeds capital %.2f",
-                actual_notional, capital,
+                actual_notional,
+                capital,
             )
             return None
 
@@ -814,8 +827,8 @@ class BacktestEngine:
         # Profit factor — cap at 1000.0 to avoid inf when no losing trades
         gross_profit = sum(winners) if winners else 0.0
         gross_loss = abs(sum(losers)) if losers else 0.0
-        profit_factor = gross_profit / gross_loss if gross_loss > 0 else (
-            1000.0 if gross_profit > 0 else 0.0
+        profit_factor = (
+            gross_profit / gross_loss if gross_loss > 0 else (1000.0 if gross_profit > 0 else 0.0)
         )
 
         # Expectancy
@@ -992,7 +1005,10 @@ class BacktestEngine:
 
         logger.info(
             "Train/test split: %d train bars, %d test bars (%.0f/%.0f)",
-            len(train_data), len(test_data), train_ratio * 100, (1 - train_ratio) * 100,
+            len(train_data),
+            len(test_data),
+            train_ratio * 100,
+            (1 - train_ratio) * 100,
         )
 
         # Run on train
@@ -1025,7 +1041,11 @@ class BacktestEngine:
         logger.info(
             "Train/test results: train_sharpe=%.2f test_sharpe=%.2f "
             "overfit_score=%.2f is_overfit=%s degradation=%.1f%%",
-            train_sharpe, test_sharpe, overfit_score, is_overfit, degradation_pct,
+            train_sharpe,
+            test_sharpe,
+            overfit_score,
+            is_overfit,
+            degradation_pct,
         )
 
         return {

@@ -14,9 +14,8 @@ ingestion and the NewsGatekeeper decision engine.
 from __future__ import annotations
 
 import logging
-import time
 from dataclasses import dataclass
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime
 from typing import Any
 
 logger = logging.getLogger(__name__)
@@ -49,13 +48,13 @@ class AvalancheSignal:
     """Detected news avalanche."""
 
     detected: bool
-    direction: str = ""        # "bullish", "bearish", "mixed"
-    severity: str = ""         # "emergency", "opportunity", "watch"
+    direction: str = ""  # "bullish", "bearish", "mixed"
+    severity: str = ""  # "emergency", "opportunity", "watch"
     article_count: int = 0
     window_minutes: int = 0
     avg_sentiment: float = 0.0
     unique_sources: int = 0
-    action: str = ""           # "VETO_ALL", "AMPLIFY_SIGNAL", "MONITOR"
+    action: str = ""  # "VETO_ALL", "AMPLIFY_SIGNAL", "MONITOR"
     description: str = ""
 
 
@@ -66,7 +65,7 @@ class SilenceSignal:
     detected: bool
     hours_silent: float = 0.0
     is_market_hours: bool = False
-    action: str = ""           # "INVESTIGATE", "MONITOR"
+    action: str = ""  # "INVESTIGATE", "MONITOR"
     description: str = ""
 
 
@@ -76,7 +75,7 @@ class SentimentShiftSignal:
 
     detected: bool
     shift_magnitude: float = 0.0
-    direction: str = ""        # "positive", "negative"
+    direction: str = ""  # "positive", "negative"
     window_minutes: int = 0
     action: str = ""
     description: str = ""
@@ -92,7 +91,7 @@ class NewsVelocityReport:
     silence: SilenceSignal
     sentiment_shift: SentimentShiftSignal
     is_unusual: bool
-    recommended_action: str    # "NORMAL", "ALERT", "VETO", "INVESTIGATE"
+    recommended_action: str  # "NORMAL", "ALERT", "VETO", "INVESTIGATE"
     timestamp: datetime | None = None
 
 
@@ -106,22 +105,22 @@ class VelocityConfig:
     """Configuration for velocity detection thresholds."""
 
     # Avalanche detection
-    avalanche_threshold: int = 5          # Min articles for avalanche
-    avalanche_window_minutes: int = 60    # Time window
-    avalanche_min_sources: int = 2        # Min unique sources
+    avalanche_threshold: int = 5  # Min articles for avalanche
+    avalanche_window_minutes: int = 60  # Time window
+    avalanche_min_sources: int = 2  # Min unique sources
 
     # Silence detection
     silence_threshold_hours: float = 24.0  # Hours of no news
     silence_market_hours_only: bool = True
 
     # Sentiment shift
-    shift_threshold: float = 0.3          # Min sentiment change
-    shift_window_minutes: int = 30        # Time window
+    shift_threshold: float = 0.3  # Min sentiment change
+    shift_window_minutes: int = 30  # Time window
 
     # Normal ranges (for "unusual" detection)
     normal_articles_per_hour_low: float = 1.0
     normal_articles_per_hour_high: float = 10.0
-    normal_source_diversity: int = 3      # Min sources for "normal"
+    normal_source_diversity: int = 3  # Min sources for "normal"
 
 
 # ═══════════════════════════════════════════════════════════════════════
@@ -232,16 +231,13 @@ class NewsVelocityDetector:
         window_count = len(in_window)
 
         # Articles per hour
-        if window > 0 and window_count > 0:
-            articles_per_hour = window_count / (window / 60)
-        else:
-            articles_per_hour = 0.0
+        articles_per_hour = window_count / (window / 60) if window > 0 and window_count > 0 else 0.0
 
         # Sentiment stats
         avg_sent = sum(sentiments) / len(sentiments) if sentiments else 0.0
         if len(sentiments) > 1:
             variance = sum((s - avg_sent) ** 2 for s in sentiments) / len(sentiments)
-            std = variance ** 0.5
+            std = variance**0.5
         else:
             std = 0.0
 
@@ -277,10 +273,7 @@ class NewsVelocityDetector:
         min_sources = self._config.avalanche_min_sources
 
         # Count directional articles in window
-        in_window = [
-            i for i in items
-            if i.get("age_minutes", 999) <= window
-        ]
+        in_window = [i for i in items if i.get("age_minutes", 999) <= window]
 
         if len(in_window) < threshold:
             return AvalancheSignal(detected=False)

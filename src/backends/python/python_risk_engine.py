@@ -66,13 +66,17 @@ class PythonRiskEngine(RiskEngine):
         risk = abs(entry_price - stop_loss)
         reward = abs(take_profit - entry_price)
         if risk > 0 and reward / risk < self.MIN_RISK_REWARD:
-            checks_failed.append(f"risk_reward_too_low ({reward/risk:.2f} < {self.MIN_RISK_REWARD})")
+            checks_failed.append(
+                f"risk_reward_too_low ({reward / risk:.2f} < {self.MIN_RISK_REWARD})"
+            )
         else:
             checks_passed.append("risk_reward_ok")
 
         # 3. Max open positions
         if len(open_positions) >= self.MAX_OPEN_POSITIONS:
-            checks_failed.append(f"max_positions ({len(open_positions)} >= {self.MAX_OPEN_POSITIONS})")
+            checks_failed.append(
+                f"max_positions ({len(open_positions)} >= {self.MAX_OPEN_POSITIONS})"
+            )
         else:
             checks_passed.append("positions_ok")
 
@@ -121,8 +125,13 @@ class PythonRiskEngine(RiskEngine):
         risk_per_unit = abs(entry_price - stop_loss)
         if risk_per_unit == 0:
             return PositionSizeResult(
-                quantity=0, notional_value=0, risk_amount=0,
-                risk_pct=0, method=method, capped=True, cap_reason="zero_risk_per_unit"
+                quantity=0,
+                notional_value=0,
+                risk_amount=0,
+                risk_pct=0,
+                method=method,
+                capped=True,
+                cap_reason="zero_risk_per_unit",
             )
 
         risk_amount = equity * risk_pct
@@ -145,7 +154,7 @@ class PythonRiskEngine(RiskEngine):
             quantity = max_notional / entry_price
             notional = max_notional
             capped = True
-            cap_reason = f"capped_at_{self.MAX_POSITION_PCT*100:.0f}pct"
+            cap_reason = f"capped_at_{self.MAX_POSITION_PCT * 100:.0f}pct"
 
         return PositionSizeResult(
             quantity=quantity,

@@ -352,8 +352,9 @@ class RegimeConditionalBacktestResult:
 # ═══════════════════════════════════════════════════════════════════════
 
 
-def _compute_sharpe(returns: np.ndarray, risk_free_rate: float = 0.0,
-                    periods_per_year: int = 365) -> float:
+def _compute_sharpe(
+    returns: np.ndarray, risk_free_rate: float = 0.0, periods_per_year: int = 365
+) -> float:
     """Annualized Sharpe ratio from a return series."""
     if len(returns) < 2:
         return 0.0
@@ -365,8 +366,9 @@ def _compute_sharpe(returns: np.ndarray, risk_free_rate: float = 0.0,
     return float(np.mean(excess) / std * math.sqrt(periods_per_year))
 
 
-def _compute_sortino(returns: np.ndarray, risk_free_rate: float = 0.0,
-                     periods_per_year: int = 365) -> float:
+def _compute_sortino(
+    returns: np.ndarray, risk_free_rate: float = 0.0, periods_per_year: int = 365
+) -> float:
     """Annualized Sortino ratio from a return series."""
     if len(returns) < 2:
         return 0.0
@@ -504,14 +506,14 @@ class BacktestingTools:
             ValueError: If ohlcv and signals have different lengths.
         """
         if len(ohlcv) != len(signals):
-            raise ValueError(
-                f"ohlcv ({len(ohlcv)}) and signals ({len(signals)}) length mismatch"
-            )
+            raise ValueError(f"ohlcv ({len(ohlcv)}) and signals ({len(signals)}) length mismatch")
 
         n = len(ohlcv)
         if n < 2:
             return BacktestResult(
-                trades=[], equity_curve=[initial_capital], returns=[],
+                trades=[],
+                equity_curve=[initial_capital],
+                returns=[],
                 timestamp=pd.Timestamp.now().timestamp(),
             )
 
@@ -543,7 +545,9 @@ class BacktestingTools:
 
             # Close existing position if direction changes or goes flat
             if current_side != 0 and (target_side != current_side or target_side == 0):
-                exit_price = _apply_slippage(exec_price, "short" if current_side == 1 else "long", slippage_bps)
+                exit_price = _apply_slippage(
+                    exec_price, "short" if current_side == 1 else "long", slippage_bps
+                )
                 exit_notional = abs(position) * exit_price
                 exit_fee = _compute_fees(exit_notional, fee_rate)
                 exit_slip = abs(exit_price - exec_price) * abs(position)
@@ -553,23 +557,29 @@ class BacktestingTools:
                 else:
                     pnl = (entry_price - exit_price) * abs(position) - entry_fees - exit_fee
 
-                pnl_pct = pnl / (entry_price * abs(position)) if entry_price > 0 and abs(position) > 0 else 0.0
+                pnl_pct = (
+                    pnl / (entry_price * abs(position))
+                    if entry_price > 0 and abs(position) > 0
+                    else 0.0
+                )
                 capital += pnl + entry_fees + exit_fee  # Return capital + pnl minus fees
                 total_fees += entry_fees + exit_fee
                 total_slippage += entry_slip + exit_slip
 
-                trades.append(TradeRecord(
-                    entry_time=entry_time,
-                    exit_time=i,
-                    side="long" if current_side == 1 else "short",
-                    entry_price=entry_price,
-                    exit_price=exit_price,
-                    quantity=abs(position),
-                    pnl=pnl,
-                    pnl_pct=pnl_pct,
-                    fees_paid=entry_fees + exit_fee,
-                    slippage_cost=entry_slip + exit_slip,
-                ))
+                trades.append(
+                    TradeRecord(
+                        entry_time=entry_time,
+                        exit_time=i,
+                        side="long" if current_side == 1 else "short",
+                        entry_price=entry_price,
+                        exit_price=exit_price,
+                        quantity=abs(position),
+                        pnl=pnl,
+                        pnl_pct=pnl_pct,
+                        fees_paid=entry_fees + exit_fee,
+                        slippage_cost=entry_slip + exit_slip,
+                    )
+                )
 
                 position = 0.0
                 current_side = 0
@@ -577,7 +587,9 @@ class BacktestingTools:
             # Open new position if signal says so
             if target_side != 0 and current_side == 0:
                 alloc = capital * position_size_pct
-                entry_fill = _apply_slippage(exec_price, "long" if target_side == 1 else "short", slippage_bps)
+                entry_fill = _apply_slippage(
+                    exec_price, "long" if target_side == 1 else "short", slippage_bps
+                )
                 position = alloc / entry_fill if entry_fill > 0 else 0.0
                 entry_fee = _compute_fees(alloc, fee_rate)
                 entry_slip = abs(entry_fill - exec_price) * position
@@ -585,7 +597,6 @@ class BacktestingTools:
                 entry_price = entry_fill
                 entry_time = i
                 entry_fees = entry_fee
-                entry_slip_cost = entry_slip
                 current_side = target_side
                 capital -= alloc  # Capital deployed into position
 
@@ -607,7 +618,9 @@ class BacktestingTools:
         # Close any remaining position at last close
         if current_side != 0 and position > 0:
             last_close = closes[-1]
-            exit_price = _apply_slippage(last_close, "short" if current_side == 1 else "long", slippage_bps)
+            exit_price = _apply_slippage(
+                last_close, "short" if current_side == 1 else "long", slippage_bps
+            )
             exit_fee = _compute_fees(abs(position) * exit_price, fee_rate)
             exit_slip = abs(exit_price - last_close) * abs(position)
 
@@ -621,18 +634,20 @@ class BacktestingTools:
             total_fees += entry_fees + exit_fee
             total_slippage += entry_slip + exit_slip
 
-            trades.append(TradeRecord(
-                entry_time=entry_time,
-                exit_time=n - 1,
-                side="long" if current_side == 1 else "short",
-                entry_price=entry_price,
-                exit_price=exit_price,
-                quantity=position,
-                pnl=pnl,
-                pnl_pct=pnl_pct,
-                fees_paid=entry_fees + exit_fee,
-                slippage_cost=entry_slip + exit_slip,
-            ))
+            trades.append(
+                TradeRecord(
+                    entry_time=entry_time,
+                    exit_time=n - 1,
+                    side="long" if current_side == 1 else "short",
+                    entry_price=entry_price,
+                    exit_price=exit_price,
+                    quantity=position,
+                    pnl=pnl,
+                    pnl_pct=pnl_pct,
+                    fees_paid=entry_fees + exit_fee,
+                    slippage_cost=entry_slip + exit_slip,
+                )
+            )
             equity_curve[-1] = capital
 
         # ── Compute metrics ───────────────────────────────────────
@@ -644,10 +659,7 @@ class BacktestingTools:
         ann_ret = ((1 + total_ret) ** (1 / years) - 1) if years > 0 else 0.0
 
         win_streak, loss_streak = _streak_count([t.pnl > 0 for t in trades])
-        avg_duration = (
-            np.mean([t.exit_time - t.entry_time for t in trades])
-            if trades else 0.0
-        )
+        avg_duration = np.mean([t.exit_time - t.entry_time for t in trades]) if trades else 0.0
 
         return BacktestResult(
             trades=trades,
@@ -657,16 +669,19 @@ class BacktestingTools:
             annualized_return=round(ann_ret * 100, 4),
             max_drawdown=round(_compute_max_drawdown(eq) * 100, 4),
             sharpe_ratio=round(_compute_sharpe(ret_arr, risk_free_rate, trading_days_per_year), 4),
-            sortino_ratio=round(
-                _compute_sortino(ret_arr, risk_free_rate, trading_days_per_year), 4
-            ) if _compute_sortino(ret_arr, risk_free_rate, trading_days_per_year) != float("inf") else 999.99,
-            win_rate=round(
-                sum(1 for t in trades if t.pnl > 0) / len(trades) * 100, 2
-            ) if trades else 0.0,
+            sortino_ratio=round(_compute_sortino(ret_arr, risk_free_rate, trading_days_per_year), 4)
+            if _compute_sortino(ret_arr, risk_free_rate, trading_days_per_year) != float("inf")
+            else 999.99,
+            win_rate=round(sum(1 for t in trades if t.pnl > 0) / len(trades) * 100, 2)
+            if trades
+            else 0.0,
             profit_factor=round(
-                sum(t.pnl for t in trades if t.pnl > 0) /
-                abs(sum(t.pnl for t in trades if t.pnl < 0)), 2
-            ) if any(t.pnl < 0 for t in trades) else 999.99,
+                sum(t.pnl for t in trades if t.pnl > 0)
+                / abs(sum(t.pnl for t in trades if t.pnl < 0)),
+                2,
+            )
+            if any(t.pnl < 0 for t in trades)
+            else 999.99,
             total_trades=len(trades),
             total_fees=round(total_fees, 4),
             total_slippage=round(total_slippage, 4),
@@ -719,7 +734,8 @@ class BacktestingTools:
         n = len(ohlcv)
         if n < 10 or n_splits < 2:
             return WalkForwardResult(
-                in_sample_metrics=[], out_of_sample_metrics=[],
+                in_sample_metrics=[],
+                out_of_sample_metrics=[],
                 combined_oos_equity=[initial_capital],
                 num_folds=0,
             )
@@ -731,7 +747,8 @@ class BacktestingTools:
 
         if is_size < 5 or oos_size < 3:
             return WalkForwardResult(
-                in_sample_metrics=[], out_of_sample_metrics=[],
+                in_sample_metrics=[],
+                out_of_sample_metrics=[],
                 combined_oos_equity=[initial_capital],
                 num_folds=0,
             )
@@ -753,56 +770,88 @@ class BacktestingTools:
             is_data = ohlcv.iloc[start:is_end].reset_index(drop=True)
             is_signals = signal_func(is_data)
             is_result = self.run_backtest(
-                is_data, is_signals, initial_capital,
-                fee_rate, slippage_bps, position_size_pct,
-                risk_free_rate, trading_days_per_year,
+                is_data,
+                is_signals,
+                initial_capital,
+                fee_rate,
+                slippage_bps,
+                position_size_pct,
+                risk_free_rate,
+                trading_days_per_year,
             )
-            is_metrics_list.append({
-                "total_return": is_result.total_return,
-                "sharpe_ratio": is_result.sharpe_ratio,
-                "max_drawdown": is_result.max_drawdown,
-                "win_rate": is_result.win_rate,
-                "total_trades": float(is_result.total_trades),
-            })
+            is_metrics_list.append(
+                {
+                    "total_return": is_result.total_return,
+                    "sharpe_ratio": is_result.sharpe_ratio,
+                    "max_drawdown": is_result.max_drawdown,
+                    "win_rate": is_result.win_rate,
+                    "total_trades": float(is_result.total_trades),
+                }
+            )
 
             # Out-of-sample
             oos_data = ohlcv.iloc[is_end:oos_end].reset_index(drop=True)
             oos_signals = signal_func(oos_data)
             oos_result = self.run_backtest(
-                oos_data, oos_signals, initial_capital,
-                fee_rate, slippage_bps, position_size_pct,
-                risk_free_rate, trading_days_per_year,
+                oos_data,
+                oos_signals,
+                initial_capital,
+                fee_rate,
+                slippage_bps,
+                position_size_pct,
+                risk_free_rate,
+                trading_days_per_year,
             )
-            oos_metrics_list.append({
-                "total_return": oos_result.total_return,
-                "sharpe_ratio": oos_result.sharpe_ratio,
-                "max_drawdown": oos_result.max_drawdown,
-                "win_rate": oos_result.win_rate,
-                "total_trades": float(oos_result.total_trades),
-            })
+            oos_metrics_list.append(
+                {
+                    "total_return": oos_result.total_return,
+                    "sharpe_ratio": oos_result.sharpe_ratio,
+                    "max_drawdown": oos_result.max_drawdown,
+                    "win_rate": oos_result.win_rate,
+                    "total_trades": float(oos_result.total_trades),
+                }
+            )
 
             # Stitch OOS equity
-            scale = combined_oos_equity[-1] / oos_result.equity_curve[0] if oos_result.equity_curve[0] > 0 else 1.0
+            scale = (
+                combined_oos_equity[-1] / oos_result.equity_curve[0]
+                if oos_result.equity_curve[0] > 0
+                else 1.0
+            )
             for eq_val in oos_result.equity_curve[1:]:
                 combined_oos_equity.append(eq_val * scale)
             combined_oos_returns.extend(oos_result.returns)
 
         # Compute combined metrics
         oos_eq = np.array(combined_oos_equity, dtype=float)
-        oos_ret = np.array(combined_oos_returns, dtype=float) if combined_oos_returns else np.array([0.0])
+        oos_ret = (
+            np.array(combined_oos_returns, dtype=float) if combined_oos_returns else np.array([0.0])
+        )
 
         oos_total = (oos_eq[-1] - oos_eq[0]) / oos_eq[0] if oos_eq[0] > 0 else 0.0
         oos_sharpe = _compute_sharpe(oos_ret)
         oos_mdd = _compute_max_drawdown(oos_eq)
 
-        avg_is_sharpe = float(np.mean([m["sharpe_ratio"] for m in is_metrics_list])) if is_metrics_list else 0.0
-        avg_oos_sharpe = float(np.mean([m["sharpe_ratio"] for m in oos_metrics_list])) if oos_metrics_list else 0.0
-        degradation = (avg_is_sharpe - avg_oos_sharpe) / abs(avg_is_sharpe) if avg_is_sharpe != 0 else 0.0
+        avg_is_sharpe = (
+            float(np.mean([m["sharpe_ratio"] for m in is_metrics_list])) if is_metrics_list else 0.0
+        )
+        avg_oos_sharpe = (
+            float(np.mean([m["sharpe_ratio"] for m in oos_metrics_list]))
+            if oos_metrics_list
+            else 0.0
+        )
+        degradation = (
+            (avg_is_sharpe - avg_oos_sharpe) / abs(avg_is_sharpe) if avg_is_sharpe != 0 else 0.0
+        )
 
         # Stability score: inverse CV of OOS returns across folds
         oos_fold_returns = [m["total_return"] for m in oos_metrics_list]
         if len(oos_fold_returns) > 1 and np.std(oos_fold_returns) > 0:
-            cv = abs(np.std(oos_fold_returns) / np.mean(oos_fold_returns)) if np.mean(oos_fold_returns) != 0 else 999.0
+            cv = (
+                abs(np.std(oos_fold_returns) / np.mean(oos_fold_returns))
+                if np.mean(oos_fold_returns) != 0
+                else 999.0
+            )
             stability = max(0.0, 1.0 - cv)
         else:
             stability = 0.0
@@ -968,6 +1017,7 @@ class BacktestingTools:
 
         # Distribution shape
         from scipy import stats as sp_stats
+
         skew = float(sp_stats.skew(ret_arr))
         kurt = float(sp_stats.kurtosis(ret_arr))
 
@@ -1063,10 +1113,10 @@ class BacktestingTools:
 
         ic_series: list[float] = []
         for i in range(rolling_window, len(strat)):
-            window_strat = strat[i - rolling_window:i]
+            window_strat = strat[i - rolling_window : i]
             # IC is typically computed vs a composite factor
             # Here we use the first factor as the primary signal
-            window_factor = F[i - rolling_window:i, 0]
+            window_factor = F[i - rolling_window : i, 0]
             if np.std(window_strat) > 0 and np.std(window_factor) > 0:
                 corr, _ = sp_stats.spearmanr(window_factor, window_strat)
                 ic_series.append(float(corr))
@@ -1095,7 +1145,11 @@ class BacktestingTools:
         # Compute standard errors and t-stats
         y_hat = X @ coeffs
         resid = strat - y_hat
-        mse = float(np.sum(resid ** 2) / (len(strat) - n_factors - 1)) if len(strat) > n_factors + 1 else 0.0
+        mse = (
+            float(np.sum(resid**2) / (len(strat) - n_factors - 1))
+            if len(strat) > n_factors + 1
+            else 0.0
+        )
         try:
             cov_matrix = mse * np.linalg.inv(X.T @ X)
             se = np.sqrt(np.diag(cov_matrix))
@@ -1105,7 +1159,7 @@ class BacktestingTools:
         alpha_t = alpha / se[0] if se[0] > 0 else 0.0
 
         # R²
-        ss_res = float(np.sum(resid ** 2))
+        ss_res = float(np.sum(resid**2))
         ss_tot = float(np.sum((strat - np.mean(strat)) ** 2))
         r_squared = 1 - ss_res / ss_tot if ss_tot > 0 else 0.0
 
@@ -1135,17 +1189,21 @@ class BacktestingTools:
             except Exception:
                 r2_contribution = 0.0
 
-            exposures.append(FactorExposure(
-                factor_name=name,
-                beta=round(beta_j, 6),
-                t_stat=round(t_stat_j, 4),
-                p_value=round(float(p_val), 6),
-                r_squared=round(max(0, r2_contribution), 6),
-                partial_correlation=round(partial_corr, 6),
-            ))
+            exposures.append(
+                FactorExposure(
+                    factor_name=name,
+                    beta=round(beta_j, 6),
+                    t_stat=round(t_stat_j, 4),
+                    p_value=round(float(p_val), 6),
+                    r_squared=round(max(0, r2_contribution), 6),
+                    partial_correlation=round(partial_corr, 6),
+                )
+            )
 
         return FactorAnalysisResult(
-            ic=round(float(sp_stats.spearmanr(F[:, 0], strat)[0]), 6) if np.std(F[:, 0]) > 0 else 0.0,
+            ic=round(float(sp_stats.spearmanr(F[:, 0], strat)[0]), 6)
+            if np.std(F[:, 0]) > 0
+            else 0.0,
             ic_mean=round(ic_mean, 6),
             ic_std=round(ic_std, 6),
             ir=round(ir, 6),
@@ -1216,9 +1274,14 @@ class BacktestingTools:
 
         # ── Detect regimes ────────────────────────────────────────
         regimes = self._detect_regimes(
-            closes, ret_arr, regime_method, lookback,
-            vol_lookback, trend_threshold,
-            vol_high_percentile, vol_low_percentile,
+            closes,
+            ret_arr,
+            regime_method,
+            lookback,
+            vol_lookback,
+            trend_threshold,
+            vol_high_percentile,
+            vol_low_percentile,
         )
 
         # ── Compute per-regime metrics ────────────────────────────
@@ -1232,7 +1295,8 @@ class BacktestingTools:
 
             if len(regime_returns) < 2:
                 regime_perf[regime] = RegimePerformance(
-                    regime=regime, total_bars=int(np.sum(mask)),
+                    regime=regime,
+                    total_bars=int(np.sum(mask)),
                     pct_of_total_time=round(float(np.sum(mask)) / n * 100, 2),
                 )
                 continue
@@ -1283,8 +1347,12 @@ class BacktestingTools:
 
         # ── Best/worst regime by Sharpe ───────────────────────────
         valid_regimes = {k: v for k, v in regime_perf.items() if v.total_bars > 1}
-        best = max(valid_regimes, key=lambda k: valid_regimes[k].sharpe_ratio) if valid_regimes else ""
-        worst = min(valid_regimes, key=lambda k: valid_regimes[k].sharpe_ratio) if valid_regimes else ""
+        best = (
+            max(valid_regimes, key=lambda k: valid_regimes[k].sharpe_ratio) if valid_regimes else ""
+        )
+        worst = (
+            min(valid_regimes, key=lambda k: valid_regimes[k].sharpe_ratio) if valid_regimes else ""
+        )
 
         # ── Regime adaptability: how much Sharpe varies across regimes ──
         sharpes = [v.sharpe_ratio for v in valid_regimes.values()]
@@ -1346,14 +1414,14 @@ class BacktestingTools:
             lookback_ret = (closes[i] - closes[i - lookback]) / closes[i - lookback]
 
             # Volatility: rolling std of returns
-            vol_window = returns[max(0, i - vol_lookback):i]
+            vol_window = returns[max(0, i - vol_lookback) : i]
             current_vol = float(np.std(vol_window, ddof=1)) if len(vol_window) > 1 else 0.0
 
             # Compute volatility percentiles using expanding window
             if i >= vol_lookback * 2:
                 hist_vol = []
                 for j in range(vol_lookback, i):
-                    w = returns[max(0, j - vol_lookback):j]
+                    w = returns[max(0, j - vol_lookback) : j]
                     if len(w) > 1:
                         hist_vol.append(float(np.std(w, ddof=1)))
                 if hist_vol:
@@ -1395,8 +1463,11 @@ class BacktestingTools:
 
             X = returns.reshape(-1, 1)
             model = GaussianHMM(
-                n_components=2, covariance_type="full",
-                n_iter=100, random_state=42, tol=1e-4,
+                n_components=2,
+                covariance_type="full",
+                n_iter=100,
+                random_state=42,
+                tol=1e-4,
             )
             model.fit(X)
             states = model.predict(X)
@@ -1404,7 +1475,7 @@ class BacktestingTools:
             # Label states by mean return
             means = model.means_.flatten()
             low_vol_state = np.argmin(model.covars_.flatten())
-            high_vol_state = 1 - low_vol_state
+            1 - low_vol_state
 
             regime_map = {}
             for state_idx in range(2):
@@ -1427,8 +1498,8 @@ class BacktestingTools:
             regimes = [MarketRegime.RANGING.value] * n
             lookback = 20
             for i in range(lookback, n):
-                ret = (returns[i - lookback:i].sum())
-                vol = float(np.std(returns[max(0, i - lookback):i], ddof=1))
+                ret = returns[i - lookback : i].sum()
+                vol = float(np.std(returns[max(0, i - lookback) : i], ddof=1))
                 if ret > 0.05:
                     regimes[i] = MarketRegime.TRENDING_UP.value
                 elif ret < -0.05:

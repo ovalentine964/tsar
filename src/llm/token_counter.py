@@ -27,6 +27,7 @@ def _check_tiktoken() -> bool:
     if _tiktoken_available is None:
         try:
             import tiktoken  # noqa: F401
+
             _tiktoken_available = True
         except ImportError:
             _tiktoken_available = False

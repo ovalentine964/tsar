@@ -46,9 +46,7 @@ from src.risk.position_sizer import PositionSizer, SizingConfig
 logger = logging.getLogger(__name__)
 
 # Default config path
-_DEFAULT_CONFIG = os.environ.get(
-    "TSAR_RISK_CONFIG", "config/risk.yaml"
-)
+_DEFAULT_CONFIG = os.environ.get("TSAR_RISK_CONFIG", "config/risk.yaml")
 
 
 class RiskGovernor(RiskEngine):
@@ -85,16 +83,12 @@ class RiskGovernor(RiskEngine):
 
         # Cache commonly used thresholds
         self._max_open_positions = self._config.get("max_open_positions", 10)
-        self._max_single_position_pct = self._config.get(
-            "max_single_position_pct", 0.15
-        )
+        self._max_single_position_pct = self._config.get("max_single_position_pct", 0.15)
         self._max_stop_loss_pct = self._config.get("max_stop_loss_pct", 0.02)
         self._stop_loss_required = self._config.get("stop_loss_required", True)
         self._min_rr_ratio = self._config.get("min_rr_ratio", 2.0)
         self._max_daily_trades = self._config.get("max_daily_trades", 30)
-        self._anti_fomo_min_score = self._config.get(
-            "anti_fomo_min_signal_score", 0.6
-        )
+        self._anti_fomo_min_score = self._config.get("anti_fomo_min_signal_score", 0.6)
         self._blackout_events = self._config.get("blackout_events", {})
         self._recovery_config = self._config.get("recovery", {})
 
@@ -111,7 +105,7 @@ class RiskGovernor(RiskEngine):
         # Recovery protocol state (C-016)
         self._recovery_state: dict[str, Any] = {
             "active": False,
-            "level": None,       # "orange" or "red"
+            "level": None,  # "orange" or "red"
             "started_at": None,  # Unix timestamp when recovery began
             "current_phase": 0,  # Index into recovery phases
         }
@@ -199,8 +193,7 @@ class RiskGovernor(RiskEngine):
                 f"Circuit Breaker {dd_state.circuit_breaker_level}: "
                 f"Drawdown {dd_state.current_drawdown_pct:.2%} — "
                 f"no new entries allowed.",
-                VetoLevel.HARD if dd_state.circuit_breaker_level == "ORANGE"
-                else VetoLevel.NUCLEAR,
+                VetoLevel.HARD if dd_state.circuit_breaker_level == "ORANGE" else VetoLevel.NUCLEAR,
             )
         if dd_state.position_size_multiplier < 1.0:
             warnings.append(
@@ -219,9 +212,7 @@ class RiskGovernor(RiskEngine):
 
         # ── All checks passed — calculate position size ───────────
         # Combine drawdown multiplier with guard multiplier
-        combined_multiplier = (
-            dd_state.position_size_multiplier * guard_decision.size_multiplier
-        )
+        combined_multiplier = dd_state.position_size_multiplier * guard_decision.size_multiplier
 
         position_size = self.calculate_position_size(signal, portfolio)
         adjusted_size = position_size * combined_multiplier
@@ -379,8 +370,7 @@ class RiskGovernor(RiskEngine):
         if not phases:
             # No phases defined for this level - fallback to defaults
             logger.warning(
-                f"No recovery phases defined for level '{level}', "
-                f"using default phased re-entry"
+                f"No recovery phases defined for level '{level}', using default phased re-entry"
             )
             phases = self._default_recovery_phases(level)
 
@@ -401,7 +391,7 @@ class RiskGovernor(RiskEngine):
             if duration == 0:
                 # Duration 0 = final phase (indefinite until gate passed)
                 logger.info(
-                    f"Recovery [{level}] Phase {i+1}: {allocation:.0%} allocation "
+                    f"Recovery [{level}] Phase {i + 1}: {allocation:.0%} allocation "
                     f"(final phase, elapsed={elapsed_hours:.1f}h)"
                 )
                 return allocation
@@ -410,17 +400,14 @@ class RiskGovernor(RiskEngine):
 
             if elapsed_hours < cumulative_hours:
                 logger.info(
-                    f"Recovery [{level}] Phase {i+1}/{len(phases)}: "
+                    f"Recovery [{level}] Phase {i + 1}/{len(phases)}: "
                     f"{allocation:.0%} allocation "
                     f"(elapsed={elapsed_hours:.1f}h/{cumulative_hours:.1f}h)"
                 )
                 return allocation
 
         # All phases completed - full allocation
-        logger.info(
-            f"Recovery [{level}] COMPLETE: all phases passed, "
-            f"returning 100% allocation"
-        )
+        logger.info(f"Recovery [{level}] COMPLETE: all phases passed, returning 100% allocation")
         self._recovery_state["active"] = False
         return 1.0
 
@@ -567,9 +554,7 @@ class RiskGovernor(RiskEngine):
         # Non-zero multiplier → warning, not block
         return ""
 
-    def _check_position_limits(
-        self, signal: Signal, portfolio: Portfolio
-    ) -> str:
+    def _check_position_limits(self, signal: Signal, portfolio: Portfolio) -> str:
         """Layer 7: Check position count and concentration limits.
 
         Returns error message or empty string if within limits.
@@ -589,15 +574,14 @@ class RiskGovernor(RiskEngine):
                 if existing_notional / portfolio.equity > self._max_single_position_pct:
                     return (
                         f"Position Limit: Existing position in {signal.symbol} "
-                        f"already at {existing_notional/portfolio.equity:.1%} of equity."
+                        f"already at {existing_notional / portfolio.equity:.1%} of equity."
                     )
 
         # Daily trade count (from metadata if available)
         daily_trades = signal.metadata.get("daily_trade_count", 0)
         if daily_trades >= self._max_daily_trades:
             return (
-                f"Position Limit: {daily_trades} trades today >= "
-                f"maximum {self._max_daily_trades}."
+                f"Position Limit: {daily_trades} trades today >= maximum {self._max_daily_trades}."
             )
 
         return ""
@@ -634,9 +618,7 @@ class RiskGovernor(RiskEngine):
             # Standard params
             kelly_fraction=self._config.get("kelly_fraction", 0.25),
             risk_per_trade_pct=self._config.get("risk_per_trade_pct", 0.02),
-            max_single_position_pct=self._config.get(
-                "max_single_position_pct", 0.15
-            ),
+            max_single_position_pct=self._config.get("max_single_position_pct", 0.15),
             # Fee params (C-001)
             maker_fee_pct=fee_cfg.get("maker_fee_pct", 0.001),
             taker_fee_pct=fee_cfg.get("taker_fee_pct", 0.001),
@@ -647,9 +629,7 @@ class RiskGovernor(RiskEngine):
             micro_capital_threshold_usd=micro_cfg.get("threshold_usd", 50.0),
             micro_kelly_fraction=micro_cfg.get("kelly_fraction", 0.40),
             micro_risk_per_trade_pct=micro_cfg.get("risk_per_trade_pct", 0.05),
-            micro_max_single_position_pct=micro_cfg.get(
-                "max_single_position_pct", 0.30
-            ),
+            micro_max_single_position_pct=micro_cfg.get("max_single_position_pct", 0.30),
             micro_min_notional_usd=micro_cfg.get("min_notional_usd", 5.0),
             micro_min_quantity_step=micro_cfg.get("min_quantity_step", 0.00001),
         )
@@ -669,24 +649,12 @@ class RiskGovernor(RiskEngine):
         relax_cfg = micro_cfg.get("relax_guards", {})
 
         return GuardsConfig(
-            anti_revenge_cooldown_minutes=self._config.get(
-                "anti_revenge_cooldown_minutes", 60
-            ),
-            anti_revenge_loss_streak=self._config.get(
-                "anti_revenge_loss_streak", 3
-            ),
-            anti_greed_sizing_factor=self._config.get(
-                "anti_greed_sizing_factor", 0.7
-            ),
-            anti_greed_win_streak=self._config.get(
-                "anti_greed_win_streak", 5
-            ),
-            anti_fomo_min_signal_score=self._config.get(
-                "anti_fomo_min_signal_score", 0.6
-            ),
-            anti_overconfidence_win_streak=self._config.get(
-                "anti_overconfidence_win_streak", 5
-            ),
+            anti_revenge_cooldown_minutes=self._config.get("anti_revenge_cooldown_minutes", 60),
+            anti_revenge_loss_streak=self._config.get("anti_revenge_loss_streak", 3),
+            anti_greed_sizing_factor=self._config.get("anti_greed_sizing_factor", 0.7),
+            anti_greed_win_streak=self._config.get("anti_greed_win_streak", 5),
+            anti_fomo_min_signal_score=self._config.get("anti_fomo_min_signal_score", 0.6),
+            anti_overconfidence_win_streak=self._config.get("anti_overconfidence_win_streak", 5),
             # Micro-capital guard relaxation (H-005)
             relax_anti_greed=relax_cfg.get("anti_greed", False),
             relax_anti_overconfidence=relax_cfg.get("anti_overconfidence", False),
@@ -697,9 +665,7 @@ class RiskGovernor(RiskEngine):
     # ═══════════════════════════════════════════════════════════════
 
     @staticmethod
-    def _reject(
-        signal_id: str, reason: str, veto_level: VetoLevel
-    ) -> RiskDecision:
+    def _reject(signal_id: str, reason: str, veto_level: VetoLevel) -> RiskDecision:
         """Build a rejection RiskDecision."""
         logger.info(f"Risk REJECTED: {signal_id} — {reason}")
         return RiskDecision(

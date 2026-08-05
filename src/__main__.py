@@ -19,6 +19,7 @@ import time
 from pathlib import Path
 
 import structlog
+
 logger = structlog.get_logger()
 
 # Ensure data directory exists
@@ -64,23 +65,19 @@ def _validate_secrets() -> None:
         )
     elif api_key.lower() in _WEAK_SECRETS:
         errors.append(
-            f"TSAR_API_KEY uses a known weak default value. "
-            f"Generate a strong key with: "
-            f"python3 -c 'import secrets; print(secrets.token_urlsafe(48))'"
+            "TSAR_API_KEY uses a known weak default value. "
+            "Generate a strong key with: "
+            "python3 -c 'import secrets; print(secrets.token_urlsafe(48))'"
         )
     elif len(api_key) < 16:
         errors.append(
-            f"TSAR_API_KEY is too short ({len(api_key)} chars). "
-            f"Use at least 16 characters."
+            f"TSAR_API_KEY is too short ({len(api_key)} chars). Use at least 16 characters."
         )
 
     # REDIS_PASSWORD — required for Redis auth
     redis_pw = os.environ.get("REDIS_PASSWORD", "").strip()
     if redis_pw and redis_pw.lower() in _WEAK_SECRETS:
-        errors.append(
-            "REDIS_PASSWORD uses a known weak default value. "
-            "Generate a strong password."
-        )
+        errors.append("REDIS_PASSWORD uses a known weak default value. Generate a strong password.")
 
     # Exchange secrets — critical for trading
     for key_name in ["EXCHANGE_API_KEY", "EXCHANGE_SECRET"]:
@@ -124,11 +121,19 @@ async def run_full_system(args: argparse.Namespace) -> None:
 
     config = load_config(args.config)
     config_dict = config if isinstance(config, dict) else vars(config)
-    setup_logging(level=getattr(config, "logging", config).level if hasattr(config, "logging") else "INFO",
-                  json_output=getattr(getattr(config, "logging", None), "json_output", False) if hasattr(config, "logging") else False)
+    setup_logging(
+        level=getattr(config, "logging", config).level if hasattr(config, "logging") else "INFO",
+        json_output=getattr(getattr(config, "logging", None), "json_output", False)
+        if hasattr(config, "logging")
+        else False,
+    )
 
     # Resolve trading mode: CLI flags override config, config defaults to "paper"
-    config_mode = config_dict.get("app", {}).get("trading_mode", "paper") if isinstance(config_dict, dict) else "paper"
+    config_mode = (
+        config_dict.get("app", {}).get("trading_mode", "paper")
+        if isinstance(config_dict, dict)
+        else "paper"
+    )
     if args.live:
         trading_mode = "live"
     elif args.paper:
@@ -140,7 +145,9 @@ async def run_full_system(args: argparse.Namespace) -> None:
     if trading_mode == "live":
         try:
             from pathlib import Path
+
             from src.risk.mandate import Mandate
+
             mandate_gate = Mandate(config_path=Path("config/mandate.yaml"))
             gate_decision = mandate_gate.check_paper_trading_gate()
             if not gate_decision.allowed:
@@ -156,12 +163,17 @@ async def run_full_system(args: argparse.Namespace) -> None:
     logger.info(f"\n🏰 TSAR v0.2.0 — {trading_mode.upper()} MODE")
     logger.info(f"   Config: {args.config}")
     logger.info(f"   API: http://{args.host}:{args.port}")
-    db_path = getattr(getattr(config, "database", None), "db_path", "data/tsar.db") if hasattr(config, "database") else "data/tsar.db"
+    db_path = (
+        getattr(getattr(config, "database", None), "db_path", "data/tsar.db")
+        if hasattr(config, "database")
+        else "data/tsar.db"
+    )
     logger.info(f"   Database: {db_path}")
     logger.info()
 
     # ── Initialize Backend Registry ──────────────────────────────
     from src.interfaces import get_backend_registry
+
     registry = get_backend_registry()
     registry._register_defaults()
     logger.info("✅ Backend registry initialized")
@@ -178,7 +190,9 @@ async def run_full_system(args: argparse.Namespace) -> None:
     lesson_archive = LessonArchive(db_path)
     strategy_genomes = StrategyGenomes(db_path)
     regime_state = RegimeStateStore()
-    logger.info("✅ Knowledge stores ready (TradeMemory, PatternLibrary, LessonArchive, StrategyGenomes, RegimeState)")
+    logger.info(
+        "✅ Knowledge stores ready (TradeMemory, PatternLibrary, LessonArchive, StrategyGenomes, RegimeState)"
+    )
 
     # ── Initialize Risk Components ───────────────────────────────
     from src.risk.guard_state import GuardStatePersistence
@@ -202,7 +216,9 @@ async def run_full_system(args: argparse.Namespace) -> None:
                 await exchange_gateway.cancel_all_orders()
                 logger.info("✅ All orders cancelled via exchange gateway")
             else:
-                logger.warning("⚠️ No cancel_orders capability available — manual intervention required")
+                logger.warning(
+                    "⚠️ No cancel_orders capability available — manual intervention required"
+                )
         except Exception as e:
             logger.error(f"Failed to cancel orders: {e}")
 
@@ -229,6 +245,7 @@ async def run_full_system(args: argparse.Namespace) -> None:
 
     # ── Create Event Bus ─────────────────────────────────────────
     from src.comms.event_bus import get_shared_bus
+
     event_bus = get_shared_bus()
     logger.info("✅ Event bus initialized (shared singleton)")
 
@@ -247,6 +264,7 @@ async def run_full_system(args: argparse.Namespace) -> None:
     paper_config = config_dict.get("paper", {}) if isinstance(config_dict, dict) else {}
     if trading_mode == "paper":
         from src.backends.python.paper_execution_engine import PaperExecutionEngine
+
         paper_initial = paper_config.get("initial_balance", 10.0)
         paper_fee = paper_config.get("fee_rate", 0.001) * 10_000  # Convert to bps
         execution_engine = PaperExecutionEngine(
@@ -256,7 +274,7 @@ async def run_full_system(args: argparse.Namespace) -> None:
         )
         logger.info(
             f"📝 Paper execution engine: balance=${paper_initial:.2f}, "
-            f"fee={paper_config.get('fee_rate', 0.001)*100:.2f}%"
+            f"fee={paper_config.get('fee_rate', 0.001) * 100:.2f}%"
         )
     else:
         try:
@@ -296,15 +314,16 @@ async def run_full_system(args: argparse.Namespace) -> None:
     # ── Check Mandate ────────────────────────────────────────────
     try:
         from pathlib import Path
+
         mandate = Mandate(config_path=Path("config/mandate.yaml"))
 
         # Auto-track paper trading start date
-        if trading_mode == "paper":
-            if not mandate.rules.paper_start_date:
-                from datetime import UTC, datetime
-                mandate._state.rules.paper_start_date = datetime.now(UTC).isoformat()
-                mandate._save_to_yaml()
-                logger.info("📝 Paper trading start date recorded")
+        if trading_mode == "paper" and not mandate.rules.paper_start_date:
+            from datetime import UTC, datetime
+
+            mandate._state.rules.paper_start_date = datetime.now(UTC).isoformat()
+            mandate._save_to_yaml()
+            logger.info("📝 Paper trading start date recorded")
 
         if trading_mode == "live" and mandate.status.value == "DRAFT":
             logger.info("⚠️  WARNING: Mandate is DRAFT — live trades will be blocked")
@@ -314,6 +333,7 @@ async def run_full_system(args: argparse.Namespace) -> None:
 
     # ── Create Event Bus ─────────────────────────────────────────
     from src.comms.event_bus import get_shared_bus
+
     event_bus = get_shared_bus()
     logger.info("✅ Event bus initialized (shared singleton)")
 
@@ -386,9 +406,7 @@ async def run_full_system(args: argparse.Namespace) -> None:
     logger.info("✅ Watchdog started (heartbeat monitor active)")
 
     # ── Start API server in background ───────────────────────────
-    api_task = asyncio.create_task(
-        start_api(args.host, args.port, config)
-    )
+    api_task = asyncio.create_task(start_api(args.host, args.port, config))
 
     # ── Heartbeat writer task ────────────────────────────────────
     async def _heartbeat_writer(interval: float = 5.0) -> None:
@@ -430,14 +448,21 @@ async def run_full_system(args: argparse.Namespace) -> None:
                             continue
                         agent_id = agent.agent_id
                         last_check = health_checks.get(agent_id, 0)
-                        age = now - last_check if last_check > 0 else now - agent._start_time if hasattr(agent, "_start_time") else interval * 2
+                        age = (
+                            now - last_check
+                            if last_check > 0
+                            else now - agent._start_time
+                            if hasattr(agent, "_start_time")
+                            else interval * 2
+                        )
 
                         if age > _AGENT_STALE_THRESHOLD:
                             stale_counts[agent_name] = stale_counts.get(agent_name, 0) + 1
                             logger.warning(
-                                "⚠️ Agent health monitor: %s stale for %.0fs "
-                                "(stale_count=%d)",
-                                agent_name, age, stale_counts[agent_name],
+                                "⚠️ Agent health monitor: %s stale for %.0fs (stale_count=%d)",
+                                agent_name,
+                                age,
+                                stale_counts[agent_name],
                             )
                             # Trigger kill switch after 3 consecutive stale reads
                             if stale_counts[agent_name] >= 3:
@@ -452,9 +477,9 @@ async def run_full_system(args: argparse.Namespace) -> None:
                         else:
                             if stale_counts.get(agent_name, 0) > 0:
                                 logger.info(
-                                    "Agent health monitor: %s recovered "
-                                    "(was stale %d checks)",
-                                    agent_name, stale_counts[agent_name],
+                                    "Agent health monitor: %s recovered (was stale %d checks)",
+                                    agent_name,
+                                    stale_counts[agent_name],
                                 )
                             stale_counts[agent_name] = 0
                             agent_last_seen[agent_name] = now
@@ -467,12 +492,15 @@ async def run_full_system(args: argparse.Namespace) -> None:
             await asyncio.sleep(interval)
 
     agent_health_task = asyncio.create_task(_agent_health_monitor())
-    logger.info("✅ Agent health monitor started (critical agents: %s)", ", ".join(_CRITICAL_AGENTS))
+    logger.info(
+        "✅ Agent health monitor started (critical agents: %s)", ", ".join(_CRITICAL_AGENTS)
+    )
 
     # ── Start Telegram Bot ───────────────────────────────────────
     telegram_task = None
     try:
         from src.bot.bot import TelegramBot
+
         telegram_config = config_dict.get("telegram", {}) if isinstance(config_dict, dict) else {}
         bot_token = telegram_config.get("bot_token", os.environ.get("TELEGRAM_BOT_TOKEN", ""))
         chat_id = telegram_config.get("chat_id", os.environ.get("TELEGRAM_CHAT_ID", ""))
@@ -613,9 +641,11 @@ async def trading_loop(config, trading_mode: str) -> None:
             try:
                 # Get trade stats
                 stats = db.get_trade_stats()
-                logger.info(f"   📊 Trades: {stats.get('total', 0)} | "
-                      f"Win rate: {stats.get('win_rate', 0):.1f}% | "
-                      f"P&L: ${stats.get('total_pnl', 0):.2f}")
+                logger.info(
+                    f"   📊 Trades: {stats.get('total', 0)} | "
+                    f"Win rate: {stats.get('win_rate', 0):.1f}% | "
+                    f"P&L: ${stats.get('total_pnl', 0):.2f}"
+                )
 
                 # Paper mode: simulate a signal
                 if trading_mode == "paper":
@@ -659,7 +689,9 @@ def run_dashboard(args: argparse.Namespace) -> None:
     logger.info("\n📋 Running health checks...")
     result = subprocess.run(
         [sys.executable, "-m", "pytest", "tests/", "-q", "--tb=no"],
-        capture_output=True, text=True, cwd="."
+        capture_output=True,
+        text=True,
+        cwd=".",
     )
     lines = result.stdout.strip().split("\n")
     for line in lines[-3:]:
@@ -669,6 +701,7 @@ def run_dashboard(args: argparse.Namespace) -> None:
     logger.info("\n⚙️  Configuration:")
     try:
         from src.utils.config import load_config
+
         config = load_config(args.config)
         logger.info(f"   Mode: {config.trading_mode}")
         logger.info(f"   Exchange: {config.exchange.name}")
@@ -682,6 +715,7 @@ def run_dashboard(args: argparse.Namespace) -> None:
     logger.info("\n📚 Knowledge Stores:")
     try:
         from src.knowledge.trade_memory import TradeMemory
+
         db = TradeMemory("data/tsar.db")
         stats = db.get_trade_stats()
         logger.info(f"   Trades: {stats.get('total', 0)}")
@@ -692,10 +726,11 @@ def run_dashboard(args: argparse.Namespace) -> None:
     logger.info("\n📊 Factor Library:")
     try:
         from src.strategy.factors import FACTOR_REGISTRY
+
         logger.info(f"   Factors: {len(FACTOR_REGISTRY)}")
         categories = {}
         for _name, func in FACTOR_REGISTRY.items():
-            cat = getattr(func, 'category', 'other')
+            cat = getattr(func, "category", "other")
             categories[cat] = categories.get(cat, 0) + 1
         for cat, count in sorted(categories.items()):
             logger.info(f"   • {cat}: {count}")
@@ -706,6 +741,7 @@ def run_dashboard(args: argparse.Namespace) -> None:
     logger.info("\n🛡️  Mandate:")
     try:
         from src.risk.mandate import Mandate
+
         m = Mandate(config_path=Path("config/mandate.yaml"))
         logger.info(f"   Status: {m.status}")
         logger.info(f"   Symbols: {len(m.rules)} rules defined")

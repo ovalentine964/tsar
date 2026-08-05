@@ -21,7 +21,13 @@ from src.agents.base import BaseAgent
 
 # ── Domain Tools (Tools-to-Agents Wiring) ──────────────────────────
 from src.tools.execution import ExecutionTools
-from src.tools.monitoring import PnLTracker, WinRateTracker, EquityCurve, RiskStateMonitor, AlertGenerator
+from src.tools.monitoring import (
+    AlertGenerator,
+    EquityCurve,
+    PnLTracker,
+    RiskStateMonitor,
+    WinRateTracker,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -65,9 +71,11 @@ class ExecutionTracker(BaseAgent):
         """Initialize execution and monitoring domain tools."""
         try:
             from src.interfaces import get_execution_engine
+
             exec_engine = get_execution_engine()
             self._execution_tools = ExecutionTools(
-                exec_engine=exec_engine, config=self.config,
+                exec_engine=exec_engine,
+                config=self.config,
             )
         except Exception as e:
             logger.warning("ExecutionTools init failed: %s", e)
@@ -133,7 +141,8 @@ class ExecutionTracker(BaseAgent):
 
         logger.debug(
             "Monitoring state updated: %d fill records, %d slippage records",
-            len(self._fill_quality_log), len(self._trade_slippage_history),
+            len(self._fill_quality_log),
+            len(self._trade_slippage_history),
         )
 
     async def _reconcile_positions(self) -> None:
@@ -174,7 +183,10 @@ class ExecutionTracker(BaseAgent):
                 if diff > 0.0001:  # tolerance for floating point
                     logger.warning(
                         "POSITION MISMATCH: %s — exchange=%.8f local=%.8f diff=%.8f",
-                        symbol, exch_qty, local_qty, diff,
+                        symbol,
+                        exch_qty,
+                        local_qty,
+                        diff,
                     )
                     await self.publish_event(
                         stream="positions",
@@ -215,36 +227,49 @@ class ExecutionTracker(BaseAgent):
                     if abs_slip > 50:
                         logger.critical(
                             "CRITICAL SLIPPAGE: %s %s — %.2f bps (trade=%s)",
-                            trade.side, trade.symbol, trade.slippage_bps, trade.trade_id,
+                            trade.side,
+                            trade.symbol,
+                            trade.slippage_bps,
+                            trade.trade_id,
                         )
-                        self._slippage_alerts.append({
-                            "trade_id": trade.trade_id,
-                            "symbol": trade.symbol,
-                            "slippage_bps": trade.slippage_bps,
-                            "severity": "CRITICAL",
-                            "timestamp": time.time(),
-                        })
+                        self._slippage_alerts.append(
+                            {
+                                "trade_id": trade.trade_id,
+                                "symbol": trade.symbol,
+                                "slippage_bps": trade.slippage_bps,
+                                "severity": "CRITICAL",
+                                "timestamp": time.time(),
+                            }
+                        )
                     elif abs_slip > 10:
                         logger.warning(
                             "HIGH SLIPPAGE: %s %s — %.2f bps (trade=%s)",
-                            trade.side, trade.symbol, trade.slippage_bps, trade.trade_id,
+                            trade.side,
+                            trade.symbol,
+                            trade.slippage_bps,
+                            trade.trade_id,
                         )
 
                 if trade.latency_ms is not None and trade.latency_ms > 5000:
                     logger.warning(
                         "HIGH LATENCY: %s %s — %dms (trade=%s)",
-                        trade.side, trade.symbol, trade.latency_ms, trade.trade_id,
+                        trade.side,
+                        trade.symbol,
+                        trade.latency_ms,
+                        trade.trade_id,
                     )
 
                 # Record fill quality metrics
-                self._fill_quality_log.append({
-                    "trade_id": trade.trade_id,
-                    "symbol": trade.symbol,
-                    "slippage_bps": trade.slippage_bps,
-                    "latency_ms": trade.latency_ms,
-                    "execution_grade": trade.execution_grade,
-                    "timestamp": time.time(),
-                })
+                self._fill_quality_log.append(
+                    {
+                        "trade_id": trade.trade_id,
+                        "symbol": trade.symbol,
+                        "slippage_bps": trade.slippage_bps,
+                        "latency_ms": trade.latency_ms,
+                        "execution_grade": trade.execution_grade,
+                        "timestamp": time.time(),
+                    }
+                )
 
             # Trim log to last 100 entries
             if len(self._fill_quality_log) > 100:
@@ -271,14 +296,15 @@ class ExecutionTracker(BaseAgent):
             for trade in open_trades:
                 if trade.created_at:
                     try:
-                        created = datetime.fromisoformat(
-                            trade.created_at.replace("Z", "+00:00")
-                        )
+                        created = datetime.fromisoformat(trade.created_at.replace("Z", "+00:00"))
                         age_hours = (now - created).total_seconds() / 3600
                         if age_hours > 1:
                             logger.warning(
                                 "STALE ORDER: %s %s open for %.1fh (trade=%s)",
-                                trade.side, trade.symbol, age_hours, trade.trade_id,
+                                trade.side,
+                                trade.symbol,
+                                age_hours,
+                                trade.trade_id,
                             )
                     except (ValueError, TypeError):
                         pass
@@ -349,17 +375,26 @@ class ExecutionTracker(BaseAgent):
         if abs_bps > 50:
             logger.critical(
                 "CRITICAL SLIPPAGE: %s %s — %.2f bps ($%.4f)",
-                symbol, side, slippage_bps, slippage_usd,
+                symbol,
+                side,
+                slippage_bps,
+                slippage_usd,
             )
         elif abs_bps > 10:
             logger.warning(
                 "HIGH SLIPPAGE: %s %s — %.2f bps ($%.4f)",
-                symbol, side, slippage_bps, slippage_usd,
+                symbol,
+                side,
+                slippage_bps,
+                slippage_usd,
             )
         else:
             logger.info(
                 "Slippage: %s %s — %.2f bps ($%.4f)",
-                symbol, side, slippage_bps, slippage_usd,
+                symbol,
+                side,
+                slippage_bps,
+                slippage_usd,
             )
 
         return record

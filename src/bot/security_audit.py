@@ -12,7 +12,6 @@ from __future__ import annotations
 
 import json
 import logging
-import os
 import re
 import time
 from datetime import UTC, datetime
@@ -57,6 +56,7 @@ def _sanitize_details(details: dict[str, Any]) -> dict[str, Any]:
 
 
 # ── Core audit logger ──────────────────────────────────────────
+
 
 def audit_log(event_type: str, details: dict[str, Any] | None = None) -> None:
     """Append a security event to the audit log.
@@ -131,6 +131,7 @@ AUDIT_BOT_TOKEN_SUSPICIOUS = "bot_token_suspicious"
 
 # ── Credential filter for stdlib logging ───────────────────────
 
+
 class CredentialLogFilter(logging.Filter):
     """Logging filter that redacts strings that look like credentials.
 
@@ -139,8 +140,8 @@ class CredentialLogFilter(logging.Filter):
     """
 
     _PATTERNS = [
-        re.compile(r"[A-Za-z0-9]{64}"),           # Binance API key/secret
-        re.compile(r"\d+:[A-Za-z0-9_-]{35}"),     # Telegram bot token
+        re.compile(r"[A-Za-z0-9]{64}"),  # Binance API key/secret
+        re.compile(r"\d+:[A-Za-z0-9_-]{35}"),  # Telegram bot token
         re.compile(r"(?i)(key|secret|token|password)\s*[:=]\s*\S+"),  # Labeled
     ]
     _REPLACEMENT = "[REDACTED]"

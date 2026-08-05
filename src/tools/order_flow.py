@@ -16,12 +16,11 @@ All tools are async with caching and graceful degradation.
 
 from __future__ import annotations
 
-import asyncio
 import logging
 import time
-from dataclasses import dataclass, field
-from datetime import UTC, datetime, timedelta
-from enum import Enum
+from dataclasses import dataclass
+from datetime import UTC, datetime
+from enum import StrEnum
 from typing import Any
 
 import httpx
@@ -34,15 +33,17 @@ logger = logging.getLogger(__name__)
 # ═══════════════════════════════════════════════════════════════════════
 
 
-class FlowDirection(str, Enum):
+class FlowDirection(StrEnum):
     """Direction of order flow."""
+
     BULLISH = "bullish"
     BEARISH = "bearish"
     NEUTRAL = "neutral"
 
 
-class ParticipantType(str, Enum):
+class ParticipantType(StrEnum):
     """Market participant classification."""
+
     INSTITUTIONAL = "institutional"
     RETAIL = "retail"
     WHALE = "whale"
@@ -582,17 +583,20 @@ class OrderFlowTools:
                 data = resp.json()
                 for tx in data.get("transactions", []):
                     direction = self._classify_whale_direction(tx)
-                    movements.append(WhaleMovement(
-                        symbol=symbol,
-                        amount=float(tx.get("amount", 0)),
-                        amount_usd=float(tx.get("amount_usd", 0)),
-                        direction=direction,
-                        from_address=str(tx.get("from", {}).get("address", ""))[:12],
-                        to_address=str(tx.get("to", {}).get("address", ""))[:12],
-                        timestamp=datetime.fromtimestamp(tx.get("timestamp", 0), tz=UTC)
-                            if tx.get("timestamp") else None,
-                        significance=min(float(tx.get("amount_usd", 0)) / 10_000_000, 1.0),
-                    ))
+                    movements.append(
+                        WhaleMovement(
+                            symbol=symbol,
+                            amount=float(tx.get("amount", 0)),
+                            amount_usd=float(tx.get("amount_usd", 0)),
+                            direction=direction,
+                            from_address=str(tx.get("from", {}).get("address", ""))[:12],
+                            to_address=str(tx.get("to", {}).get("address", ""))[:12],
+                            timestamp=datetime.fromtimestamp(tx.get("timestamp", 0), tz=UTC)
+                            if tx.get("timestamp")
+                            else None,
+                            significance=min(float(tx.get("amount_usd", 0)) / 10_000_000, 1.0),
+                        )
+                    )
         except Exception as e:
             logger.debug("Whale Alert API error: %s", e)
 
@@ -663,12 +667,8 @@ class OrderFlowTools:
 
         # Refine with whale movements
         if whale_movements:
-            exchange_outflows = sum(
-                1 for m in whale_movements if m.direction == "exchange_outflow"
-            )
-            exchange_inflows = sum(
-                1 for m in whale_movements if m.direction == "exchange_inflow"
-            )
+            exchange_outflows = sum(1 for m in whale_movements if m.direction == "exchange_outflow")
+            exchange_inflows = sum(1 for m in whale_movements if m.direction == "exchange_inflow")
             if exchange_outflows > exchange_inflows * 1.5:
                 whale_bias = "long"
             elif exchange_inflows > exchange_outflows * 1.5:
@@ -692,9 +692,7 @@ class OrderFlowTools:
 
         # Divergence = they disagree
         divergence = (
-            inst_bias != "neutral"
-            and retail_bias != "neutral"
-            and inst_bias != retail_bias
+            inst_bias != "neutral" and retail_bias != "neutral" and inst_bias != retail_bias
         )
 
         # Smart money signal: follow institutions, fade retail

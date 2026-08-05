@@ -17,9 +17,8 @@ from __future__ import annotations
 import logging
 import time
 from collections import deque
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from enum import StrEnum
-from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -27,10 +26,10 @@ logger = logging.getLogger(__name__)
 class WhipsawState(StrEnum):
     """Current whipsaw state."""
 
-    CALM = "CALM"             # Normal market conditions
-    CHOPPY = "CHOPPY"         # Some oscillation, reduced confidence
-    WHIPSAW = "WHIPSAW"       # Active whipsaw — pause trading
-    COOLDOWN = "COOLDOWN"     # Post-whipsaw cooldown period
+    CALM = "CALM"  # Normal market conditions
+    CHOPPY = "CHOPPY"  # Some oscillation, reduced confidence
+    WHIPSAW = "WHIPSAW"  # Active whipsaw — pause trading
+    COOLDOWN = "COOLDOWN"  # Post-whipsaw cooldown period
 
 
 @dataclass(frozen=True)
@@ -38,21 +37,21 @@ class WhipsawConfig:
     """Immutable configuration for whipsaw detection."""
 
     # Detection thresholds
-    min_direction_changes: int = 4       # 4+ direction changes = whipsaw
+    min_direction_changes: int = 4  # 4+ direction changes = whipsaw
     detection_window_seconds: int = 300  # Within 5 minutes
-    min_price_move_pct: float = 0.001   # 0.1% min move to count as direction change
+    min_price_move_pct: float = 0.001  # 0.1% min move to count as direction change
 
     # Cooldown
-    cooldown_seconds: int = 180          # 3 min pause after whipsaw detected
-    choppy_cooldown_seconds: int = 60    # 1 min reduced trading in choppy
+    cooldown_seconds: int = 180  # 3 min pause after whipsaw detected
+    choppy_cooldown_seconds: int = 60  # 1 min reduced trading in choppy
 
     # Entry sensitivity adjustment
-    choppy_score_multiplier: float = 0.7   # 70% signal score in choppy
+    choppy_score_multiplier: float = 0.7  # 70% signal score in choppy
     whipsaw_score_multiplier: float = 0.0  # Block all entries in whipsaw
 
     # Frequency tracking
     frequency_window_hours: float = 24.0
-    high_frequency_threshold: int = 5    # 5+ whipsaws in 24h = high frequency
+    high_frequency_threshold: int = 5  # 5+ whipsaws in 24h = high frequency
 
 
 @dataclass
@@ -171,10 +170,7 @@ class WhipsawFilter:
         last_dir = self._last_direction[key]
 
         # Calculate direction
-        if last_price > 0:
-            change_pct = (price - last_price) / last_price
-        else:
-            change_pct = 0.0
+        change_pct = (price - last_price) / last_price if last_price > 0 else 0.0
 
         if abs(change_pct) >= self._config.min_price_move_pct:
             new_dir = "up" if change_pct > 0 else "down"
@@ -321,7 +317,7 @@ class WhipsawFilter:
         if change_count >= self._config.min_direction_changes:
             # Calculate price range during whipsaw
             if recent_prices := [c.price for c in recent_changes]:
-                price_range = (max(recent_prices) - min(recent_prices))
+                price_range = max(recent_prices) - min(recent_prices)
                 mid_price = sum(recent_prices) / len(recent_prices)
                 range_pct = price_range / mid_price if mid_price > 0 else 0.0
             else:
@@ -358,8 +354,7 @@ class WhipsawFilter:
         if change_count >= self._config.min_direction_changes // 2:
             if current_state != WhipsawState.CHOPPY:
                 logger.info(
-                    f"Choppy conditions for {symbol}/{timeframe}: "
-                    f"{change_count} direction changes"
+                    f"Choppy conditions for {symbol}/{timeframe}: {change_count} direction changes"
                 )
             return WhipsawState.CHOPPY
 

@@ -139,8 +139,12 @@ class RSIFilter:
 
         # Generate signal and score
         signal, score = self._generate_signal(
-            current_rsi, state, crossing_up, crossing_down,
-            divergence, direction_hint,
+            current_rsi,
+            state,
+            crossing_up,
+            crossing_down,
+            divergence,
+            direction_hint,
         )
 
         result = RSIResult(
@@ -156,7 +160,11 @@ class RSIFilter:
 
         logger.debug(
             "RSI filter: value=%.1f state=%s signal=%s score=%.2f hint=%s",
-            current_rsi, state.value, signal.value, score, direction_hint,
+            current_rsi,
+            state.value,
+            signal.value,
+            score,
+            direction_hint,
         )
         return result
 
@@ -211,12 +219,12 @@ class RSIFilter:
 
     def _detect_crossing_up(self, prev: float, current: float) -> bool:
         """Detect RSI crossing up through oversold level."""
-        threshold = self.genome["oversold"] + self.genome["crossing_threshold"]
+        self.genome["oversold"] + self.genome["crossing_threshold"]
         return prev <= self.genome["oversold"] and current > self.genome["oversold"]
 
     def _detect_crossing_down(self, prev: float, current: float) -> bool:
         """Detect RSI crossing down through overbought level."""
-        threshold = self.genome["overbought"] - self.genome["crossing_threshold"]
+        self.genome["overbought"] - self.genome["crossing_threshold"]
         return prev >= self.genome["overbought"] and current < self.genome["overbought"]
 
     # ------------------------------------------------------------------
@@ -255,14 +263,19 @@ class RSIFilter:
         return None
 
     @staticmethod
-    def _find_local_extremes(values: list[float], mode: str = "low", window: int = 3) -> list[float]:
+    def _find_local_extremes(
+        values: list[float], mode: str = "low", window: int = 3
+    ) -> list[float]:
         """Find local minima or maxima in a series."""
         extremes: list[float] = []
         for i in range(window, len(values) - window):
-            segment = values[i - window: i + window + 1]
-            if mode == "low" and values[i] == min(segment):
-                extremes.append(values[i])
-            elif mode == "high" and values[i] == max(segment):
+            segment = values[i - window : i + window + 1]
+            if (
+                mode == "low"
+                and values[i] == min(segment)
+                or mode == "high"
+                and values[i] == max(segment)
+            ):
                 extremes.append(values[i])
         return extremes
 
@@ -314,22 +327,36 @@ class RSIFilter:
             signal = RSISignal.BEARISH_DIVERGENCE
 
         # Direction alignment bonus
-        if direction_hint == "bullish" and signal in (
-            RSISignal.BULLISH, RSISignal.BULLISH_DIVERGENCE,
-        ):
-            score += 0.1
-        elif direction_hint == "bearish" and signal in (
-            RSISignal.BEARISH, RSISignal.BEARISH_DIVERGENCE,
+        if (
+            direction_hint == "bullish"
+            and signal
+            in (
+                RSISignal.BULLISH,
+                RSISignal.BULLISH_DIVERGENCE,
+            )
+            or direction_hint == "bearish"
+            and signal
+            in (
+                RSISignal.BEARISH,
+                RSISignal.BEARISH_DIVERGENCE,
+            )
         ):
             score += 0.1
 
         # Mismatch penalty
-        if direction_hint == "bullish" and signal in (
-            RSISignal.BEARISH, RSISignal.BEARISH_DIVERGENCE,
-        ):
-            score -= 0.3
-        elif direction_hint == "bearish" and signal in (
-            RSISignal.BULLISH, RSISignal.BULLISH_DIVERGENCE,
+        if (
+            direction_hint == "bullish"
+            and signal
+            in (
+                RSISignal.BEARISH,
+                RSISignal.BEARISH_DIVERGENCE,
+            )
+            or direction_hint == "bearish"
+            and signal
+            in (
+                RSISignal.BULLISH,
+                RSISignal.BULLISH_DIVERGENCE,
+            )
         ):
             score -= 0.3
 

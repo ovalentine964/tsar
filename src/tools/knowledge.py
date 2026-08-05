@@ -39,16 +39,17 @@ import logging
 from pathlib import Path
 from typing import Any
 
-from src.knowledge.chromadb_store import ChromaVectorStore, VectorSearchResult, is_chromadb_available
-from src.knowledge.fts_search import MemoryRecall, SearchResult
+from src.knowledge.chromadb_store import (
+    ChromaVectorStore,
+    is_chromadb_available,
+)
+from src.knowledge.fts_search import MemoryRecall
 from src.knowledge.lesson_archive import LessonArchive
 from src.knowledge.pattern_library import PatternLibrary
 from src.knowledge.regime_state import (
-    RegimeGraphSnapshot,
     RegimeState,
     RegimeStateStore,
     RegimeTransition,
-    RegimeTransitionEdge,
     TemporalRegimeGraph,
 )
 from src.knowledge.strategy_genomes import StrategyGenomes
@@ -301,6 +302,7 @@ class KnowledgeTools:
     def match_pattern(self, pattern_id: str, trade_id: str, match_score: float = 0.0) -> str:
         """Record a pattern observation/match."""
         from src.knowledge.pattern_library import PatternObservation
+
         obs = PatternObservation(
             pattern_id=pattern_id,
             trade_id=trade_id,
@@ -308,7 +310,9 @@ class KnowledgeTools:
         )
         return self.pattern_library.record_observation(obs)
 
-    def get_co_occurring_patterns(self, pattern_id: str, min_strength: float = 0.5) -> list[dict[str, Any]]:
+    def get_co_occurring_patterns(
+        self, pattern_id: str, min_strength: float = 0.5
+    ) -> list[dict[str, Any]]:
         """Find patterns that co-occur with the given pattern."""
         return self.pattern_library.get_co_occurring_patterns(pattern_id, min_strength)
 
@@ -330,9 +334,14 @@ class KnowledgeTools:
         limit: int = 50,
     ) -> list[dict[str, Any]]:
         """List lessons with optional filters."""
-        return [l.to_dict() for l in self.lesson_archive.list_lessons(
-            lesson_type=lesson_type, severity=severity, limit=limit,
-        )]
+        return [
+            l.to_dict()
+            for l in self.lesson_archive.list_lessons(
+                lesson_type=lesson_type,
+                severity=severity,
+                limit=limit,
+            )
+        ]
 
     def get_critical_lessons(self, limit: int = 20) -> list[dict[str, Any]]:
         """Get critical-severity lessons."""
@@ -349,6 +358,7 @@ class KnowledgeTools:
     def apply_lesson(self, lesson_id: str, trade_id: str, outcome: str = "followed") -> str:
         """Record a lesson application event."""
         from src.knowledge.lesson_archive import LessonApplication
+
         app = LessonApplication(
             lesson_id=lesson_id,
             trade_id=trade_id,
@@ -356,9 +366,12 @@ class KnowledgeTools:
         )
         return self.lesson_archive.record_application(app)
 
-    def record_violation(self, lesson_id: str, trade_id: str, severity: str = "minor", reason: str = "") -> str:
+    def record_violation(
+        self, lesson_id: str, trade_id: str, severity: str = "minor", reason: str = ""
+    ) -> str:
         """Record a lesson violation."""
         from src.knowledge.lesson_archive import LessonViolation
+
         v = LessonViolation(
             lesson_id=lesson_id,
             trade_id=trade_id,
@@ -475,7 +488,9 @@ class KnowledgeTools:
         """Compute all registered factors (or a category) on OHLCV data."""
         return self.factor_library.compute_all(ohlcv_df, category=category)
 
-    def record_ic(self, factor_name: str, ic_value: float, forward_period: int = 1, symbol: str = "") -> str:
+    def record_ic(
+        self, factor_name: str, ic_value: float, forward_period: int = 1, symbol: str = ""
+    ) -> str:
         """Record an Information Coefficient observation."""
         return self.factor_library.record_ic(factor_name, ic_value, forward_period, symbol)
 
@@ -503,13 +518,17 @@ class KnowledgeTools:
         """Get factor category counts."""
         return self.factor_library.get_categories()
 
-    def batch_factor_significance(self, ohlcv_df: Any, forward_returns: Any) -> list[dict[str, Any]]:
+    def batch_factor_significance(
+        self, ohlcv_df: Any, forward_returns: Any
+    ) -> list[dict[str, Any]]:
         """Run significance tests on all factors."""
         return self.factor_library.batch_factor_significance(ohlcv_df, forward_returns)
 
     # Tool 8: Vector Similarity shortcuts
 
-    def vector_upsert_pattern(self, pattern_id: str, document: str, metadata: dict[str, Any] | None = None) -> bool:
+    def vector_upsert_pattern(
+        self, pattern_id: str, document: str, metadata: dict[str, Any] | None = None
+    ) -> bool:
         """Store/update a pattern embedding."""
         if self.vector_store is None:
             return False
@@ -522,7 +541,9 @@ class KnowledgeTools:
         results = self.vector_store.search_similar_patterns(query, limit)
         return [r.to_dict() for r in results]
 
-    def vector_upsert_trade(self, trade_id: str, document: str, metadata: dict[str, Any] | None = None) -> bool:
+    def vector_upsert_trade(
+        self, trade_id: str, document: str, metadata: dict[str, Any] | None = None
+    ) -> bool:
         """Store/update a trade embedding."""
         if self.vector_store is None:
             return False
@@ -535,7 +556,9 @@ class KnowledgeTools:
         results = self.vector_store.search_similar_trades(query, limit)
         return [r.to_dict() for r in results]
 
-    def vector_upsert_lesson(self, lesson_id: str, document: str, metadata: dict[str, Any] | None = None) -> bool:
+    def vector_upsert_lesson(
+        self, lesson_id: str, document: str, metadata: dict[str, Any] | None = None
+    ) -> bool:
         """Store/update a lesson embedding."""
         if self.vector_store is None:
             return False
@@ -548,7 +571,9 @@ class KnowledgeTools:
         results = self.vector_store.search_similar_lessons(query, limit)
         return [r.to_dict() for r in results]
 
-    def vector_upsert_market_state(self, state_id: str, document: str, metadata: dict[str, Any] | None = None) -> bool:
+    def vector_upsert_market_state(
+        self, state_id: str, document: str, metadata: dict[str, Any] | None = None
+    ) -> bool:
         """Store/update a market state embedding."""
         if self.vector_store is None:
             return False

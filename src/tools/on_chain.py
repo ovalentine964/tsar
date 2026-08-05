@@ -18,7 +18,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import time
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import Any
 
@@ -358,9 +358,7 @@ class OnChainAnalytics:
 
             for tx in data.get("txs", [])[:100]:
                 # Calculate total output value in BTC
-                total_out_btc = sum(
-                    o.get("value", 0) / 1e8 for o in tx.get("out", [])
-                )
+                total_out_btc = sum(o.get("value", 0) / 1e8 for o in tx.get("out", []))
 
                 # Get BTC price for USD conversion
                 if total_out_btc * 50_000 < self._whale_threshold_usd:
@@ -384,16 +382,18 @@ class OnChainAnalytics:
 
                 significance = min(1.0, amount_usd / (self._whale_threshold_usd * 10))
 
-                movements.append(WhaleMovement(
-                    symbol="BTC",
-                    amount=round(total_out_btc, 8),
-                    amount_usd=round(amount_usd, 2),
-                    direction=direction,
-                    from_address=from_addr[:12] + "..." if len(from_addr) > 12 else from_addr,
-                    to_address=to_addr[:12] + "..." if len(to_addr) > 12 else to_addr,
-                    timestamp=datetime.fromtimestamp(tx.get("time", 0), tz=UTC),
-                    significance=round(significance, 4),
-                ))
+                movements.append(
+                    WhaleMovement(
+                        symbol="BTC",
+                        amount=round(total_out_btc, 8),
+                        amount_usd=round(amount_usd, 2),
+                        direction=direction,
+                        from_address=from_addr[:12] + "..." if len(from_addr) > 12 else from_addr,
+                        to_address=to_addr[:12] + "..." if len(to_addr) > 12 else to_addr,
+                        timestamp=datetime.fromtimestamp(tx.get("time", 0), tz=UTC),
+                        significance=round(significance, 4),
+                    )
+                )
 
                 if len(movements) >= limit:
                     break
@@ -441,23 +441,22 @@ class OnChainAnalytics:
                 to_addr = tx.get("to", "")
 
                 # Heuristic: contracts are likely exchanges
-                if to_addr and len(to_addr) == 42:
-                    direction = "exchange_inflow"
-                else:
-                    direction = "transfer"
+                direction = "exchange_inflow" if to_addr and len(to_addr) == 42 else "transfer"
 
                 significance = min(1.0, amount_usd / (self._whale_threshold_usd * 10))
 
-                movements.append(WhaleMovement(
-                    symbol="ETH",
-                    amount=round(value_eth, 8),
-                    amount_usd=round(amount_usd, 2),
-                    direction=direction,
-                    from_address=from_addr[:12] + "..." if len(from_addr) > 12 else from_addr,
-                    to_address=to_addr[:12] + "..." if len(to_addr) > 12 else to_addr,
-                    timestamp=datetime.now(UTC),
-                    significance=round(significance, 4),
-                ))
+                movements.append(
+                    WhaleMovement(
+                        symbol="ETH",
+                        amount=round(value_eth, 8),
+                        amount_usd=round(amount_usd, 2),
+                        direction=direction,
+                        from_address=from_addr[:12] + "..." if len(from_addr) > 12 else from_addr,
+                        to_address=to_addr[:12] + "..." if len(to_addr) > 12 else to_addr,
+                        timestamp=datetime.now(UTC),
+                        significance=round(significance, 4),
+                    )
+                )
 
                 if len(movements) >= limit:
                     break
@@ -525,16 +524,18 @@ class OnChainAnalytics:
 
                 significance = min(1.0, amount_usd / (self._whale_threshold_usd * 10))
 
-                movements.append(WhaleMovement(
-                    symbol=symbol,
-                    amount=round(amount_token, 8),
-                    amount_usd=round(amount_usd, 2),
-                    direction=direction,
-                    from_address="estimated",
-                    to_address="estimated",
-                    timestamp=datetime.now(UTC),
-                    significance=round(significance, 4),
-                ))
+                movements.append(
+                    WhaleMovement(
+                        symbol=symbol,
+                        amount=round(amount_token, 8),
+                        amount_usd=round(amount_usd, 2),
+                        direction=direction,
+                        from_address="estimated",
+                        to_address="estimated",
+                        timestamp=datetime.now(UTC),
+                        significance=round(significance, 4),
+                    )
+                )
 
         except Exception as exc:
             logger.debug("Whale estimation failed for %s: %s", symbol, exc)
@@ -569,7 +570,11 @@ class OnChainAnalytics:
         analytics = self._init_analytics_chain()
         pro_flow = await analytics.get_exchange_flows(base_symbol)
 
-        if pro_flow.source and pro_flow.source != "none" and (pro_flow.inflow_24h > 0 or pro_flow.outflow_24h > 0):
+        if (
+            pro_flow.source
+            and pro_flow.source != "none"
+            and (pro_flow.inflow_24h > 0 or pro_flow.outflow_24h > 0)
+        ):
             # Derive signal from professional data
             net_flow = pro_flow.net_flow_24h
             total_volume = pro_flow.inflow_24h + pro_flow.outflow_24h
@@ -748,10 +753,7 @@ class OnChainAnalytics:
             active_7d = max(latest, week_ago)
 
             # Growth rate
-            if week_ago > 0:
-                growth = (latest - week_ago) / week_ago * 100
-            else:
-                growth = 0.0
+            growth = (latest - week_ago) / week_ago * 100 if week_ago > 0 else 0.0
 
             # Activity score: normalize against typical BTC ranges
             # ~800k-1.2M active addresses/day is healthy for BTC
@@ -786,7 +788,7 @@ class OnChainAnalytics:
                 timeout=10,
             )
             resp.raise_for_status()
-            data = resp.json()
+            resp.json()
 
             # Etherscan doesn't directly expose active addresses on free tier
             # Fall back to CoinGecko community data for estimation
@@ -816,7 +818,7 @@ class OnChainAnalytics:
             data = resp.json()
 
             market = data.get("market_data", {})
-            community = data.get("community_data", {})
+            data.get("community_data", {})
             total_volume = float(market.get("total_volume", {}).get("usd", 0))
 
             # Rough estimation: active addresses correlate with volume
@@ -942,13 +944,17 @@ class OnChainAnalytics:
 
             market = data.get("market_data", {})
             total_volume = float(market.get("total_volume", {}).get("usd", 0))
-            price = float(market.get("current_price", {}).get("usd", 0))
+            float(market.get("current_price", {}).get("usd", 0))
 
             # Estimate tx count from volume
             # Average tx size varies by chain
             avg_tx_sizes = {
-                "ETH": 2000, "SOL": 500, "BNB": 1000,
-                "XRP": 100, "ADA": 200, "DOT": 300,
+                "ETH": 2000,
+                "SOL": 500,
+                "BNB": 1000,
+                "XRP": 100,
+                "ADA": 200,
+                "DOT": 300,
             }
             avg_tx = avg_tx_sizes.get(symbol, 1000)
             estimated_tx_count = int(total_volume / avg_tx) if avg_tx > 0 else 0
@@ -1115,9 +1121,21 @@ class OnChainAnalytics:
             return_exceptions=True,
         )
 
-        active_addr = results[0] if not isinstance(results[0], Exception) else ActiveAddresses(symbol=base_symbol)
-        tx_metrics = results[1] if not isinstance(results[1], Exception) else TransactionMetrics(symbol=base_symbol)
-        net_health = results[2] if not isinstance(results[2], Exception) else NetworkHealth(symbol=base_symbol)
+        active_addr = (
+            results[0]
+            if not isinstance(results[0], Exception)
+            else ActiveAddresses(symbol=base_symbol)
+        )
+        tx_metrics = (
+            results[1]
+            if not isinstance(results[1], Exception)
+            else TransactionMetrics(symbol=base_symbol)
+        )
+        net_health = (
+            results[2]
+            if not isinstance(results[2], Exception)
+            else NetworkHealth(symbol=base_symbol)
+        )
         whale_moves = results[3] if not isinstance(results[3], Exception) else ()
         exchange_flow = results[4] if not isinstance(results[4], Exception) else None
 

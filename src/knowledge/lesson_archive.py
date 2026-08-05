@@ -170,9 +170,14 @@ class LessonArchive:
         return False
 
     def list_lessons(
-        self, lesson_type: str | None = None, severity: str | None = None,
-        category: str | None = None, source_strategy_id: str | None = None,
-        include_archived: bool = False, limit: int = 100, offset: int = 0
+        self,
+        lesson_type: str | None = None,
+        severity: str | None = None,
+        category: str | None = None,
+        source_strategy_id: str | None = None,
+        include_archived: bool = False,
+        limit: int = 100,
+        offset: int = 0,
     ) -> list[Lesson]:
         clauses: list[str] = []
         params: list[Any] = []
@@ -232,8 +237,12 @@ class LessonArchive:
     # ── FTS5 search ──────────────────────────────────────────
 
     def search(
-        self, query: str, severity: str | None = None, lesson_type: str | None = None,
-        include_archived: bool = False, limit: int = 20
+        self,
+        query: str,
+        severity: str | None = None,
+        lesson_type: str | None = None,
+        include_archived: bool = False,
+        limit: int = 20,
     ) -> list[dict[str, Any]]:
         fts_query = self._format_fts_query(query)
         extra_clauses: list[str] = []
@@ -288,7 +297,9 @@ class LessonArchive:
         return app.application_id
 
     def get_applications(self, lesson_id: str, limit: int = 50) -> list[LessonApplication]:
-        sql = "SELECT * FROM lesson_applications WHERE lesson_id = ? ORDER BY created_at DESC LIMIT ?"
+        sql = (
+            "SELECT * FROM lesson_applications WHERE lesson_id = ? ORDER BY created_at DESC LIMIT ?"
+        )
         with self._conn() as conn:
             rows = conn.execute(sql, (lesson_id, limit)).fetchall()
         return [LessonApplication(**dict(r)) for r in rows]
@@ -416,7 +427,9 @@ class LessonArchive:
 
     def get_applicable_strategies(self, lesson_id: str) -> list[str]:
         """Get strategy types where this lesson applies."""
-        sql = "SELECT strategy_type FROM lesson_strategies WHERE lesson_id = ? ORDER BY strategy_type"
+        sql = (
+            "SELECT strategy_type FROM lesson_strategies WHERE lesson_id = ? ORDER BY strategy_type"
+        )
         with self._conn() as conn:
             rows = conn.execute(sql, (lesson_id,)).fetchall()
         return [r["strategy_type"] for r in rows]

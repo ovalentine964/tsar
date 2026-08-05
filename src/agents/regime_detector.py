@@ -25,12 +25,12 @@ import pandas as pd
 import pandas_ta as ta
 
 from src.agents.base import BaseAgent
+from src.tools.correlation import CorrelationAnalyzer
 
 # ── Domain Tools (Tools-to-Agents Wiring) ──────────────────────────
 from src.tools.market_data import MarketDataTools
 from src.tools.technical_analysis import TechnicalAnalysisTools
 from src.tools.volatility import VolatilityAnalyzer
-from src.tools.correlation import CorrelationAnalyzer
 
 logger = logging.getLogger(__name__)
 
@@ -86,12 +86,14 @@ def _build_hmm_features(df: pd.DataFrame) -> np.ndarray | None:
         else:
             bb_width = pd.Series(0.0, index=df.index)
 
-        features = pd.DataFrame({
-            "returns": log_ret,
-            "atr_pct": atr_pct,
-            "adx": adx_val,
-            "bb_width": bb_width,
-        }).dropna()
+        features = pd.DataFrame(
+            {
+                "returns": log_ret,
+                "atr_pct": atr_pct,
+                "adx": adx_val,
+                "bb_width": bb_width,
+            }
+        ).dropna()
 
         if len(features) < 20:
             return None
@@ -192,7 +194,7 @@ class HMMRegimeClassifier:
 
         # Build probability dict
         probs = {}
-        for i, label in enumerate(self.REGIME_LABELS):
+        for _i, label in enumerate(self.REGIME_LABELS):
             # Map model states to labels
             for model_state, mapped_label in self._state_map.items():
                 if mapped_label == label:
@@ -250,9 +252,9 @@ class HMMRegimeClassifier:
         used_labels: set[str] = set()
 
         returns_mean = means[:, 0]  # column 0: returns
-        atr_mean = means[:, 1]      # column 1: atr_pct
-        adx_mean = means[:, 2]      # column 2: adx
-        bb_mean = means[:, 3]       # column 3: bb_width
+        atr_mean = means[:, 1]  # column 1: atr_pct
+        adx_mean = means[:, 2]  # column 2: adx
+        bb_mean = means[:, 3]  # column 3: bb_width
 
         # Sort by returns
         sorted_by_return = np.argsort(returns_mean)
@@ -376,7 +378,7 @@ class RegimeDetector(BaseAgent):
 
     async def on_initialize(self) -> None:
         """Initialize pricing engine, domain tools, and regime state."""
-        from src.interfaces import get_pricing_engine, get_exchange_gateway
+        from src.interfaces import get_exchange_gateway, get_pricing_engine
         from src.knowledge.regime_state import RegimeStateStore
 
         self.pricing_engine = get_pricing_engine()
@@ -388,7 +390,8 @@ class RegimeDetector(BaseAgent):
         try:
             gateway = get_exchange_gateway()
             self._market_data_tools = MarketDataTools(
-                gateway=gateway, config=self.config.get("market_data", {}),
+                gateway=gateway,
+                config=self.config.get("market_data", {}),
             )
             self._ta_tools = TechnicalAnalysisTools(config=self.config)
             self._volatility_analyzer = VolatilityAnalyzer(config=self.config)
@@ -415,9 +418,7 @@ class RegimeDetector(BaseAgent):
 
     async def _classify_symbol(self, symbol: str) -> None:
         """Classify regime for a single symbol."""
-        ohlcv = await self.pricing_engine.get_ohlcv(
-            symbol, "1h", limit=self._lookback_bars
-        )
+        ohlcv = await self.pricing_engine.get_ohlcv(symbol, "1h", limit=self._lookback_bars)
         if ohlcv is None or len(ohlcv) < 50:
             return
 
@@ -452,7 +453,9 @@ class RegimeDetector(BaseAgent):
                 vol_regime_label = vol_regime.regime
                 logger.debug(
                     "%s: volatility tool regime=%s (percentile=%.1f)",
-                    symbol, vol_regime.regime, vol_regime.percentile,
+                    symbol,
+                    vol_regime.regime,
+                    vol_regime.percentile,
                 )
             except Exception:
                 logger.debug("Volatility tool failed for %s", symbol, exc_info=True)
@@ -468,7 +471,9 @@ class RegimeDetector(BaseAgent):
                 regime, confidence, probabilities = self._hmm_classifier.fit_predict(features)
                 logger.debug(
                     "HMM regime: %s = %s (conf=%.3f, probs=%s)",
-                    symbol, regime, confidence,
+                    symbol,
+                    regime,
+                    confidence,
                     {k: f"{v:.3f}" for k, v in probabilities.items()},
                 )
 
@@ -497,8 +502,7 @@ class RegimeDetector(BaseAgent):
                 "plus_di": float(plus_di),
                 "minus_di": float(minus_di),
                 "bb_width": float(
-                    (bb_upper - bb_lower) / bb["BBM_20_2.0"].iloc[-1]
-                    if bb is not None else 0
+                    (bb_upper - bb_lower) / bb["BBM_20_2.0"].iloc[-1] if bb is not None else 0
                 ),
                 "classifier": "hmm" if (self._use_hmm and confidence >= 0.3) else "rule_based",
                 "volatility_regime": vol_regime_label or "unknown",
@@ -508,6 +512,8 @@ class RegimeDetector(BaseAgent):
 
         logger.info(
             "Regime: %s = %s (conf=%.3f, classifier=%s)",
-            symbol, regime, confidence,
+            symbol,
+            regime,
+            confidence,
             "hmm" if (self._use_hmm and confidence >= 0.3) else "rule_based",
         )

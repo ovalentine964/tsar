@@ -38,8 +38,8 @@ from src.interfaces.types import (
 
 # ── Domain Tools (Tools-to-Agents Wiring) ──────────────────────────
 from src.tools.execution import ExecutionTools
-from src.tools.order_router import SmartOrderRouter
 from src.tools.market_data import MarketDataTools
+from src.tools.order_router import SmartOrderRouter
 
 if TYPE_CHECKING:
     from src.comms.events import CloudEvent
@@ -67,7 +67,7 @@ class ExecutionSniper(BaseAgent):
     SUBSCRIBE_STREAMS = ["risk_decisions"]
 
     # Slippage thresholds (basis points)
-    SLIPPAGE_WARNING_BPS = 10.0   # 0.1% — log warning
+    SLIPPAGE_WARNING_BPS = 10.0  # 0.1% — log warning
     SLIPPAGE_CRITICAL_BPS = 50.0  # 0.5% — abort and alert
 
     # Order timeout
@@ -103,13 +103,16 @@ class ExecutionSniper(BaseAgent):
 
         # Initialize domain tools
         self._execution_tools = ExecutionTools(
-            exec_engine=self._exec_engine, config=self.config,
+            exec_engine=self._exec_engine,
+            config=self.config,
         )
         self._order_router = SmartOrderRouter(
-            exec_engine=self._exec_engine, gateway=self._gateway,
+            exec_engine=self._exec_engine,
+            gateway=self._gateway,
         )
         self._market_data_tools = MarketDataTools(
-            gateway=self._gateway, config=self.config.get("market_data", {}),
+            gateway=self._gateway,
+            config=self.config.get("market_data", {}),
         )
 
         logger.info(
@@ -183,14 +186,22 @@ class ExecutionSniper(BaseAgent):
 
         logger.info(
             "🎯 Executing approved signal: %s %s %s qty=%.6f entry=%.2f sl=%.2f tp=%.2f",
-            signal_id, symbol, side.value, quantity,
-            entry_price, stop_loss, take_profit,
+            signal_id,
+            symbol,
+            side.value,
+            quantity,
+            entry_price,
+            stop_loss,
+            take_profit,
         )
 
         if quantity <= 0:
             logger.error("Cannot execute: position_size=%.6f", quantity)
             await self._publish_execution_failure(
-                signal_id, symbol, side, "Invalid position size: zero or negative",
+                signal_id,
+                symbol,
+                side,
+                "Invalid position size: zero or negative",
                 trace_id,
             )
             return
@@ -208,7 +219,10 @@ class ExecutionSniper(BaseAgent):
             if not sl_order_id:
                 logger.error("Failed to place stop-loss — aborting entry")
                 await self._publish_execution_failure(
-                    signal_id, symbol, side, "Stop-loss order failed",
+                    signal_id,
+                    symbol,
+                    side,
+                    "Stop-loss order failed",
                     trace_id,
                 )
                 return
@@ -222,8 +236,10 @@ class ExecutionSniper(BaseAgent):
                 and quantity * entry_price > 10000  # > $10k notional → smart route
             )
             if use_router:
-                logger.info("  Using SmartOrderRouter for large order (notional=$%.2f)",
-                           quantity * entry_price)
+                logger.info(
+                    "  Using SmartOrderRouter for large order (notional=$%.2f)",
+                    quantity * entry_price,
+                )
                 entry_result = await self._place_entry_order_routed(
                     symbol=symbol,
                     side=side,
@@ -244,15 +260,20 @@ class ExecutionSniper(BaseAgent):
                 logger.error("Entry order failed — cancelling stop-loss")
                 await self._cancel_stop_loss(sl_order_id)
                 await self._publish_execution_failure(
-                    signal_id, symbol, side, "Entry order failed",
+                    signal_id,
+                    symbol,
+                    side,
+                    "Entry order failed",
                     trace_id,
                 )
                 return
 
             logger.info(
                 "  ✓ Entry filled: order_id=%s avg_price=%.2f filled=%.6f slippage=%.2f bps",
-                entry_result.order_id, entry_result.average_price,
-                entry_result.filled_quantity, entry_result.slippage_bps,
+                entry_result.order_id,
+                entry_result.average_price,
+                entry_result.filled_quantity,
+                entry_result.slippage_bps,
             )
 
             # ── Step 3: Check & Track Slippage ───────────────────
@@ -320,7 +341,10 @@ class ExecutionSniper(BaseAgent):
         except Exception:
             logger.exception("Execution failed for signal %s", signal_id)
             await self._publish_execution_failure(
-                signal_id, symbol, side, "Execution exception",
+                signal_id,
+                symbol,
+                side,
+                "Execution exception",
                 trace_id,
             )
 
@@ -418,7 +442,8 @@ class ExecutionSniper(BaseAgent):
 
             logger.info(
                 "  Using LIMIT order: price=%.2f (offset=%.3f%%)",
-                limit_price, limit_offset * 100,
+                limit_price,
+                limit_offset * 100,
             )
         else:
             order = Order(

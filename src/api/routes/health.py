@@ -41,6 +41,7 @@ async def detailed_health(api_key: str = Depends(_require_api_key_for_detailed))
     # Check TradeMemory
     try:
         from src.knowledge.trade_memory import TradeMemory
+
         db = TradeMemory(os.environ.get("TSAR_DB_PATH", "data/tsar.db"))
         count = db.get_trade_count()
         components["trade_memory"] = {"status": "healthy", "trade_count": count}
@@ -50,6 +51,7 @@ async def detailed_health(api_key: str = Depends(_require_api_key_for_detailed))
     # Check KillSwitch
     try:
         from src.risk.kill_switch import KillSwitch
+
         ks = KillSwitch()
         active = await ks.is_active()
         components["kill_switch"] = {"status": "active" if active else "inactive"}

@@ -19,9 +19,8 @@ from __future__ import annotations
 import logging
 import time
 from collections import deque
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from enum import StrEnum
-from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -29,11 +28,11 @@ logger = logging.getLogger(__name__)
 class CorrelationRegime(StrEnum):
     """Correlation regime classification."""
 
-    HIGH_CORRELATION = "HIGH"       # Correlation > 0.7 — normal crypto behavior
-    MODERATE_CORRELATION = "MOD"    # 0.4 - 0.7 — watch closely
-    LOW_CORRELATION = "LOW"         # 0.2 - 0.4 — regime change warning
-    DECORRELATED = "DECOUPLED"      # < 0.2 — major regime shift
-    NEGATIVE = "NEGATIVE"           # < 0 — assets moving opposite
+    HIGH_CORRELATION = "HIGH"  # Correlation > 0.7 — normal crypto behavior
+    MODERATE_CORRELATION = "MOD"  # 0.4 - 0.7 — watch closely
+    LOW_CORRELATION = "LOW"  # 0.2 - 0.4 — regime change warning
+    DECORRELATED = "DECOUPLED"  # < 0.2 — major regime shift
+    NEGATIVE = "NEGATIVE"  # < 0 — assets moving opposite
 
 
 @dataclass(frozen=True)
@@ -41,28 +40,26 @@ class CorrelationConfig:
     """Immutable configuration for correlation monitoring."""
 
     # Correlation thresholds
-    high_threshold: float = 0.7       # Above this = normal
-    moderate_threshold: float = 0.4   # Below this = warning
-    low_threshold: float = 0.2        # Below this = regime break
-    negative_threshold: float = 0.0   # Below this = negative correlation
+    high_threshold: float = 0.7  # Above this = normal
+    moderate_threshold: float = 0.4  # Below this = warning
+    low_threshold: float = 0.2  # Below this = regime break
+    negative_threshold: float = 0.0  # Below this = negative correlation
 
     # Calculation parameters
-    lookback_periods: int = 50        # Rolling window for correlation calc
-    min_periods: int = 20             # Minimum data points for valid calc
+    lookback_periods: int = 50  # Rolling window for correlation calc
+    min_periods: int = 20  # Minimum data points for valid calc
 
     # Alert thresholds
     correlation_drop_alert: float = 0.3  # Alert if drops by 0.3+ in short time
-    alert_window_seconds: int = 3600     # Track drops over 1 hour
+    alert_window_seconds: int = 3600  # Track drops over 1 hour
 
     # Exposure adjustment
     decorrelated_exposure_mult: float = 0.5  # 50% exposure when decorrelated
-    negative_exposure_mult: float = 0.25     # 25% exposure when negative
-    low_corr_exposure_mult: float = 0.75     # 75% exposure when low
+    negative_exposure_mult: float = 0.25  # 25% exposure when negative
+    low_corr_exposure_mult: float = 0.75  # 75% exposure when low
 
     # Default monitored pairs
-    default_pairs: tuple[tuple[str, str], ...] = (
-        ("BTC/USDT", "ETH/USDT"),
-    )
+    default_pairs: tuple[tuple[str, str], ...] = (("BTC/USDT", "ETH/USDT"),)
 
 
 @dataclass
@@ -129,9 +126,7 @@ class CorrelationBreakDetector:
         self._regime_changes: dict[tuple[str, str], deque[CorrelationRegimeChange]] = {}
 
         # Monitored pairs
-        self._monitored_pairs: list[tuple[str, str]] = list(
-            self._config.default_pairs
-        )
+        self._monitored_pairs: list[tuple[str, str]] = list(self._config.default_pairs)
 
         logger.info(
             f"CorrelationBreakDetector initialized: "
@@ -156,9 +151,7 @@ class CorrelationBreakDetector:
             self._monitored_pairs.append(pair)
             logger.info(f"Now monitoring correlation: {symbol_a} / {symbol_b}")
 
-    def update(
-        self, symbol: str, price: float, timestamp: float | None = None
-    ) -> None:
+    def update(self, symbol: str, price: float, timestamp: float | None = None) -> None:
         """Update with a new price for a symbol.
 
         Recalculates correlation for all pairs that include this symbol.
@@ -171,9 +164,7 @@ class CorrelationBreakDetector:
         now = timestamp or time.time()
 
         if symbol not in self._price_history:
-            self._price_history[symbol] = deque(
-                maxlen=self._config.lookback_periods * 2
-            )
+            self._price_history[symbol] = deque(maxlen=self._config.lookback_periods * 2)
 
         self._price_history[symbol].append((price, now))
 
@@ -247,7 +238,9 @@ class CorrelationBreakDetector:
         # Calculate trend
         if len(history) >= 5:
             recent_5 = [h.correlation for h in list(history)[-5:]]
-            older_5 = [h.correlation for h in list(history)[-10:-5]] if len(history) >= 10 else recent_5
+            older_5 = (
+                [h.correlation for h in list(history)[-10:-5]] if len(history) >= 10 else recent_5
+            )
             avg_recent = sum(recent_5) / len(recent_5)
             avg_older = sum(older_5) / len(older_5)
             diff = avg_recent - avg_older
@@ -293,18 +286,13 @@ class CorrelationBreakDetector:
     # Internal: Correlation calculation
     # ------------------------------------------------------------------
 
-    def _recalculate_correlation(
-        self, pair: tuple[str, str], now: float
-    ) -> None:
+    def _recalculate_correlation(self, pair: tuple[str, str], now: float) -> None:
         """Recalculate correlation for a pair and check for regime changes."""
         sym_a, sym_b = pair
         history_a = self._price_history.get(sym_a, deque())
         history_b = self._price_history.get(sym_b, deque())
 
-        if (
-            len(history_a) < self._config.min_periods
-            or len(history_b) < self._config.min_periods
-        ):
+        if len(history_a) < self._config.min_periods or len(history_b) < self._config.min_periods:
             return
 
         # Align prices by timestamp (use nearest within 5 seconds)
@@ -330,9 +318,7 @@ class CorrelationBreakDetector:
 
         # Store correlation data point
         if pair not in self._correlation_history:
-            self._correlation_history[pair] = deque(
-                maxlen=self._config.lookback_periods * 2
-            )
+            self._correlation_history[pair] = deque(maxlen=self._config.lookback_periods * 2)
         self._correlation_history[pair].append(
             CorrelationDataPoint(correlation=correlation, timestamp=now)
         )

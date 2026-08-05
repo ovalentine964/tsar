@@ -89,8 +89,7 @@ class TradeProposal:
     @property
     def is_expired(self) -> bool:
         return (
-            self.state == TRADE_STATE_PENDING
-            and (time.time() - self.created_at) > self.ttl_seconds
+            self.state == TRADE_STATE_PENDING and (time.time() - self.created_at) > self.ttl_seconds
         )
 
     @property
@@ -176,6 +175,7 @@ class TelegramBot:
 
         # Conversational state machine for setup wizard
         from src.bot.conversation import ConversationManager
+
         self._conversations = ConversationManager()
 
     # ── Messaging ────────────────────────────────────────────
@@ -206,9 +206,7 @@ class TelegramBot:
 
         try:
             async with aiohttp.ClientSession() as session:
-                resp = await session.post(
-                    f"{self.base_url}/sendMessage", json=payload
-                )
+                resp = await session.post(f"{self.base_url}/sendMessage", json=payload)
                 data = await resp.json()
                 if not data.get("ok"):
                     logger.error("sendMessage failed: %s", data)
@@ -270,9 +268,8 @@ class TelegramBot:
         Each credential is encrypted immediately upon receipt.
         """
         from src.bot.conversation import (
-            ConversationState,
-            SETUP_WELCOME,
             SETUP_STEPS,
+            SETUP_WELCOME,
         )
 
         session = self._conversations.get_session(user_id, chat_id)
@@ -294,26 +291,23 @@ class TelegramBot:
             prompt = prompt.format(chat_id=chat_id)
         await self.send_message(prompt)
 
-    async def _handle_setup_input(
-        self, user_id: str, text: str, msg: dict[str, Any]
-    ) -> None:
+    async def _handle_setup_input(self, user_id: str, text: str, msg: dict[str, Any]) -> None:
         """Handle user input during setup wizard.
 
         Processes each step, encrypts credentials, deletes sensitive
         messages, and advances to the next step.
         """
         from src.bot.conversation import (
-            ConversationState,
-            SETUP_STEPS,
-            SETUP_COMPLETE_MSG,
             SETUP_CANCELLED_MSG,
+            SETUP_COMPLETE_MSG,
+            SETUP_STEPS,
+            ConversationState,
         )
         from src.bot.credentials import (
-            encrypt_credentials,
-            update_single_credential,
-            test_binance_connection,
             decrypt_credentials,
             mask_credential,
+            test_binance_connection,
+            update_single_credential,
         )
 
         session = self._conversations.get_session(user_id)
@@ -363,8 +357,7 @@ class TelegramBot:
         # Show success with masked value
         masked = mask_credential(value)
         await self.send_message(
-            f"{current_step['success']}\n"
-            f"<code>{current_step['label']}: {masked}</code>"
+            f"{current_step['success']}\n<code>{current_step['label']}: {masked}</code>"
         )
 
         # Test connection after API secret if applicable
@@ -391,9 +384,7 @@ class TelegramBot:
             # Setup complete!
             session.set_state(ConversationState.SETUP_COMPLETE)
             connection_status = "✅ Connected" if result.get("ok", False) else "⚠️ Not verified"
-            await self.send_message(
-                SETUP_COMPLETE_MSG.format(connection_status=connection_status)
-            )
+            await self.send_message(SETUP_COMPLETE_MSG.format(connection_status=connection_status))
             session.reset()
         else:
             # Next step
@@ -456,8 +447,11 @@ class TelegramBot:
 
         logger.info(
             "Trade proposal %s sent: %s %s %s entry=%.2f",
-            proposal_id, proposal.symbol, proposal.side,
-            proposal.strategy, proposal.entry_price,
+            proposal_id,
+            proposal.symbol,
+            proposal.side,
+            proposal.strategy,
+            proposal.entry_price,
         )
         return proposal_id
 
@@ -505,7 +499,7 @@ class TelegramBot:
 
         # Build message
         lines = [
-            f"🤖 <b>TSAR wants to open a trade:</b>",
+            "🤖 <b>TSAR wants to open a trade:</b>",
             "",
             f"{side_emoji} <b>{proposal.symbol} {side_label}</b>",
             f"📊 Strategy: {proposal.strategy}",
@@ -649,7 +643,9 @@ class TelegramBot:
                     "Check logs for details."
                 )
 
-        logger.info("Trade APPROVED: %s %s %s", proposal.symbol, proposal.side, proposal.proposal_id)
+        logger.info(
+            "Trade APPROVED: %s %s %s", proposal.symbol, proposal.side, proposal.proposal_id
+        )
 
     async def _handle_reject(
         self,
@@ -670,7 +666,9 @@ class TelegramBot:
             )
             await self.edit_message(message_id, rejected_msg)
 
-        logger.info("Trade REJECTED: %s %s %s", proposal.symbol, proposal.side, proposal.proposal_id)
+        logger.info(
+            "Trade REJECTED: %s %s %s", proposal.symbol, proposal.side, proposal.proposal_id
+        )
 
     async def _handle_modify(
         self,
@@ -785,7 +783,9 @@ class TelegramBot:
         is_win = pnl >= 0
 
         emoji = "✅" if is_win else "❌"
-        result_label = f"+${pnl:.2f} (+{pnl_pct:.1f}%)" if is_win else f"-${abs(pnl):.2f} ({pnl_pct:.1f}%)"
+        result_label = (
+            f"+${pnl:.2f} (+{pnl_pct:.1f}%)" if is_win else f"-${abs(pnl):.2f} ({pnl_pct:.1f}%)"
+        )
 
         symbol = trade.get("symbol", "Unknown")
         side = trade.get("side", "Unknown")
@@ -830,6 +830,7 @@ class TelegramBot:
             lines.append("<b>Lesson learned:</b>")
             if isinstance(reflection, str):
                 import json
+
                 try:
                     reflection = json.loads(reflection)
                 except json.JSONDecodeError:
@@ -867,7 +868,9 @@ class TelegramBot:
                 lines.append("• Strategy genome updated")
             if flywheel.get("pattern_confidence_change"):
                 change = flywheel["pattern_confidence_change"]
-                lines.append(f"• Pattern confidence: {change.get('from', 0):.2f} → {change.get('to', 0):.2f}")
+                lines.append(
+                    f"• Pattern confidence: {change.get('from', 0):.2f} → {change.get('to', 0):.2f}"
+                )
             if flywheel.get("lesson_stored"):
                 lines.append(f'• Lesson stored: "{flywheel["lesson_stored"][:80]}"')
 
@@ -902,6 +905,7 @@ class TelegramBot:
         if self.system:
             try:
                 from src.tools.knowledge import KnowledgeTools
+
                 db_path = os.environ.get("TSAR_DB_PATH", "./data/tsar.db")
                 kt = KnowledgeTools(db_path)
 
@@ -925,7 +929,9 @@ class TelegramBot:
                 if patterns:
                     lines.append(f"<b>Active Patterns ({len(patterns)}):</b>")
                     for p in patterns[:3]:
-                        lines.append(f"• {p.get('name', 'unknown')} (confidence: {p.get('confidence', 0):.0%})")
+                        lines.append(
+                            f"• {p.get('name', 'unknown')} (confidence: {p.get('confidence', 0):.0%})"
+                        )
 
                 kt.close()
             except Exception:
@@ -940,9 +946,7 @@ class TelegramBot:
                 lines.append(f"• {component}: {score:.3f}")
 
         lines.append("")
-        lines.append(
-            "<i>Use the buttons below to approve, reject, or modify this trade.</i>"
-        )
+        lines.append("<i>Use the buttons below to approve, reject, or modify this trade.</i>")
 
         return "\n".join(lines)
 
@@ -1055,7 +1059,11 @@ class TelegramBot:
                         # Handle text messages
                         msg = update.get("message", {})
                         text = msg.get("text", "")
-                        user_id = str(msg.from_user.id) if hasattr(msg, "from_user") and msg.from_user else str(msg.get("from", {}).get("id", ""))
+                        user_id = (
+                            str(msg.from_user.id)
+                            if hasattr(msg, "from_user") and msg.from_user
+                            else str(msg.get("from", {}).get("id", ""))
+                        )
 
                         if not self._is_authorized(msg):
                             logger.warning(
@@ -1084,7 +1092,7 @@ class TelegramBot:
         while True:
             try:
                 await asyncio.sleep(30)
-                now = time.time()
+                time.time()
                 for pid, proposal in list(self._proposals.items()):
                     if proposal.is_expired:
                         proposal.expire()
@@ -1111,7 +1119,9 @@ class TelegramBot:
             proposal = self._proposals.get(proposal_id)
             if proposal and proposal.state == TRADE_STATE_PENDING:
                 if text.lower() in ("cancel", "abort", "nvm", "nevermind"):
-                    await self.send_message("📝 Modification cancelled. Trade proposal still pending.")
+                    await self.send_message(
+                        "📝 Modification cancelled. Trade proposal still pending."
+                    )
                     return
 
                 proposal.modify(text)
@@ -1167,6 +1177,7 @@ class TelegramBot:
             # ── /start: Welcome + auto-setup if needed ──
             if cmd == "/start":
                 from src.bot.credentials import has_credentials
+
                 if not has_credentials():
                     await self.start_setup_wizard(user_id, self.chat_id)
                     return
@@ -1189,10 +1200,7 @@ class TelegramBot:
                 session_obj = self._conversations.get_session(user_id)
                 if session_obj.is_in_setup():
                     session_obj.reset()
-                    await self.send_message(
-                        "❌ Setup cancelled.\n"
-                        "Type /setup anytime to restart."
-                    )
+                    await self.send_message("❌ Setup cancelled.\nType /setup anytime to restart.")
                 elif self._discussion_context.get("awaiting_input"):
                     self._discussion_context = {}
                     await self.send_message("❌ Operation cancelled.")
@@ -1236,6 +1244,7 @@ class TelegramBot:
 
         try:
             from src.tools.knowledge import KnowledgeTools
+
             db_path = os.environ.get("TSAR_DB_PATH", "./data/tsar.db")
             kt = KnowledgeTools(db_path)
 
@@ -1270,9 +1279,7 @@ class TelegramBot:
             logger.debug("Ask context aggregation failed", exc_info=True)
 
         lines.append("")
-        lines.append(
-            "<i>For deeper analysis, use /performance, /regime, or /strategy.</i>"
-        )
+        lines.append("<i>For deeper analysis, use /performance, /regime, or /strategy.</i>")
 
         await self.send_message("\n".join(lines))
 
@@ -1281,35 +1288,29 @@ class TelegramBot:
         help_text = (
             "🏰 <b>TSAR — Trading Super Agent</b>\n"
             "━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
-
             "<b>⚙️ Setup & Config:</b>\n"
             "/start — Welcome + auto-setup\n"
             "/setup — Re-run credential wizard\n"
             "/config — View configuration (masked)\n\n"
-
             "<b>📊 Monitoring:</b>\n"
             "/status — System health and state\n"
             "/pnl — P&L summary\n"
             "/positions — Open positions\n"
             "/risk — Risk assessment\n\n"
-
             "<b>🌊 Analysis:</b>\n"
             "/regime — Current market regime\n"
             "/strategy — Active strategy & genome\n"
             "/flywheel — Self-improvement health\n"
             "/performance — Detailed performance\n\n"
-
             "<b>💬 Interactive:</b>\n"
             "/trade — Start/stop trading\n"
             "/discuss [trade_id] — Discuss a trade\n"
             "/why [trade_id] — Why was this trade taken?\n"
             "/ask — Ask TSAR anything\n\n"
-
             "<b>🔧 Control:</b>\n"
             "/stop — Emergency stop (kill switch)\n"
             "/cancel — Cancel current operation\n"
             "/help — This message\n\n"
-
             "<b>🔘 Inline Buttons:</b>\n"
             "When TSAR proposes a trade, use the buttons to:\n"
             "✅ Approve — Execute the trade\n"

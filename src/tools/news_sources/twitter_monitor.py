@@ -128,17 +128,49 @@ _ASSET_PATTERNS: dict[str, str] = {
 }
 
 # Sentiment keywords
-_BULLISH_KEYWORDS = frozenset({
-    "bullish", "pump", "moon", "rally", "breakout", "surge",
-    "accumulate", "buy", "long", "uptrend", "adoption", "partnership",
-    "upgrade", "launch", "milestone", "all-time high", "ath",
-})
+_BULLISH_KEYWORDS = frozenset(
+    {
+        "bullish",
+        "pump",
+        "moon",
+        "rally",
+        "breakout",
+        "surge",
+        "accumulate",
+        "buy",
+        "long",
+        "uptrend",
+        "adoption",
+        "partnership",
+        "upgrade",
+        "launch",
+        "milestone",
+        "all-time high",
+        "ath",
+    }
+)
 
-_BEARISH_KEYWORDS = frozenset({
-    "bearish", "dump", "crash", "sell", "short", "downtrend",
-    "hack", "exploit", "ban", "regulation", "fear", "panic",
-    "rug", "scam", "bankruptcy", "liquidation", "correction",
-})
+_BEARISH_KEYWORDS = frozenset(
+    {
+        "bearish",
+        "dump",
+        "crash",
+        "sell",
+        "short",
+        "downtrend",
+        "hack",
+        "exploit",
+        "ban",
+        "regulation",
+        "fear",
+        "panic",
+        "rug",
+        "scam",
+        "bankruptcy",
+        "liquidation",
+        "correction",
+    }
+)
 
 
 # ═══════════════════════════════════════════════════════════════════════
@@ -230,7 +262,8 @@ class TwitterCryptoMonitor:
         # Filter by symbol
         if base_symbol and base_symbol != "GENERAL":
             tweets = [
-                t for t in tweets
+                t
+                for t in tweets
                 if base_symbol in t.mentioned_assets or self._is_relevant_tweet(t, base_symbol)
             ]
 
@@ -242,10 +275,7 @@ class TwitterCryptoMonitor:
         tweets = tweets[:limit]
 
         # Compute aggregates
-        if tweets:
-            sentiment = sum(t.sentiment for t in tweets) / len(tweets)
-        else:
-            sentiment = 0.0
+        sentiment = sum(t.sentiment for t in tweets) / len(tweets) if tweets else 0.0
 
         # Top authors
         author_counts: dict[str, int] = {}
@@ -283,10 +313,7 @@ class TwitterCryptoMonitor:
         digest = await self.get_twitter_digest(symbol="GENERAL", limit=50)
 
         # Filter for breaking/high-impact
-        breaking = [
-            t for t in digest.tweets
-            if t.relevance > 0.7 or abs(t.sentiment) > 0.5
-        ]
+        breaking = [t for t in digest.tweets if t.relevance > 0.7 or abs(t.sentiment) > 0.5]
 
         return breaking[:limit]
 
@@ -296,10 +323,7 @@ class TwitterCryptoMonitor:
         """Fetch tweets from all monitored accounts via Nitter."""
         import asyncio
 
-        tasks = [
-            self._fetch_account_nitter(account)
-            for account in self._accounts
-        ]
+        tasks = [self._fetch_account_nitter(account) for account in self._accounts]
 
         results = await asyncio.gather(*tasks, return_exceptions=True)
 
@@ -351,7 +375,7 @@ class TwitterCryptoMonitor:
 
         link = self._get_text(elem, "link")
         pub_date = self._get_text(elem, "pubDate")
-        description = self._get_text(elem, "description")
+        self._get_text(elem, "description")
 
         # Clean the text
         text = self._clean_tweet_text(title)
@@ -387,9 +411,9 @@ class TwitterCryptoMonitor:
     def _clean_tweet_text(text: str) -> str:
         """Clean tweet text for analysis."""
         # Remove HTML
-        text = re.sub(r'<[^>]+>', '', text)
+        text = re.sub(r"<[^>]+>", "", text)
         # Normalize whitespace
-        text = re.sub(r'\s+', ' ', text).strip()
+        text = re.sub(r"\s+", " ", text).strip()
         return text
 
     @staticmethod
@@ -399,8 +423,17 @@ class TwitterCryptoMonitor:
 
         # Direct crypto keywords
         crypto_keywords = [
-            "crypto", "bitcoin", "ethereum", "blockchain", "defi",
-            "token", "coin", "binance", "coinbase", "web3", "nft",
+            "crypto",
+            "bitcoin",
+            "ethereum",
+            "blockchain",
+            "defi",
+            "token",
+            "coin",
+            "binance",
+            "coinbase",
+            "web3",
+            "nft",
         ]
 
         hits = sum(1 for kw in crypto_keywords if kw in text_lower)
@@ -417,7 +450,7 @@ class TwitterCryptoMonitor:
                 return 0.6
 
         # Check for $-prefixed tokens
-        if re.search(r'\$[A-Z]{2,6}\b', text):
+        if re.search(r"\$[A-Z]{2,6}\b", text):
             return 0.5
 
         return 0.1
@@ -447,7 +480,7 @@ class TwitterCryptoMonitor:
                 found.append(symbol)
 
         # Also check $SYMBOL patterns
-        dollar_tokens = re.findall(r'\$([A-Z]{2,6})\b', text)
+        dollar_tokens = re.findall(r"\$([A-Z]{2,6})\b", text)
         for token in dollar_tokens:
             if token not in found:
                 found.append(token)
@@ -459,9 +492,7 @@ class TwitterCryptoMonitor:
         """Check if a tweet is relevant to a specific symbol."""
         if symbol in tweet.mentioned_assets:
             return True
-        if tweet.relevance > 0.7:
-            return True
-        return False
+        return tweet.relevance > 0.7
 
     # ── Utilities ────────────────────────────────────────────────────
 

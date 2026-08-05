@@ -45,12 +45,12 @@ from src.interfaces.types import (
     VetoLevel,
 )
 from src.risk.mandate_gate import MandateGate
+from src.tools.fee_calculator import FeeCalculator
 
 # ── Domain Tools (Tools-to-Agents Wiring) ──────────────────────────
 from src.tools.risk_management import RiskManagementTools
 from src.tools.stop_loss_calculator import StopLossCalculator
 from src.tools.take_profit_calculator import TakeProfitCalculator
-from src.tools.fee_calculator import FeeCalculator
 
 if TYPE_CHECKING:
     from src.comms.events import CloudEvent
@@ -77,18 +77,18 @@ class RiskGuardian(BaseAgent):
 
     # Risk limits from TSAR_ARCHITECTURE.md §6.1
     DEFAULT_LIMITS = {
-        "max_daily_loss_pct": 2.0,        # -2% daily loss limit
-        "max_drawdown_pct": 5.0,          # 5% max drawdown from HWM
-        "max_open_positions": 3,          # Day1: 3 (prod: 10)
+        "max_daily_loss_pct": 2.0,  # -2% daily loss limit
+        "max_drawdown_pct": 5.0,  # 5% max drawdown from HWM
+        "max_open_positions": 3,  # Day1: 3 (prod: 10)
         "max_single_position_pct": 15.0,  # 15% of equity per position
-        "min_risk_reward": 2.0,           # 2:1 minimum R:R
-        "max_stop_loss_pct": 2.0,         # 2% max stop-loss from entry
-        "cooldown_seconds": 1800,         # 30-minute symbol cooldown
-        "min_signal_score": 0.6,          # Minimum signal score
+        "min_risk_reward": 2.0,  # 2:1 minimum R:R
+        "max_stop_loss_pct": 2.0,  # 2% max stop-loss from entry
+        "cooldown_seconds": 1800,  # 30-minute symbol cooldown
+        "min_signal_score": 0.6,  # Minimum signal score
         # Entry optimization checks
-        "session_timing_check": True,     # Check session timing
-        "news_blackout_check": True,      # Check news blackout
-        "weekend_risk_check": True,       # Check weekend risk
+        "session_timing_check": True,  # Check session timing
+        "news_blackout_check": True,  # Check news blackout
+        "weekend_risk_check": True,  # Check weekend risk
     }
 
     def __init__(
@@ -175,7 +175,8 @@ class RiskGuardian(BaseAgent):
         # Periodic maintenance: clean expired cooldowns
         now = time.time()
         expired = [
-            sym for sym, ts in self._symbol_cooldowns.items()
+            sym
+            for sym, ts in self._symbol_cooldowns.items()
             if now - ts > self._limits["cooldown_seconds"] * 2
         ]
         for sym in expired:
@@ -207,8 +208,11 @@ class RiskGuardian(BaseAgent):
 
         logger.info(
             "🛡️ Evaluating signal: %s %s %s score=%.3f (trace=%s)",
-            signal.signal_id, signal.symbol, signal.side.value,
-            signal.score, trace_id,
+            signal.signal_id,
+            signal.symbol,
+            signal.side.value,
+            signal.score,
+            trace_id,
         )
 
         # ── Check 0: Mandate Gate (pre-risk authorization) ────
@@ -239,15 +243,18 @@ class RiskGuardian(BaseAgent):
         # ── News Blackout Check (async, before sync checks) ────
         if self._limits.get("news_blackout_check", True):
             try:
-                from src.tools.market_calendar import MarketCalendar
                 from src.agents.trade_manager import NewsProximity
+                from src.tools.market_calendar import MarketCalendar
+
                 calendar = MarketCalendar(config=self.config.get("market_calendar", {}))
                 snapshot = await calendar.get_calendar(days_ahead=1)
                 blocked, reason, risk_mult = NewsProximity.check_news_blackout(snapshot)
                 if blocked:
                     logger.warning(
                         "🔒 NEWS BLACKOUT: %s %s — %s",
-                        signal.signal_id, signal.symbol, reason,
+                        signal.signal_id,
+                        signal.symbol,
+                        reason,
                     )
                     # Inject blocking result into signal metadata for sync check
                     signal.metadata["news_blackout_blocked"] = True
@@ -282,13 +289,19 @@ class RiskGuardian(BaseAgent):
 
             logger.info(
                 "✅ APPROVED: %s %s %s qty=%.6f (veto=%s, warnings=%d)",
-                signal.signal_id, signal.symbol, signal.side.value,
-                position_size, decision.veto_level, len(decision.warnings),
+                signal.signal_id,
+                signal.symbol,
+                signal.side.value,
+                position_size,
+                decision.veto_level,
+                len(decision.warnings),
             )
         else:
             logger.warning(
                 "❌ VETOED [%s]: %s %s — reasons: %s",
-                decision.veto_level, signal.signal_id, signal.symbol,
+                decision.veto_level,
+                signal.signal_id,
+                signal.symbol,
                 decision.rejection_reasons,
             )
 
@@ -415,7 +428,9 @@ class RiskGuardian(BaseAgent):
                 timestamp=datetime.now(UTC),
             )
 
-        stop_loss_distance_pct = abs(signal.entry_price - signal.stop_loss) / signal.entry_price * 100
+        stop_loss_distance_pct = (
+            abs(signal.entry_price - signal.stop_loss) / signal.entry_price * 100
+        )
         if stop_loss_distance_pct > self._limits["max_stop_loss_pct"]:
             checks_failed.append(
                 f"STOP_LOSS_TOO_WIDE: {stop_loss_distance_pct:.2f}% > "
@@ -470,8 +485,7 @@ class RiskGuardian(BaseAgent):
         if elapsed < self._limits["cooldown_seconds"]:
             remaining = self._limits["cooldown_seconds"] - elapsed
             checks_failed.append(
-                f"COOLDOWN: {signal.symbol} traded {elapsed:.0f}s ago "
-                f"({remaining:.0f}s remaining)"
+                f"COOLDOWN: {signal.symbol} traded {elapsed:.0f}s ago ({remaining:.0f}s remaining)"
             )
             return RiskDecision(
                 signal_id=signal.signal_id,
@@ -489,8 +503,7 @@ class RiskGuardian(BaseAgent):
         existing_side = signal.metadata.get("existing_position_side")
         if existing_side and existing_side != signal.side.value:
             checks_failed.append(
-                f"CONFLICTING_POSITION: Existing {existing_side} position "
-                f"on {signal.symbol}"
+                f"CONFLICTING_POSITION: Existing {existing_side} position on {signal.symbol}"
             )
             return RiskDecision(
                 signal_id=signal.signal_id,
@@ -542,11 +555,10 @@ class RiskGuardian(BaseAgent):
         if self._limits.get("session_timing_check", True):
             try:
                 from src.agents.trade_manager import SessionTiming
+
                 session_allowed, session_reason = SessionTiming.is_entry_allowed()
                 if not session_allowed:
-                    checks_failed.append(
-                        f"SESSION_TIMING: {session_reason}"
-                    )
+                    checks_failed.append(f"SESSION_TIMING: {session_reason}")
                     return RiskDecision(
                         signal_id=signal.signal_id,
                         approved=False,
@@ -571,11 +583,10 @@ class RiskGuardian(BaseAgent):
         if self._limits.get("weekend_risk_check", True):
             try:
                 from src.agents.trade_manager import SessionTiming
+
                 should_close, weekend_reason = SessionTiming.should_close_for_weekend()
                 if should_close:
-                    checks_failed.append(
-                        f"WEEKEND_RISK: {weekend_reason}"
-                    )
+                    checks_failed.append(f"WEEKEND_RISK: {weekend_reason}")
                     return RiskDecision(
                         signal_id=signal.signal_id,
                         approved=False,
@@ -643,7 +654,9 @@ class RiskGuardian(BaseAgent):
             )
             logger.debug(
                 "SL tool validation: price=%.2f dist_pct=%.4f capped=%s",
-                sl_result.stop_price, sl_result.distance_pct, sl_result.capped,
+                sl_result.stop_price,
+                sl_result.distance_pct,
+                sl_result.capped,
             )
 
         # Fee-adjusted R:R via FeeCalculator
@@ -658,7 +671,9 @@ class RiskGuardian(BaseAgent):
             fee_adjusted_rr = fee_result.net_rr_ratio
             logger.debug(
                 "Fee-adjusted R:R: gross=%.2f net=%.2f fees=%.4f",
-                fee_result.gross_rr_ratio, fee_result.net_rr_ratio, fee_result.total_fees,
+                fee_result.gross_rr_ratio,
+                fee_result.net_rr_ratio,
+                fee_result.total_fees,
             )
 
         # Half-Kelly sizing
@@ -685,8 +700,12 @@ class RiskGuardian(BaseAgent):
         logger.info(
             "Position sizing: equity=%.2f risk=%.2f stop_dist=%.2f qty=%.6f "
             "multiplier=%.2f fee_adj_rr=%.2f",
-            self._current_equity, risk_amount, stop_distance,
-            quantity, drawdown.position_size_multiplier, fee_adjusted_rr,
+            self._current_equity,
+            risk_amount,
+            stop_distance,
+            quantity,
+            drawdown.position_size_multiplier,
+            fee_adjusted_rr,
         )
 
         return quantity
@@ -708,7 +727,9 @@ class RiskGuardian(BaseAgent):
 
         # Fallback: calculate locally
         if self._high_water_mark > 0:
-            drawdown_pct = ((self._high_water_mark - self._current_equity) / self._high_water_mark) * 100
+            drawdown_pct = (
+                (self._high_water_mark - self._current_equity) / self._high_water_mark
+            ) * 100
         else:
             drawdown_pct = 0.0
 
@@ -734,7 +755,9 @@ class RiskGuardian(BaseAgent):
             high_water_mark=self._high_water_mark,
             current_equity=self._current_equity,
             daily_pnl=self._daily_pnl,
-            daily_pnl_pct=(self._daily_pnl / self._current_equity * 100) if self._current_equity > 0 else 0,
+            daily_pnl_pct=(self._daily_pnl / self._current_equity * 100)
+            if self._current_equity > 0
+            else 0,
             circuit_breaker_level=level,
             trading_allowed=trading_allowed,
             position_size_multiplier=multiplier,

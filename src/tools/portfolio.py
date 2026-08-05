@@ -21,7 +21,6 @@ from __future__ import annotations
 
 import asyncio
 import logging
-import time
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from enum import StrEnum
@@ -201,7 +200,9 @@ class AssetAllocationResult:
             "risk_profile": self.risk_profile,
             "expected_return": round(self.expected_return, 6),
             "expected_volatility": round(self.expected_volatility, 6),
-            "asset_class_breakdown": {k: round(v, 4) for k, v in self.asset_class_breakdown.items()},
+            "asset_class_breakdown": {
+                k: round(v, 4) for k, v in self.asset_class_breakdown.items()
+            },
             "rationale": self.rationale,
         }
 
@@ -274,7 +275,9 @@ class RiskParityResult:
         return {
             "weights": {k: round(v, 6) for k, v in self.weights.items()},
             "risk_contributions": {k: round(v, 6) for k, v in self.risk_contributions.items()},
-            "risk_contribution_pct": {k: round(v, 4) for k, v in self.risk_contribution_pct.items()},
+            "risk_contribution_pct": {
+                k: round(v, 4) for k, v in self.risk_contribution_pct.items()
+            },
             "total_portfolio_risk": round(self.total_portfolio_risk, 6),
             "method": self.method,
             "iterations": self.iterations,
@@ -421,14 +424,10 @@ class PortfolioTools:
 
         # Try cuFOLIO GPU backend first
         if self._cufolio_available():
-            return await self._mean_cvar_cufolio(
-                symbols, returns_matrix, conf, rf, mw, frontier_n
-            )
+            return await self._mean_cvar_cufolio(symbols, returns_matrix, conf, rf, mw, frontier_n)
 
         # Scipy fallback
-        return await self._mean_cvar_scipy(
-            symbols, returns_matrix, conf, rf, mw, frontier_n
-        )
+        return await self._mean_cvar_scipy(symbols, returns_matrix, conf, rf, mw, frontier_n)
 
     async def _mean_cvar_cufolio(
         self,
@@ -456,12 +455,14 @@ class PortfolioTools:
 
         frontier_data = []
         for p in frontier_result.portfolios:
-            frontier_data.append({
-                "return": round(p.expected_return, 6),
-                "risk": round(p.expected_risk, 6),
-                "sharpe": round(p.sharpe_ratio, 4),
-                "weights": {k: round(v, 6) for k, v in p.weights.items()},
-            })
+            frontier_data.append(
+                {
+                    "return": round(p.expected_return, 6),
+                    "risk": round(p.expected_risk, 6),
+                    "sharpe": round(p.sharpe_ratio, 4),
+                    "weights": {k: round(v, 6) for k, v in p.weights.items()},
+                }
+            )
 
         return MeanCVaRResult(
             weights=allocation.weights,
@@ -525,9 +526,7 @@ class PortfolioTools:
 
             opt_weights = result.x
             weight_dict = {
-                symbols[i]: float(opt_weights[i])
-                for i in range(n_assets)
-                if opt_weights[i] > 1e-6
+                symbols[i]: float(opt_weights[i]) for i in range(n_assets) if opt_weights[i] > 1e-6
             }
 
             port_returns = returns @ opt_weights
@@ -577,6 +576,7 @@ class PortfolioTools:
 
         frontier = []
         for target in target_returns:
+
             def portfolio_vol(w: np.ndarray) -> float:
                 return float(np.sqrt(w.T @ cov @ w))
 
@@ -591,23 +591,27 @@ class PortfolioTools:
             x0 = np.ones(n_assets) / n_assets
 
             res = minimize(
-                portfolio_vol, x0, method="SLSQP",
-                bounds=bounds, constraints=constraints,
+                portfolio_vol,
+                x0,
+                method="SLSQP",
+                bounds=bounds,
+                constraints=constraints,
             )
             if res.success:
                 w = res.x
                 vol = portfolio_vol(w)
                 sharpe = (target - risk_free_rate) / vol if vol > 0 else 0.0
                 weight_dict = {
-                    symbols[i]: round(float(w[i]), 6)
-                    for i in range(n_assets) if w[i] > 1e-6
+                    symbols[i]: round(float(w[i]), 6) for i in range(n_assets) if w[i] > 1e-6
                 }
-                frontier.append({
-                    "return": round(float(target), 6),
-                    "risk": round(vol, 6),
-                    "sharpe": round(sharpe, 4),
-                    "weights": weight_dict,
-                })
+                frontier.append(
+                    {
+                        "return": round(float(target), 6),
+                        "risk": round(vol, 6),
+                        "sharpe": round(sharpe, 4),
+                        "weights": weight_dict,
+                    }
+                )
 
         return frontier
 
@@ -674,9 +678,7 @@ class PortfolioTools:
             if market_caps:
                 total_cap = sum(market_caps.get(s, 0.0) for s in symbols)
                 if total_cap > 0:
-                    w_mkt = np.array(
-                        [market_caps.get(s, 0.0) / total_cap for s in symbols]
-                    )
+                    w_mkt = np.array([market_caps.get(s, 0.0) / total_cap for s in symbols])
                 else:
                     w_mkt = np.ones(n) / n
             else:
@@ -688,9 +690,7 @@ class PortfolioTools:
             # Step 2: Build view matrices P, Q, Ω
             n_views = len(views)
             if n_views == 0:
-                weight_dict = {
-                    symbols[i]: float(w_mkt[i]) for i in range(n) if w_mkt[i] > 1e-6
-                }
+                weight_dict = {symbols[i]: float(w_mkt[i]) for i in range(n) if w_mkt[i] > 1e-6}
                 eq_returns = {symbols[i]: float(pi[i]) for i in range(n)}
                 return BlackLittermanResult(
                     weights=weight_dict,
@@ -743,24 +743,17 @@ class PortfolioTools:
 
             # Step 4: Optimal weights: w* = (1/δ) * Σ_post⁻¹ * E[R]
             try:
-                optimal_weights = (1.0 / delta) * np.linalg.solve(
-                    posterior_cov, posterior_returns
-                )
+                optimal_weights = (1.0 / delta) * np.linalg.solve(posterior_cov, posterior_returns)
             except np.linalg.LinAlgError:
                 optimal_weights = w_mkt
 
             # Normalize, clip negatives
             optimal_weights = np.maximum(optimal_weights, 0.0)
             total = np.sum(optimal_weights)
-            if total > 0:
-                optimal_weights = optimal_weights / total
-            else:
-                optimal_weights = w_mkt
+            optimal_weights = optimal_weights / total if total > 0 else w_mkt
 
             weight_dict = {
-                symbols[i]: float(optimal_weights[i])
-                for i in range(n)
-                if optimal_weights[i] > 1e-6
+                symbols[i]: float(optimal_weights[i]) for i in range(n) if optimal_weights[i] > 1e-6
             }
             post_ret_dict = {symbols[i]: float(posterior_returns[i]) for i in range(n)}
             eq_ret_dict = {symbols[i]: float(pi[i]) for i in range(n)}
@@ -828,9 +821,7 @@ class PortfolioTools:
         )
 
         def _run() -> RebalanceResult:
-            all_symbols = sorted(
-                set(list(current_weights.keys()) + list(target_weights.keys()))
-            )
+            all_symbols = sorted(set(list(current_weights.keys()) + list(target_weights.keys())))
 
             if not all_symbols:
                 return RebalanceResult(
@@ -877,8 +868,7 @@ class PortfolioTools:
                     target_weights=target_weights,
                     max_drift=max_drift,
                     details=(
-                        f"Max drift {max_drift:.2f}% < threshold {thresh}%. "
-                        "Calendar not due."
+                        f"Max drift {max_drift:.2f}% < threshold {thresh}%. Calendar not due."
                     ),
                 )
 
@@ -896,12 +886,14 @@ class PortfolioTools:
 
                 usd_amount = weight_diff * portfolio_value
                 side = "buy" if weight_diff > 0 else "sell"
-                trades.append({
-                    "symbol": sym,
-                    "side": side,
-                    "weight_change": round(weight_diff, 6),
-                    "usd_amount": round(abs(usd_amount), 2),
-                })
+                trades.append(
+                    {
+                        "symbol": sym,
+                        "side": side,
+                        "weight_change": round(weight_diff, 6),
+                        "usd_amount": round(abs(usd_amount), 2),
+                    }
+                )
                 total_turnover += abs(weight_diff)
 
             turnover = total_turnover / 2.0
@@ -1001,13 +993,9 @@ class PortfolioTools:
 
                 n = len(cls_assets)
                 if custom_weights:
-                    custom_sum = sum(
-                        custom_weights.get(a["symbol"], 0.0) for a in cls_assets
-                    )
+                    custom_sum = sum(custom_weights.get(a["symbol"], 0.0) for a in cls_assets)
                     remaining = max(0.0, class_w - custom_sum)
-                    unspecified = [
-                        a for a in cls_assets if a["symbol"] not in custom_weights
-                    ]
+                    unspecified = [a for a in cls_assets if a["symbol"] not in custom_weights]
                     equal_share = remaining / max(len(unspecified), 1)
 
                     for a in cls_assets:
@@ -1022,11 +1010,7 @@ class PortfolioTools:
                     sym_list = [a["symbol"] for a in assets]
                     inv_vols = []
                     for a in cls_assets:
-                        idx = (
-                            sym_list.index(a["symbol"])
-                            if a["symbol"] in sym_list
-                            else -1
-                        )
+                        idx = sym_list.index(a["symbol"]) if a["symbol"] in sym_list else -1
                         if 0 <= idx < returns.shape[1]:
                             vol = np.std(returns[:, idx])
                             inv_vols.append(1.0 / max(vol, 1e-10))
@@ -1034,7 +1018,7 @@ class PortfolioTools:
                             inv_vols.append(1.0)
 
                     total_inv = sum(inv_vols)
-                    for a, iv in zip(cls_assets, inv_vols):
+                    for a, iv in zip(cls_assets, inv_vols, strict=False):
                         weights[a["symbol"]] = (
                             class_w * (iv / total_inv) if total_inv > 0 else class_w / n
                         )
@@ -1064,9 +1048,7 @@ class PortfolioTools:
             breakdown: dict[str, float] = {}
             for asset in assets:
                 cls = asset.get("asset_class", "crypto").lower()
-                breakdown[cls] = breakdown.get(cls, 0.0) + weights.get(
-                    asset["symbol"], 0.0
-                )
+                breakdown[cls] = breakdown.get(cls, 0.0) + weights.get(asset["symbol"], 0.0)
 
             rationale = (
                 f"Risk profile '{profile}' allocation: "
@@ -1152,9 +1134,7 @@ class PortfolioTools:
                     asset_vols = np.std(returns[:, :n], axis=0)
                     weighted_vol_sum = float(w @ asset_vols)
                     port_vol = float(np.sqrt(w @ np.cov(returns[:, :n].T) @ w))
-                    corr_div_ratio = (
-                        port_vol / weighted_vol_sum if weighted_vol_sum > 0 else 1.0
-                    )
+                    corr_div_ratio = port_vol / weighted_vol_sum if weighted_vol_sum > 0 else 1.0
 
             # Diversification score (0-100)
             hhi_score = max(0, (1 - hhi) * 100) * 0.4
@@ -1171,10 +1151,7 @@ class PortfolioTools:
                     f"holds {top.get('pct', 0):.1f}%. Consider reducing."
                 )
             if avg_corr > 0.7:
-                recs.append(
-                    f"High average correlation ({avg_corr:.2f}). "
-                    "Add uncorrelated assets."
-                )
+                recs.append(f"High average correlation ({avg_corr:.2f}). Add uncorrelated assets.")
             if effective_n < 3:
                 recs.append(
                     f"Effective diversification is only {effective_n:.1f} assets. "
@@ -1187,8 +1164,7 @@ class PortfolioTools:
                 )
             if n < 5:
                 recs.append(
-                    f"Only {n} assets. Consider expanding to 8-15 for better "
-                    "diversification."
+                    f"Only {n} assets. Consider expanding to 8-15 for better diversification."
                 )
             if not recs:
                 recs.append("Portfolio diversification looks healthy.")
@@ -1265,9 +1241,7 @@ class PortfolioTools:
             total_rc = np.sum(risk_contrib)
             rc_pct = risk_contrib / total_rc if total_rc > 0 else np.zeros(n)
 
-            weight_dict = {
-                symbols[i]: float(weights[i]) for i in range(n) if weights[i] > 1e-6
-            }
+            weight_dict = {symbols[i]: float(weights[i]) for i in range(n) if weights[i] > 1e-6}
             rc_dict = {symbols[i]: float(risk_contrib[i]) for i in range(n)}
             rcp_dict = {symbols[i]: float(rc_pct[i]) * 100 for i in range(n)}
 
@@ -1337,9 +1311,7 @@ class PortfolioTools:
             total_rc = np.sum(risk_contrib)
             rc_pct = risk_contrib / total_rc if total_rc > 0 else np.zeros(n)
 
-            weight_dict = {
-                symbols[i]: float(opt_w[i]) for i in range(n) if opt_w[i] > 1e-6
-            }
+            weight_dict = {symbols[i]: float(opt_w[i]) for i in range(n) if opt_w[i] > 1e-6}
             rc_dict = {symbols[i]: float(risk_contrib[i]) for i in range(n)}
             rcp_dict = {symbols[i]: float(rc_pct[i]) * 100 for i in range(n)}
 

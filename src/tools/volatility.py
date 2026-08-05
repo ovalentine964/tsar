@@ -26,12 +26,12 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import numpy as np
-import pandas as pd
 
-from src.interfaces.types import OHLCV
+if TYPE_CHECKING:
+    from src.interfaces.types import OHLCV
 
 logger = logging.getLogger(__name__)
 
@@ -228,12 +228,15 @@ class VolatilityAnalyzer:
         """
         if len(closes) < period + 1:
             return VolatilityResult(
-                volatility=0.0, daily_volatility=0.0,
-                method=method, period=period,
-                percentile=50.0, interpretation="Insufficient data",
+                volatility=0.0,
+                daily_volatility=0.0,
+                method=method,
+                period=period,
+                percentile=50.0,
+                interpretation="Insufficient data",
             )
 
-        c = np.array(closes[-period - 1:], dtype=float)
+        c = np.array(closes[-period - 1 :], dtype=float)
 
         if method == "close_to_close":
             daily_vol = self._close_to_close_vol(c)
@@ -282,9 +285,12 @@ class VolatilityAnalyzer:
         """
         if len(ohlcv) < period + 1:
             return VolatilityResult(
-                volatility=0.0, daily_volatility=0.0,
-                method=method, period=period,
-                percentile=50.0, interpretation="Insufficient data",
+                volatility=0.0,
+                daily_volatility=0.0,
+                method=method,
+                period=period,
+                percentile=50.0,
+                interpretation="Insufficient data",
             )
 
         recent = ohlcv[-period:]
@@ -294,7 +300,7 @@ class VolatilityAnalyzer:
         elif method == "garman_klass":
             daily_vol = self._garman_klass_vol(recent)
         else:
-            closes = [c.close for c in ohlcv[-period - 1:]]
+            closes = [c.close for c in ohlcv[-period - 1 :]]
             daily_vol = self._close_to_close_vol(np.array(closes, dtype=float))
 
         annualized = daily_vol * np.sqrt(self._annualization)
@@ -342,24 +348,23 @@ class VolatilityAnalyzer:
         """
         if len(ohlcv) < long_period + 1:
             return ImpliedVolProxy(
-                iv_proxy=0.0, iv_vs_hv_ratio=1.0,
-                skew=0.0, interpretation="Insufficient data",
+                iv_proxy=0.0,
+                iv_vs_hv_ratio=1.0,
+                skew=0.0,
+                interpretation="Insufficient data",
             )
 
         closes = np.array([c.close for c in ohlcv], dtype=float)
-        highs = np.array([c.high for c in ohlcv], dtype=float)
-        lows = np.array([c.low for c in ohlcv], dtype=float)
+        np.array([c.high for c in ohlcv], dtype=float)
+        np.array([c.low for c in ohlcv], dtype=float)
 
         # Short-term and long-term realized vol
-        short_vol = self._close_to_close_vol(closes[-short_period - 1:])
-        long_vol = self._close_to_close_vol(closes[-long_period - 1:])
+        short_vol = self._close_to_close_vol(closes[-short_period - 1 :])
+        long_vol = self._close_to_close_vol(closes[-long_period - 1 :])
 
         # IV proxy: blend of short and long vol, weighted toward short
         # with acceleration adjustment
-        if long_vol > 0:
-            vol_ratio = short_vol / long_vol
-        else:
-            vol_ratio = 1.0
+        vol_ratio = short_vol / long_vol if long_vol > 0 else 1.0
 
         # If vol is accelerating, IV tends to be higher than realized
         iv_proxy_raw = short_vol * np.sqrt(self._annualization)
@@ -425,8 +430,11 @@ class VolatilityAnalyzer:
         """
         if len(ohlcv) < lookback:
             return VolatilityRegime(
-                regime="normal", current_vol=0.0, percentile=50.0,
-                atr_normalized=0.0, bollinger_width=0.0,
+                regime="normal",
+                current_vol=0.0,
+                percentile=50.0,
+                atr_normalized=0.0,
+                bollinger_width=0.0,
                 recommended_position_size_factor=1.0,
                 description="Insufficient data for regime classification",
             )
@@ -452,11 +460,13 @@ class VolatilityAnalyzer:
         rolling_vols: list[float] = []
         window = 30
         for i in range(window, len(closes)):
-            vol = self._close_to_close_vol(closes[i - window:i + 1])
+            vol = self._close_to_close_vol(closes[i - window : i + 1])
             rolling_vols.append(vol * np.sqrt(self._annualization))
 
         if rolling_vols:
-            percentile = float(np.sum(np.array(rolling_vols) < current_vol) / len(rolling_vols) * 100)
+            percentile = float(
+                np.sum(np.array(rolling_vols) < current_vol) / len(rolling_vols) * 100
+            )
         else:
             percentile = 50.0
 
@@ -518,7 +528,7 @@ class VolatilityAnalyzer:
 
         for p in periods:
             if len(c) >= p + 1:
-                vol = self._close_to_close_vol(c[-p - 1:]) * np.sqrt(self._annualization)
+                vol = self._close_to_close_vol(c[-p - 1 :]) * np.sqrt(self._annualization)
                 vols.append(vol)
                 valid_periods.append(p)
             else:
@@ -526,10 +536,7 @@ class VolatilityAnalyzer:
                 valid_periods.append(p)
 
         # Compute slope (short-term vs long-term)
-        if len(vols) >= 2 and vols[-1] > 0:
-            slope = (vols[0] - vols[-1]) / vols[-1]
-        else:
-            slope = 0.0
+        slope = (vols[0] - vols[-1]) / vols[-1] if len(vols) >= 2 and vols[-1] > 0 else 0.0
 
         return VolatilityTermStructure(
             periods=tuple(valid_periods),
@@ -579,13 +586,13 @@ class VolatilityAnalyzer:
                 continue
 
             # Current volatility at this horizon
-            current = self._close_to_close_vol(c[-p - 1:]) * np.sqrt(self._annualization)
+            current = self._close_to_close_vol(c[-p - 1 :]) * np.sqrt(self._annualization)
             current_vols.append(current)
 
             # Historical distribution of rolling vol at this horizon
             rolling: list[float] = []
             for i in range(p, len(c)):
-                v = self._close_to_close_vol(c[i - p:i + 1]) * np.sqrt(self._annualization)
+                v = self._close_to_close_vol(c[i - p : i + 1]) * np.sqrt(self._annualization)
                 rolling.append(v)
 
             if rolling:
@@ -632,9 +639,14 @@ class VolatilityAnalyzer:
         """
         if len(closes) < 50:
             return GARCHForecast(
-                current_variance=0.0, forecast_1d=0.0,
-                forecast_5d=0.0, forecast_10d=0.0,
-                annualized_vol=0.0, omega=0.0, alpha=0.1, beta=0.85,
+                current_variance=0.0,
+                forecast_1d=0.0,
+                forecast_5d=0.0,
+                forecast_10d=0.0,
+                annualized_vol=0.0,
+                omega=0.0,
+                alpha=0.1,
+                beta=0.85,
                 persistence=0.95,
             )
 
@@ -660,8 +672,8 @@ class VolatilityAnalyzer:
         if persistence < 1:
             long_run_var = omega / (1 - persistence)
             forecast_1 = long_run_var + persistence * (current_var - long_run_var)
-            forecast_5 = long_run_var + persistence ** 5 * (current_var - long_run_var)
-            forecast_10 = long_run_var + persistence ** horizon * (current_var - long_run_var)
+            forecast_5 = long_run_var + persistence**5 * (current_var - long_run_var)
+            forecast_10 = long_run_var + persistence**horizon * (current_var - long_run_var)
         else:
             # Unit root — forecast equals current
             forecast_1 = current_var
@@ -768,7 +780,7 @@ class VolatilityAnalyzer:
         c = np.array(closes, dtype=float)
         rolling_vols: list[float] = []
         for i in range(period, len(c)):
-            v = self._close_to_close_vol(c[i - period:i + 1])
+            v = self._close_to_close_vol(c[i - period : i + 1])
             rolling_vols.append(v)
 
         if not rolling_vols:
@@ -787,7 +799,7 @@ class VolatilityAnalyzer:
         var = float(np.var(returns))
 
         # Compute squared returns and lagged variance proxy
-        sq_returns = returns ** 2
+        sq_returns = returns**2
         mean_sq = float(np.mean(sq_returns))
 
         # Method of moments: match variance and first autocorrelation of sq returns

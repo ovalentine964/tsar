@@ -27,11 +27,10 @@ from __future__ import annotations
 
 import asyncio
 import hashlib
-import json
 import logging
 import time
 import uuid
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import UTC, datetime
 from enum import StrEnum
 from typing import Any
@@ -48,6 +47,7 @@ logger = logging.getLogger(__name__)
 
 class IntentProtocol(StrEnum):
     """Supported intent-based trading protocols."""
+
     COW_PROTOCOL = "cow_protocol"
     UNISWAPX = "uniswapx"
     ONEINCH_FUSION = "1inch_fusion"
@@ -55,6 +55,7 @@ class IntentProtocol(StrEnum):
 
 class IntentStatus(StrEnum):
     """Lifecycle status of an intent order."""
+
     CREATED = "created"
     SUBMITTED = "submitted"
     SOLVER_COMPETING = "solver_competing"
@@ -67,6 +68,7 @@ class IntentStatus(StrEnum):
 
 class SettlementVerification(StrEnum):
     """Result of settlement verification."""
+
     VERIFIED = "verified"
     PRICE_DEVIATION = "price_deviation"
     AMOUNT_MISMATCH = "amount_mismatch"
@@ -101,7 +103,11 @@ TOKEN_ADDRESSES: dict[str, dict[str, str]] = {
 PROTOCOL_FEES: dict[IntentProtocol, dict[str, float]] = {
     IntentProtocol.COW_PROTOCOL: {"solver_fee_bps": 0, "protocol_fee_bps": 1, "gas_savings_bps": 5},
     IntentProtocol.UNISWAPX: {"solver_fee_bps": 0, "protocol_fee_bps": 0, "gas_savings_bps": 8},
-    IntentProtocol.ONEINCH_FUSION: {"solver_fee_bps": 0, "protocol_fee_bps": 3, "gas_savings_bps": 4},
+    IntentProtocol.ONEINCH_FUSION: {
+        "solver_fee_bps": 0,
+        "protocol_fee_bps": 3,
+        "gas_savings_bps": 4,
+    },
 }
 
 # Protocol chain support
@@ -144,6 +150,7 @@ class IntentQuote:
         expires_at: When the quote expires.
         route_id: Unique identifier for this quote.
     """
+
     protocol: IntentProtocol
     pair: str
     side: str
@@ -180,6 +187,7 @@ class IntentResult:
         created_at: When the intent was created.
         settled_at: When the intent was settled.
     """
+
     order_id: str
     protocol: IntentProtocol
     pair: str
@@ -210,6 +218,7 @@ class SettlementVerificationResult:
         gas_used: Actual gas used.
         verification: Detailed verification status.
     """
+
     verified: bool
     expected_output: float
     actual_output: float
@@ -234,6 +243,7 @@ class ExecutionComparison:
         savings_vs_worst_bps: Savings vs worst option in bps.
         mev_protection_winner: Which method has best MEV protection.
     """
+
     pair: str
     amount: float
     intent_quotes: list[IntentQuote]
@@ -272,10 +282,13 @@ class CowProtocolClient:
     def __init__(self, http_client: httpx.AsyncClient, config: dict[str, Any] | None = None):
         self._http = http_client
         self._config = config or {}
-        self._solver_urls = self._config.get("solver_urls", [
-            "https://solver.cow.fi",
-            "https://solver-1.cow.fi",
-        ])
+        self._solver_urls = self._config.get(
+            "solver_urls",
+            [
+                "https://solver.cow.fi",
+                "https://solver-1.cow.fi",
+            ],
+        )
 
     def supports_chain(self, chain: str) -> bool:
         """Check if CoW Protocol supports this chain."""
@@ -296,7 +309,7 @@ class CowProtocolClient:
             IntentQuote with CoW Protocol pricing.
         """
         base, quote = pair.split("/")
-        tokens = TOKEN_ADDRESSES.get(chain, {})
+        TOKEN_ADDRESSES.get(chain, {})
 
         # Simulate solver competition
         base_price = await self._get_reference_price(base, quote, chain)
@@ -304,11 +317,11 @@ class CowProtocolClient:
             estimated_output = amount / base_price
             # CoW often finds coincidence of Wants — slight improvement
             improvement_bps = 2.5
-            estimated_output *= (1 + improvement_bps / 10_000)
+            estimated_output *= 1 + improvement_bps / 10_000
         else:
             estimated_output = amount * base_price
             improvement_bps = 2.5
-            estimated_output *= (1 + improvement_bps / 10_000)
+            estimated_output *= 1 + improvement_bps / 10_000
 
         price_impact = max(0.5, 10 / (amount + 1))  # Less impact for larger orders on CoW
         fee_info = PROTOCOL_FEES[IntentProtocol.COW_PROTOCOL]
@@ -317,7 +330,9 @@ class CowProtocolClient:
         protocol_fee = amount * base_price * fee_info["protocol_fee_bps"] / 10_000
 
         now = datetime.now(UTC)
-        expires_at = now.replace(second=(now.second + 30) % 60, minute=now.minute + (1 if now.second >= 30 else 0))
+        expires_at = now.replace(
+            second=(now.second + 30) % 60, minute=now.minute + (1 if now.second >= 30 else 0)
+        )
 
         route_id = f"cow-{pair}-{amount}-{uuid.uuid4().hex[:8]}"
 
@@ -327,7 +342,9 @@ class CowProtocolClient:
             side=side,
             amount=amount,
             estimated_output=round(estimated_output, 6),
-            price=round(estimated_output / amount if side == "buy" else amount / estimated_output, 6),
+            price=round(
+                estimated_output / amount if side == "buy" else amount / estimated_output, 6
+            ),
             price_impact_bps=round(price_impact, 2),
             gas_cost_usd=gas_cost,
             protocol_fee_usd=round(protocol_fee, 2),
@@ -339,8 +356,13 @@ class CowProtocolClient:
         )
 
     async def submit_order(
-        self, pair: str, amount: float, chain: str, side: str,
-        user_address: str, slippage_bps: float = 50,
+        self,
+        pair: str,
+        amount: float,
+        chain: str,
+        side: str,
+        user_address: str,
+        slippage_bps: float = 50,
     ) -> IntentResult:
         """Submit an order to CoW Protocol.
 
@@ -388,7 +410,9 @@ class CowProtocolClient:
             side=side,
             amount=amount,
             filled_amount=round(filled_amount, 6),
-            execution_price=round(filled_amount / amount if side == "buy" else amount / filled_amount, 6),
+            execution_price=round(
+                filled_amount / amount if side == "buy" else amount / filled_amount, 6
+            ),
             price_impact_bps=round(max(0.5, 10 / (amount + 1)), 2),
             gas_paid_by_solver=True,
             solver_address="0x" + hashlib.sha256(f"solver-{order_id}".encode()).hexdigest()[:40],
@@ -402,8 +426,15 @@ class CowProtocolClient:
         """Get reference price for a pair."""
         # Simplified price lookup — in production would use CoinGecko/Chainlink
         prices = {
-            "ETH": 3500, "BTC": 65000, "SOL": 150, "USDC": 1.0, "USDT": 1.0,
-            "DAI": 1.0, "WBTC": 65000, "MATIC": 0.8, "AVAX": 35,
+            "ETH": 3500,
+            "BTC": 65000,
+            "SOL": 150,
+            "USDC": 1.0,
+            "USDT": 1.0,
+            "DAI": 1.0,
+            "WBTC": 65000,
+            "MATIC": 0.8,
+            "AVAX": 35,
         }
         base_price = prices.get(base, 1.0)
         quote_price = prices.get(quote, 1.0)
@@ -454,24 +485,21 @@ class UniswapXClient:
         base, quote = pair.split("/")
         base_price = await self._get_reference_price(base, quote, chain)
 
-        if side == "buy":
-            estimated_output = amount / base_price
-        else:
-            estimated_output = amount * base_price
+        estimated_output = amount / base_price if side == "buy" else amount * base_price
 
         # UniswapX competitive pricing
         improvement_bps = 3.0
         if side == "buy":
-            estimated_output *= (1 + improvement_bps / 10_000)
+            estimated_output *= 1 + improvement_bps / 10_000
         else:
-            estimated_output *= (1 + improvement_bps / 10_000)
+            estimated_output *= 1 + improvement_bps / 10_000
 
         price_impact = max(0.3, 8 / (amount + 1))
         gas_cost = 0.0  # Gasless
         protocol_fee = 0.0  # No protocol fee on UniswapX
 
         now = datetime.now(UTC)
-        expires_at = now.replace(second=(now.second + 60) % 60, minute=now.minute + 1)
+        now.replace(second=(now.second + 60) % 60, minute=now.minute + 1)
         route_id = f"ux-{pair}-{amount}-{uuid.uuid4().hex[:8]}"
 
         return IntentQuote(
@@ -480,20 +508,29 @@ class UniswapXClient:
             side=side,
             amount=amount,
             estimated_output=round(estimated_output, 6),
-            price=round(estimated_output / amount if side == "buy" else amount / estimated_output, 6),
+            price=round(
+                estimated_output / amount if side == "buy" else amount / estimated_output, 6
+            ),
             price_impact_bps=round(price_impact, 2),
             gas_cost_usd=gas_cost,
             protocol_fee_usd=protocol_fee,
             mev_protection=True,
             solver_count=5,
             auction_duration_s=AUCTION_DURATION_S[IntentProtocol.UNISWAPX],
-            expires_at=datetime.now(UTC).replace(second=(datetime.now(UTC).second + 60) % 60, minute=datetime.now(UTC).minute + 1),
+            expires_at=datetime.now(UTC).replace(
+                second=(datetime.now(UTC).second + 60) % 60, minute=datetime.now(UTC).minute + 1
+            ),
             route_id=route_id,
         )
 
     async def submit_order(
-        self, pair: str, amount: float, chain: str, side: str,
-        user_address: str, slippage_bps: float = 50,
+        self,
+        pair: str,
+        amount: float,
+        chain: str,
+        side: str,
+        user_address: str,
+        slippage_bps: float = 50,
     ) -> IntentResult:
         """Submit a UniswapX order.
 
@@ -527,7 +564,9 @@ class UniswapXClient:
             side=side,
             amount=amount,
             filled_amount=round(filled_amount, 6),
-            execution_price=round(filled_amount / amount if side == "buy" else amount / filled_amount, 6),
+            execution_price=round(
+                filled_amount / amount if side == "buy" else amount / filled_amount, 6
+            ),
             price_impact_bps=round(max(0.3, 8 / (amount + 1)), 2),
             gas_paid_by_solver=True,
             solver_address="0x" + hashlib.sha256(f"filler-{order_id}".encode()).hexdigest()[:40],
@@ -540,8 +579,15 @@ class UniswapXClient:
     async def _get_reference_price(self, base: str, quote: str, chain: str) -> float:
         """Get reference price."""
         prices = {
-            "ETH": 3500, "BTC": 65000, "SOL": 150, "USDC": 1.0, "USDT": 1.0,
-            "DAI": 1.0, "WBTC": 65000, "MATIC": 0.8, "AVAX": 35,
+            "ETH": 3500,
+            "BTC": 65000,
+            "SOL": 150,
+            "USDC": 1.0,
+            "USDT": 1.0,
+            "DAI": 1.0,
+            "WBTC": 65000,
+            "MATIC": 0.8,
+            "AVAX": 35,
         }
         return prices.get(base, 1.0) / prices.get(quote, 1.0)
 
@@ -591,17 +637,14 @@ class OneInchFusionClient:
         base, quote = pair.split("/")
         base_price = await self._get_reference_price(base, quote, chain)
 
-        if side == "buy":
-            estimated_output = amount / base_price
-        else:
-            estimated_output = amount * base_price
+        estimated_output = amount / base_price if side == "buy" else amount * base_price
 
         # 1inch Fusion competitive pricing
         improvement_bps = 2.0
         if side == "buy":
-            estimated_output *= (1 + improvement_bps / 10_000)
+            estimated_output *= 1 + improvement_bps / 10_000
         else:
-            estimated_output *= (1 + improvement_bps / 10_000)
+            estimated_output *= 1 + improvement_bps / 10_000
 
         price_impact = max(0.4, 9 / (amount + 1))
         gas_cost = 0.0
@@ -616,20 +659,30 @@ class OneInchFusionClient:
             side=side,
             amount=amount,
             estimated_output=round(estimated_output, 6),
-            price=round(estimated_output / amount if side == "buy" else amount / estimated_output, 6),
+            price=round(
+                estimated_output / amount if side == "buy" else amount / estimated_output, 6
+            ),
             price_impact_bps=round(price_impact, 2),
             gas_cost_usd=gas_cost,
             protocol_fee_usd=round(protocol_fee, 2),
             mev_protection=True,
             solver_count=12,  # 1inch has many resolvers
             auction_duration_s=AUCTION_DURATION_S[IntentProtocol.ONEINCH_FUSION],
-            expires_at=datetime.now(UTC).replace(second=(datetime.now(UTC).second + 45) % 60, minute=datetime.now(UTC).minute + (1 if datetime.now(UTC).second >= 15 else 0)),
+            expires_at=datetime.now(UTC).replace(
+                second=(datetime.now(UTC).second + 45) % 60,
+                minute=datetime.now(UTC).minute + (1 if datetime.now(UTC).second >= 15 else 0),
+            ),
             route_id=route_id,
         )
 
     async def submit_order(
-        self, pair: str, amount: float, chain: str, side: str,
-        user_address: str, slippage_bps: float = 50,
+        self,
+        pair: str,
+        amount: float,
+        chain: str,
+        side: str,
+        user_address: str,
+        slippage_bps: float = 50,
     ) -> IntentResult:
         """Submit a 1inch Fusion order.
 
@@ -663,7 +716,9 @@ class OneInchFusionClient:
             side=side,
             amount=amount,
             filled_amount=round(filled_amount, 6),
-            execution_price=round(filled_amount / amount if side == "buy" else amount / filled_amount, 6),
+            execution_price=round(
+                filled_amount / amount if side == "buy" else amount / filled_amount, 6
+            ),
             price_impact_bps=round(max(0.4, 9 / (amount + 1)), 2),
             gas_paid_by_solver=True,
             solver_address="0x" + hashlib.sha256(f"resolver-{order_id}".encode()).hexdigest()[:40],
@@ -676,8 +731,15 @@ class OneInchFusionClient:
     async def _get_reference_price(self, base: str, quote: str, chain: str) -> float:
         """Get reference price."""
         prices = {
-            "ETH": 3500, "BTC": 65000, "SOL": 150, "USDC": 1.0, "USDT": 1.0,
-            "DAI": 1.0, "WBTC": 65000, "MATIC": 0.8, "AVAX": 35,
+            "ETH": 3500,
+            "BTC": 65000,
+            "SOL": 150,
+            "USDC": 1.0,
+            "USDT": 1.0,
+            "DAI": 1.0,
+            "WBTC": 65000,
+            "MATIC": 0.8,
+            "AVAX": 35,
         }
         return prices.get(base, 1.0) / prices.get(quote, 1.0)
 
@@ -722,8 +784,15 @@ class DirectDexQuoter:
         """
         base, quote = pair.split("/")
         prices = {
-            "ETH": 3500, "BTC": 65000, "SOL": 150, "USDC": 1.0, "USDT": 1.0,
-            "DAI": 1.0, "WBTC": 65000, "MATIC": 0.8, "AVAX": 35,
+            "ETH": 3500,
+            "BTC": 65000,
+            "SOL": 150,
+            "USDC": 1.0,
+            "USDT": 1.0,
+            "DAI": 1.0,
+            "WBTC": 65000,
+            "MATIC": 0.8,
+            "AVAX": 35,
         }
         base_price = prices.get(base, 1.0) / prices.get(quote, 1.0)
 
@@ -745,22 +814,28 @@ class DirectDexQuoter:
 
             # Gas cost for direct DEX swap
             gas_usd = {
-                "ethereum": 15.0, "arbitrum": 0.10, "base": 0.05,
-                "polygon": 0.02, "avalanche": 0.15, "solana": 0.001,
+                "ethereum": 15.0,
+                "arbitrum": 0.10,
+                "base": 0.05,
+                "polygon": 0.02,
+                "avalanche": 0.15,
+                "solana": 0.001,
             }.get(chain, 15.0)
 
-            quotes.append({
-                "dex": dex_name,
-                "pair": pair,
-                "side": side,
-                "amount": amount,
-                "estimated_output": round(output, 6),
-                "price": round(output / amount if side == "buy" else amount / output, 6),
-                "fee_bps": fee_bps,
-                "price_impact_bps": round(price_impact, 2),
-                "gas_cost_usd": gas_usd,
-                "mev_protection": False,
-            })
+            quotes.append(
+                {
+                    "dex": dex_name,
+                    "pair": pair,
+                    "side": side,
+                    "amount": amount,
+                    "estimated_output": round(output, 6),
+                    "price": round(output / amount if side == "buy" else amount / output, 6),
+                    "fee_bps": fee_bps,
+                    "price_impact_bps": round(price_impact, 2),
+                    "gas_cost_usd": gas_usd,
+                    "mev_protection": False,
+                }
+            )
 
         # Sort by best output
         quotes.sort(key=lambda q: -q["estimated_output"])
@@ -834,11 +909,11 @@ class IntentExecutor:
         ]
 
         tasks = []
-        for client, protocol in clients:
+        for client, _protocol in clients:
             if client.supports_chain(chain):
-                tasks.append(asyncio.create_task(
-                    self._safe_quote(client, pair, amount, chain, side)
-                ))
+                tasks.append(
+                    asyncio.create_task(self._safe_quote(client, pair, amount, chain, side))
+                )
 
         results = await asyncio.gather(*tasks, return_exceptions=True)
         quotes: list[IntentQuote] = []
@@ -936,8 +1011,7 @@ class IntentExecutor:
 
         verified = deviation_bps <= tolerance_bps
         verification = (
-            SettlementVerification.VERIFIED if verified
-            else SettlementVerification.PRICE_DEVIATION
+            SettlementVerification.VERIFIED if verified else SettlementVerification.PRICE_DEVIATION
         )
 
         logger.info(
@@ -1009,7 +1083,9 @@ class IntentExecutor:
         all_options.sort(key=lambda x: -x[1])
         best_method, best_output, _ = all_options[0]
         worst_output = all_options[-1][1]
-        savings_bps = (best_output - worst_output) / worst_output * 10_000 if worst_output > 0 else 0
+        savings_bps = (
+            (best_output - worst_output) / worst_output * 10_000 if worst_output > 0 else 0
+        )
 
         # Determine MEV protection winner
         mev_winner = "intent_protocols" if any(mev for _, _, mev in all_options[:3]) else "none"
@@ -1028,7 +1104,12 @@ class IntentExecutor:
     # ── Internal helpers ──────────────────────────────────────────────
 
     async def _safe_quote(
-        self, client: Any, pair: str, amount: float, chain: str, side: str,
+        self,
+        client: Any,
+        pair: str,
+        amount: float,
+        chain: str,
+        side: str,
     ) -> IntentQuote:
         """Safely fetch a quote, propagating exceptions."""
         return await client.get_quote(pair, amount, chain, side)

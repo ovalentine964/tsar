@@ -130,6 +130,7 @@ class WeeklyReportGenerator:
             reflection = trade.get("reflection", {})
             if isinstance(reflection, str):
                 import json
+
                 try:
                     reflection = json.loads(reflection)
                 except (json.JSONDecodeError, TypeError):
@@ -173,16 +174,8 @@ class WeeklyReportGenerator:
 
         best = stats["best_trade"]
         worst = stats["worst_trade"]
-        lines.append(
-            Fmt.bullet(
-                f"Best: {best.get('symbol', '?')} +${best.get('pnl', 0):.2f}"
-            )
-        )
-        lines.append(
-            Fmt.bullet(
-                f"Worst: {worst.get('symbol', '?')} ${worst.get('pnl', 0):.2f}"
-            )
-        )
+        lines.append(Fmt.bullet(f"Best: {best.get('symbol', '?')} +${best.get('pnl', 0):.2f}"))
+        lines.append(Fmt.bullet(f"Worst: {worst.get('symbol', '?')} ${worst.get('pnl', 0):.2f}"))
 
         if stats["avg_hold_minutes"] > 0:
             avg = stats["avg_hold_minutes"]
@@ -234,10 +227,7 @@ class WeeklyReportGenerator:
         """Build what worked / what didn't sections."""
         lines: list[str] = []
 
-        valid = {
-            k: v for k, v in pattern_stats.items()
-            if (v["wins"] + v["losses"]) >= 2
-        }
+        valid = {k: v for k, v in pattern_stats.items() if (v["wins"] + v["losses"]) >= 2}
 
         if valid:
             best = max(valid, key=lambda k: valid[k]["win_rate"])
@@ -270,10 +260,7 @@ class WeeklyReportGenerator:
         """Build next week's plan section."""
         lines = [Fmt.section_header(Fmt.BOOK, "NEXT WEEK'S PLAN")]
 
-        valid = {
-            k: v for k, v in pattern_stats.items()
-            if (v["wins"] + v["losses"]) >= 2
-        }
+        valid = {k: v for k, v in pattern_stats.items() if (v["wins"] + v["losses"]) >= 2}
 
         if valid:
             best = max(valid, key=lambda k: valid[k]["win_rate"])
@@ -293,9 +280,7 @@ class WeeklyReportGenerator:
 
         return "\n".join(lines)
 
-    def _build_strategy_section(
-        self, strategy_name: str, generation: int, stats: dict
-    ) -> str:
+    def _build_strategy_section(self, strategy_name: str, generation: int, stats: dict) -> str:
         """Build strategy evolution section."""
         lines = [Fmt.section_header(Fmt.DNA, "STRATEGY EVOLUTION")]
 
@@ -338,6 +323,7 @@ class WeeklyReportGenerator:
         reflection = trade.get("reflection", {})
         if isinstance(reflection, str):
             import json
+
             try:
                 reflection = json.loads(reflection)
             except (json.JSONDecodeError, TypeError):

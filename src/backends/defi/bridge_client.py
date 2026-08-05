@@ -26,7 +26,7 @@ import hashlib
 import logging
 import time
 import uuid
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import UTC, datetime
 from enum import StrEnum
 from typing import Any
@@ -40,8 +40,10 @@ logger = logging.getLogger(__name__)
 # CONSTANTS
 # ═══════════════════════════════════════════════════════════════════════
 
+
 class BridgeProtocol(StrEnum):
     """Supported bridge protocols."""
+
     WORMHOLE = "wormhole"
     LAYERZERO = "layerzero"
     AXELAR = "axelar"
@@ -49,6 +51,7 @@ class BridgeProtocol(StrEnum):
 
 class Chain(StrEnum):
     """Supported blockchain networks."""
+
     ETHEREUM = "ethereum"
     SOLANA = "solana"
     POLYGON = "polygon"
@@ -59,6 +62,7 @@ class Chain(StrEnum):
 
 class BridgeTxStatus(StrEnum):
     """Lifecycle status of a bridge transaction."""
+
     PENDING = "pending"
     SOURCE_CONFIRMED = "source_confirmed"
     BRIDGING = "bridging"
@@ -70,6 +74,7 @@ class BridgeTxStatus(StrEnum):
 
 class RoutePreference(StrEnum):
     """User preference for route selection."""
+
     CHEAPEST = "cheapest"
     FASTEST = "fastest"
     MOST_RELIABLE = "most_reliable"
@@ -169,8 +174,22 @@ CHAIN_CONFIGS: dict[str, dict[str, Any]] = {
 # Supported bridge routes per protocol
 WORMHOLE_ROUTES: set[tuple[str, str]] = {
     (s, d)
-    for s in [Chain.ETHEREUM, Chain.SOLANA, Chain.POLYGON, Chain.ARBITRUM, Chain.BASE, Chain.AVALANCHE]
-    for d in [Chain.ETHEREUM, Chain.SOLANA, Chain.POLYGON, Chain.ARBITRUM, Chain.BASE, Chain.AVALANCHE]
+    for s in [
+        Chain.ETHEREUM,
+        Chain.SOLANA,
+        Chain.POLYGON,
+        Chain.ARBITRUM,
+        Chain.BASE,
+        Chain.AVALANCHE,
+    ]
+    for d in [
+        Chain.ETHEREUM,
+        Chain.SOLANA,
+        Chain.POLYGON,
+        Chain.ARBITRUM,
+        Chain.BASE,
+        Chain.AVALANCHE,
+    ]
     if s != d
 }
 
@@ -190,16 +209,35 @@ AXELAR_ROUTES: set[tuple[str, str]] = {
 
 # Default bridge fees (bps of transfer amount)
 DEFAULT_BRIDGE_FEES_BPS: dict[BridgeProtocol, float] = {
-    BridgeProtocol.WORMHOLE: 10,    # 0.10%
-    BridgeProtocol.LAYERZERO: 8,    # 0.08%
-    BridgeProtocol.AXELAR: 12,      # 0.12%
+    BridgeProtocol.WORMHOLE: 10,  # 0.10%
+    BridgeProtocol.LAYERZERO: 8,  # 0.08%
+    BridgeProtocol.AXELAR: 12,  # 0.12%
 }
 
 # Estimated bridge times in seconds
 DEFAULT_BRIDGE_TIMES_S: dict[BridgeProtocol, dict[str, float]] = {
-    BridgeProtocol.WORMHOLE: {"ethereum": 900, "solana": 600, "polygon": 1200, "arbitrum": 600, "base": 600, "avalanche": 900},
-    BridgeProtocol.LAYERZERO: {"ethereum": 1200, "polygon": 900, "arbitrum": 600, "base": 600, "avalanche": 900},
-    BridgeProtocol.AXELAR: {"ethereum": 600, "polygon": 600, "arbitrum": 600, "base": 600, "avalanche": 600},
+    BridgeProtocol.WORMHOLE: {
+        "ethereum": 900,
+        "solana": 600,
+        "polygon": 1200,
+        "arbitrum": 600,
+        "base": 600,
+        "avalanche": 900,
+    },
+    BridgeProtocol.LAYERZERO: {
+        "ethereum": 1200,
+        "polygon": 900,
+        "arbitrum": 600,
+        "base": 600,
+        "avalanche": 900,
+    },
+    BridgeProtocol.AXELAR: {
+        "ethereum": 600,
+        "polygon": 600,
+        "arbitrum": 600,
+        "base": 600,
+        "avalanche": 600,
+    },
 }
 
 
@@ -225,6 +263,7 @@ class BridgeQuote:
         gas_cost_usd: Estimated gas cost in USD.
         route_id: Unique identifier for this route.
     """
+
     protocol: BridgeProtocol
     from_chain: str
     to_chain: str
@@ -255,6 +294,7 @@ class BridgeTx:
         created_at: When the bridge tx was submitted.
         completed_at: When the bridge tx completed.
     """
+
     tx_hash: str
     protocol: BridgeProtocol
     from_chain: str
@@ -283,6 +323,7 @@ class BridgeStatus:
         error_message: Error details if failed.
         updated_at: Last status update timestamp.
     """
+
     tx_hash: str
     status: BridgeTxStatus
     source_confirmed: bool = False
@@ -336,7 +377,7 @@ class WormholeClient:
             BridgeQuote with Wormhole-specific pricing.
         """
         from_cfg = CHAIN_CONFIGS[from_chain]
-        to_cfg = CHAIN_CONFIGS[to_chain]
+        CHAIN_CONFIGS[to_chain]
         fee_bps = DEFAULT_BRIDGE_FEES_BPS[BridgeProtocol.WORMHOLE]
         fee_amount = amount * fee_bps / 10_000
         estimated_out = amount - fee_amount
@@ -366,8 +407,13 @@ class WormholeClient:
         )
 
     async def initiate_transfer(
-        self, from_chain: str, to_chain: str, token: str, amount: float,
-        sender_address: str, recipient_address: str,
+        self,
+        from_chain: str,
+        to_chain: str,
+        token: str,
+        amount: float,
+        sender_address: str,
+        recipient_address: str,
     ) -> BridgeTx:
         """Initiate a Wormhole cross-chain transfer.
 
@@ -389,7 +435,9 @@ class WormholeClient:
             BridgeTx with transaction details.
         """
         # Simulate transaction hash
-        tx_data = f"wormhole:{from_chain}:{to_chain}:{token}:{amount}:{sender_address}:{time.time()}"
+        tx_data = (
+            f"wormhole:{from_chain}:{to_chain}:{token}:{amount}:{sender_address}:{time.time()}"
+        )
         tx_hash = "0x" + hashlib.sha256(tx_data.encode()).hexdigest()
 
         explorer_url = self._get_explorer_url(from_chain, tx_hash)
@@ -452,8 +500,12 @@ class WormholeClient:
         """Estimate gas cost in USD for bridge transaction."""
         # Simplified gas estimation
         gas_price_gwei = {
-            Chain.ETHEREUM: 20, Chain.POLYGON: 30, Chain.ARBITRUM: 0.1,
-            Chain.BASE: 0.01, Chain.AVALANCHE: 25, Chain.SOLANA: 0.001,
+            Chain.ETHEREUM: 20,
+            Chain.POLYGON: 30,
+            Chain.ARBITRUM: 0.1,
+            Chain.BASE: 0.01,
+            Chain.AVALANCHE: 25,
+            Chain.SOLANA: 0.001,
         }
         eth_price = 3500  # Would fetch real price in production
         gas_limit = 200_000
@@ -488,7 +540,8 @@ class WormholeClient:
         return BridgeStatus(
             tx_hash=tx_hash,
             status=status,
-            source_confirmed=status in (BridgeTxStatus.SOURCE_CONFIRMED, BridgeTxStatus.BRIDGING, BridgeTxStatus.COMPLETED),
+            source_confirmed=status
+            in (BridgeTxStatus.SOURCE_CONFIRMED, BridgeTxStatus.BRIDGING, BridgeTxStatus.COMPLETED),
             destination_confirmed=status == BridgeTxStatus.COMPLETED,
             dest_tx_hash=data.get("dest_tx_hash"),
             updated_at=datetime.now(UTC),
@@ -528,7 +581,7 @@ class LayerZeroClient:
         Returns:
             BridgeQuote with LayerZero-specific pricing.
         """
-        from_cfg = CHAIN_CONFIGS[from_chain]
+        CHAIN_CONFIGS[from_chain]
         fee_bps = DEFAULT_BRIDGE_FEES_BPS[BridgeProtocol.LAYERZERO]
         fee_amount = amount * fee_bps / 10_000
         estimated_out = amount - fee_amount
@@ -556,15 +609,22 @@ class LayerZeroClient:
         )
 
     async def initiate_transfer(
-        self, from_chain: str, to_chain: str, token: str, amount: float,
-        sender_address: str, recipient_address: str,
+        self,
+        from_chain: str,
+        to_chain: str,
+        token: str,
+        amount: float,
+        sender_address: str,
+        recipient_address: str,
     ) -> BridgeTx:
         """Initiate a LayerZero cross-chain transfer.
 
         Uses LayerZero's OFT (Omnichain Fungible Token) standard
         for native cross-chain token transfers.
         """
-        tx_data = f"layerzero:{from_chain}:{to_chain}:{token}:{amount}:{sender_address}:{time.time()}"
+        tx_data = (
+            f"layerzero:{from_chain}:{to_chain}:{token}:{amount}:{sender_address}:{time.time()}"
+        )
         tx_hash = "0x" + hashlib.sha256(tx_data.encode()).hexdigest()
 
         explorers = {
@@ -611,7 +671,9 @@ class LayerZeroClient:
                     status_str = msg.get("status", "")
                     return BridgeStatus(
                         tx_hash=tx_hash,
-                        status=BridgeTxStatus.COMPLETED if status_str == "DELIVERED" else BridgeTxStatus.BRIDGING,
+                        status=BridgeTxStatus.COMPLETED
+                        if status_str == "DELIVERED"
+                        else BridgeTxStatus.BRIDGING,
                         source_confirmed=True,
                         destination_confirmed=status_str == "DELIVERED",
                         dest_tx_hash=msg.get("dst_tx_hash"),
@@ -631,8 +693,11 @@ class LayerZeroClient:
     async def _estimate_gas(self, from_chain: str, to_chain: str) -> float:
         """Estimate gas cost for LayerZero message."""
         gas_price = {
-            Chain.ETHEREUM: 20, Chain.POLYGON: 30, Chain.ARBITRUM: 0.1,
-            Chain.BASE: 0.01, Chain.AVALANCHE: 25,
+            Chain.ETHEREUM: 20,
+            Chain.POLYGON: 30,
+            Chain.ARBITRUM: 0.1,
+            Chain.BASE: 0.01,
+            Chain.AVALANCHE: 25,
         }
         eth_price = 3500
         gwei = gas_price.get(from_chain, 20)
@@ -699,8 +764,13 @@ class AxelarClient:
         )
 
     async def initiate_transfer(
-        self, from_chain: str, to_chain: str, token: str, amount: float,
-        sender_address: str, recipient_address: str,
+        self,
+        from_chain: str,
+        to_chain: str,
+        token: str,
+        amount: float,
+        sender_address: str,
+        recipient_address: str,
     ) -> BridgeTx:
         """Initiate an Axelar cross-chain transfer.
 
@@ -755,7 +825,9 @@ class AxelarClient:
                     is_completed = status_str == "executed"
                     return BridgeStatus(
                         tx_hash=tx_hash,
-                        status=BridgeTxStatus.COMPLETED if is_completed else BridgeTxStatus.BRIDGING,
+                        status=BridgeTxStatus.COMPLETED
+                        if is_completed
+                        else BridgeTxStatus.BRIDGING,
                         source_confirmed=True,
                         destination_confirmed=is_completed,
                         dest_tx_hash=tx_data.get("dest_tx_hash"),
@@ -775,8 +847,11 @@ class AxelarClient:
     async def _estimate_gas(self, from_chain: str, to_chain: str) -> float:
         """Estimate gas cost for Axelar transfer."""
         gas_price = {
-            Chain.ETHEREUM: 20, Chain.POLYGON: 30, Chain.ARBITRUM: 0.1,
-            Chain.BASE: 0.01, Chain.AVALANCHE: 25,
+            Chain.ETHEREUM: 20,
+            Chain.POLYGON: 30,
+            Chain.ARBITRUM: 0.1,
+            Chain.BASE: 0.01,
+            Chain.AVALANCHE: 25,
         }
         eth_price = 3500
         gwei = gas_price.get(from_chain, 20)
@@ -1008,8 +1083,13 @@ class BridgeClient:
     # ── Internal helpers ──────────────────────────────────────────────
 
     async def _safe_quote(
-        self, client: Any, from_chain: str, to_chain: str,
-        token: str, amount: float, protocol: BridgeProtocol,
+        self,
+        client: Any,
+        from_chain: str,
+        to_chain: str,
+        token: str,
+        amount: float,
+        protocol: BridgeProtocol,
     ) -> BridgeQuote:
         """Safely fetch a quote, propagating exceptions."""
         return await client.get_quote(from_chain, to_chain, token, amount)

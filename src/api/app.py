@@ -18,12 +18,12 @@ import secrets
 from datetime import UTC, datetime
 from typing import Any
 
-from fastapi import FastAPI, HTTPException, Depends, Request
+from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from slowapi import Limiter
-from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
+from slowapi.util import get_remote_address
 
 logger = logging.getLogger(__name__)
 
@@ -107,7 +107,8 @@ def create_app(config: Any = None) -> FastAPI:
     @app.exception_handler(RateLimitExceeded)
     async def rate_limit_handler(request: Request, exc: RateLimitExceeded):
         from fastapi.responses import JSONResponse
-        retry_after = getattr(exc, 'retry_after', 60)
+
+        retry_after = getattr(exc, "retry_after", 60)
         return JSONResponse(
             status_code=429,
             content={"detail": "Rate limit exceeded. Please try again later."},
@@ -120,9 +121,7 @@ def create_app(config: Any = None) -> FastAPI:
         allowed_origins = [o.strip() for o in cors_origins_str.split(",") if o.strip()]
     else:
         allowed_origins = []
-        logger.warning(
-            "TSAR_CORS_ORIGINS not set — CORS will deny all cross-origin requests."
-        )
+        logger.warning("TSAR_CORS_ORIGINS not set — CORS will deny all cross-origin requests.")
 
     app.add_middleware(
         CORSMiddleware,
@@ -153,6 +152,7 @@ def create_app(config: Any = None) -> FastAPI:
         components = {"api": "healthy"}
         try:
             from src.risk.kill_switch import KillSwitch
+
             ks = KillSwitch()
             ks_active = await ks.is_active()
             components["kill_switch"] = "active" if ks_active else "inactive"
@@ -161,6 +161,7 @@ def create_app(config: Any = None) -> FastAPI:
 
         try:
             from src.knowledge.trade_memory import TradeMemory
+
             db = TradeMemory(_db_path())
             db.get_trade_count()
             components["trade_memory"] = "healthy"
@@ -193,6 +194,7 @@ def create_app(config: Any = None) -> FastAPI:
 
         try:
             from src.knowledge.trade_memory import TradeMemory
+
             db = TradeMemory(_db_path())
             stats = db.get_trade_stats()
             data["trades"] = stats
@@ -201,6 +203,7 @@ def create_app(config: Any = None) -> FastAPI:
 
         try:
             from src.risk.kill_switch import KillSwitch
+
             ks = KillSwitch()
             data["kill_switch"] = {"active": await ks.is_active()}
         except Exception:
@@ -208,6 +211,7 @@ def create_app(config: Any = None) -> FastAPI:
 
         try:
             from src.strategy.factors import FACTOR_REGISTRY
+
             data["factors"] = {"count": len(FACTOR_REGISTRY)}
         except Exception:
             data["factors"] = {"count": 28}
@@ -220,13 +224,16 @@ def create_app(config: Any = None) -> FastAPI:
 
     @app.get("/api/v1/trades")
     async def get_trades(
-        limit: int = 100, symbol: str = None, status: str = None,
+        limit: int = 100,
+        symbol: str = None,
+        status: str = None,
         api_key: str = Depends(require_api_key),
     ):
         """Get trade history from TradeMemory tool."""
         limit = min(limit, 1000)
         try:
             from src.knowledge.trade_memory import TradeMemory
+
             db = TradeMemory(_db_path())
             trades = db.list_trades(limit=limit, symbol=symbol, status=status)
             return {
@@ -242,6 +249,7 @@ def create_app(config: Any = None) -> FastAPI:
         """Get trade statistics from TradeMemory tool."""
         try:
             from src.knowledge.trade_memory import TradeMemory
+
             db = TradeMemory(_db_path())
             return db.get_trade_stats()
         except Exception as e:
@@ -253,6 +261,7 @@ def create_app(config: Any = None) -> FastAPI:
         """Get strategy performance from TradeMemory + StrategyGenomes."""
         try:
             from src.knowledge.trade_memory import TradeMemory
+
             db = TradeMemory(_db_path())
             summaries = db.get_strategy_summary()
             return {"strategies": summaries, "count": len(summaries)}
@@ -272,6 +281,7 @@ def create_app(config: Any = None) -> FastAPI:
         """
         try:
             from src.knowledge.trade_memory import TradeMemory
+
             db = TradeMemory(_db_path())
             open_trades = db.get_open_positions()
             return {
@@ -307,6 +317,7 @@ def create_app(config: Any = None) -> FastAPI:
         """
         try:
             from src.knowledge.trade_memory import TradeMemory
+
             db = TradeMemory(_db_path())
             stats = db.get_trade_stats()
             regime_perf = db.get_performance_by_regime()
@@ -322,7 +333,12 @@ def create_app(config: Any = None) -> FastAPI:
             }
         except Exception as e:
             logger.error("Failed to fetch PnL: %s", e)
-            return {"total_pnl": 0, "win_rate": 0, "total_trades": 0, "error": "Failed to retrieve PnL data."}
+            return {
+                "total_pnl": 0,
+                "win_rate": 0,
+                "total_trades": 0,
+                "error": "Failed to retrieve PnL data.",
+            }
 
     # ════════════════════════════════════════════════════════════════
     # RISK — Wired to risk_management tool + KillSwitch
@@ -368,17 +384,23 @@ def create_app(config: Any = None) -> FastAPI:
             }
         except Exception as e:
             logger.error("Failed to fetch risk state: %s", e)
-            return {"level": "unknown", "kill_switch_active": False, "error": "Failed to retrieve risk data."}
+            return {
+                "level": "unknown",
+                "kill_switch_active": False,
+                "error": "Failed to retrieve risk data.",
+            }
 
     @limiter.limit("10/minute")
     @app.post("/api/v1/kill-switch")
     async def activate_kill_switch(
         request: Request,
-        reason: str = "manual", api_key: str = Depends(require_api_key),
+        reason: str = "manual",
+        api_key: str = Depends(require_api_key),
     ):
         """Emergency halt — stop all trading immediately."""
         try:
             from src.risk.kill_switch import KillSwitch
+
             ks = KillSwitch()
             await ks.activate(reason)
             return {"status": "activated", "reason": reason}
@@ -392,6 +414,7 @@ def create_app(config: Any = None) -> FastAPI:
         """Resume trading after kill switch."""
         try:
             from src.risk.kill_switch import KillSwitch
+
             ks = KillSwitch()
             await ks.deactivate()
             return {"status": "resumed"}
@@ -412,6 +435,7 @@ def create_app(config: Any = None) -> FastAPI:
         """
         try:
             from src.knowledge.trade_memory import TradeMemory
+
             db = TradeMemory(_db_path())
             regime_perf = db.get_performance_by_regime()
 
@@ -431,7 +455,11 @@ def create_app(config: Any = None) -> FastAPI:
             }
         except Exception as e:
             logger.error("Failed to fetch regime: %s", e)
-            return {"regime": "unknown", "confidence": 0.0, "error": "Failed to retrieve regime data."}
+            return {
+                "regime": "unknown",
+                "confidence": 0.0,
+                "error": "Failed to retrieve regime data.",
+            }
 
     # ════════════════════════════════════════════════════════════════
     # FACTORS — Wired to factor_library tool
@@ -446,14 +474,17 @@ def create_app(config: Any = None) -> FastAPI:
         """
         try:
             from src.strategy.factors import FACTOR_REGISTRY
+
             factors = []
             for name, entry in FACTOR_REGISTRY.items():
-                factors.append({
-                    "name": name,
-                    "category": entry.get("category", "other"),
-                    "description": entry.get("description", ""),
-                    "universe": entry.get("universe", []),
-                })
+                factors.append(
+                    {
+                        "name": name,
+                        "category": entry.get("category", "other"),
+                        "description": entry.get("description", ""),
+                        "universe": entry.get("universe", []),
+                    }
+                )
             return {"factors": factors, "count": len(factors)}
         except Exception as e:
             logger.error("Failed to fetch factors: %s", e)
@@ -461,12 +492,14 @@ def create_app(config: Any = None) -> FastAPI:
 
     @app.get("/api/v1/factors/compute")
     async def compute_factors(
-        symbol: str = "BTC/USDT", api_key: str = Depends(require_api_key),
+        symbol: str = "BTC/USDT",
+        api_key: str = Depends(require_api_key),
     ):
         """Compute all factors for a symbol using factor_library tool."""
         try:
             from src.strategy.factor_library import FactorLibrary
             from src.strategy.factors import FACTOR_REGISTRY
+
             fl = FactorLibrary()
             # Build a summary of all registered factors with their metadata
             computed = {}
@@ -487,10 +520,11 @@ def create_app(config: Any = None) -> FastAPI:
     async def benchmark_factors(api_key: str = Depends(require_api_key)):
         """Run IC/IR benchmark on all factors."""
         try:
-            from src.strategy.factor_library import FactorLibrary
             from src.strategy.factor_bench import FactorBenchmarker
+            from src.strategy.factor_library import FactorLibrary
+
             fl = FactorLibrary()
-            fb = FactorBenchmarker(fl)
+            FactorBenchmarker(fl)
             # Return factor library metadata as benchmark overview
             factors = fl.list_factors()
             fl.close()
@@ -530,7 +564,8 @@ def create_app(config: Any = None) -> FastAPI:
         """
         try:
             from src.tools.backtesting import BacktestingTools
-            bt = BacktestingTools(config={"symbol": symbol, "lookback_days": days})
+
+            BacktestingTools(config={"symbol": symbol, "lookback_days": days})
             # BacktestingTools provides strategy evaluation
             return {
                 "status": "completed",
@@ -562,6 +597,7 @@ def create_app(config: Any = None) -> FastAPI:
         """
         try:
             from src.metrics.flywheel import FlywheelHealth
+
             fh = FlywheelHealth()
             result = fh.compute({})
             return {
@@ -591,7 +627,9 @@ def create_app(config: Any = None) -> FastAPI:
         """Get mandate status."""
         try:
             from pathlib import Path
+
             from src.risk.mandate import Mandate
+
             m = Mandate(config_path=Path("config/mandate.yaml"))
             return {
                 "status": m.status.value if hasattr(m.status, "value") else str(m.status),
@@ -607,7 +645,9 @@ def create_app(config: Any = None) -> FastAPI:
         """Commit the mandate (enables live trading)."""
         try:
             from pathlib import Path
+
             from src.risk.mandate import Mandate
+
             m = Mandate(config_path=Path("config/mandate.yaml"))
             m.commit("api_user")
             return {"status": "ACTIVE", "message": "Mandate committed"}
@@ -624,7 +664,9 @@ def create_app(config: Any = None) -> FastAPI:
         """Revoke the mandate (blocks live trading)."""
         try:
             from pathlib import Path
+
             from src.risk.mandate import Mandate
+
             m = Mandate(config_path=Path("config/mandate.yaml"))
             m.revoke("api_user")
             return {"status": "REVOKED", "message": "Mandate revoked"}
@@ -650,13 +692,16 @@ def create_app(config: Any = None) -> FastAPI:
 
         # Get paper execution engine stats (if available)
         try:
-            from src.risk.mandate import Mandate
             from pathlib import Path
+
+            from src.risk.mandate import Mandate
+
             m = Mandate(config_path=Path("config/mandate.yaml"))
             rules = m.rules
             win_rate = (
                 rules.paper_wins / rules.paper_trades_completed
-                if rules.paper_trades_completed > 0 else 0.0
+                if rules.paper_trades_completed > 0
+                else 0.0
             )
             gate = m.check_paper_trading_gate()
             result["gate"] = {
@@ -669,7 +714,8 @@ def create_app(config: Any = None) -> FastAPI:
                         "required": rules.min_paper_trades,
                         "pct": (
                             rules.paper_trades_completed / rules.min_paper_trades * 100
-                            if rules.min_paper_trades > 0 else 100
+                            if rules.min_paper_trades > 0
+                            else 100
                         ),
                     },
                     "days": {
@@ -691,6 +737,7 @@ def create_app(config: Any = None) -> FastAPI:
         # Paper trade stats from TradeMemory
         try:
             from src.knowledge.trade_memory import TradeMemory
+
             db = TradeMemory(_db_path())
             stats = db.get_trade_stats()
             result["paper_stats"] = {
@@ -731,14 +778,17 @@ def create_app(config: Any = None) -> FastAPI:
         - Win rate vs threshold
         """
         try:
-            from src.risk.mandate import Mandate
             from pathlib import Path
+
+            from src.risk.mandate import Mandate
+
             m = Mandate(config_path=Path("config/mandate.yaml"))
             gate = m.check_paper_trading_gate()
             rules = m.rules
             win_rate = (
                 rules.paper_wins / rules.paper_trades_completed
-                if rules.paper_trades_completed > 0 else 0.0
+                if rules.paper_trades_completed > 0
+                else 0.0
             )
             return {
                 "can_go_live": gate.allowed,
@@ -769,7 +819,8 @@ def create_app(config: Any = None) -> FastAPI:
         """Get extracted shadow rules from rule_validator tool."""
         try:
             from src.knowledge.rule_validator import RuleValidator
-            rv = RuleValidator()
+
+            RuleValidator()
             return {"rules": [], "count": 0}
         except Exception:
             return {"rules": [], "count": 0}
@@ -786,11 +837,14 @@ def create_app(config: Any = None) -> FastAPI:
 
     @app.get("/api/v1/knowledge/search")
     async def search_knowledge(
-        query: str, stores: str = None, api_key: str = Depends(require_api_key),
+        query: str,
+        stores: str = None,
+        api_key: str = Depends(require_api_key),
     ):
         """Search across all knowledge stores."""
         try:
             from src.knowledge.fts_search import MemoryRecall
+
             store_list = stores.split(",") if stores else None
             rec = MemoryRecall(_db_path())
             await rec.initialize()
@@ -824,7 +878,8 @@ def create_app(config: Any = None) -> FastAPI:
         """Get discovered patterns from pattern_library tool."""
         try:
             from src.knowledge.pattern_library import PatternLibrary
-            pl = PatternLibrary(_db_path())
+
+            PatternLibrary(_db_path())
             return {"patterns": [], "count": 0}
         except Exception:
             return {"patterns": [], "count": 0}
@@ -834,7 +889,8 @@ def create_app(config: Any = None) -> FastAPI:
         """Get trade lessons from lesson_archive tool."""
         try:
             from src.knowledge.lesson_archive import LessonArchive
-            la = LessonArchive(_db_path())
+
+            LessonArchive(_db_path())
             return {"lessons": [], "count": 0}
         except Exception:
             return {"lessons": [], "count": 0}
@@ -848,6 +904,7 @@ def create_app(config: Any = None) -> FastAPI:
         """Get backend registry status."""
         try:
             from src.interfaces import get_backend_registry
+
             return get_backend_registry().get_backend_status()
         except Exception:
             return {"backends": {}}
@@ -914,18 +971,21 @@ def create_app(config: Any = None) -> FastAPI:
 
     try:
         from src.api.routes.health import router as health_router
+
         app.include_router(health_router, tags=["health"])
     except ImportError:
         logger.debug("Health routes not available")
 
     try:
         from src.api.routes.trading import router as trading_router
+
         app.include_router(trading_router, prefix="/api/v1", tags=["trading"])
     except ImportError:
         logger.debug("Trading routes not available")
 
     try:
         from src.api.routes.portfolio import router as portfolio_router
+
         app.include_router(portfolio_router, prefix="/api/v1", tags=["portfolio"])
     except ImportError:
         logger.debug("Portfolio routes not available")
@@ -937,6 +997,7 @@ def create_app(config: Any = None) -> FastAPI:
     static_dir = os.path.join(os.path.dirname(__file__), "static")
     if os.path.exists(static_dir):
         from fastapi.staticfiles import StaticFiles
+
         app.mount("/app", StaticFiles(directory=static_dir, html=True), name="dashboard")
         logger.info("Web dashboard mounted at /app")
 

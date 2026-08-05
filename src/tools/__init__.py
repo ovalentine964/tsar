@@ -74,18 +74,18 @@ def _ensure_registered() -> None:
     if _TOOL_REGISTRY:
         return
 
-    from src.tools.market_data import MarketDataTools
-    from src.tools.technical_analysis import TechnicalAnalysisTools
-    from src.tools.fundamental import FundamentalAnalysisTools
-    from src.tools.on_chain import OnChainAnalytics
-    from src.tools.sentiment import SocialSentimentAnalyzer
-    from src.tools.news import NewsAggregator
-    from src.tools.economic_calendar import EconomicCalendarTools
-    from src.tools.risk_management import RiskManagementTools
-    from src.tools.execution import ExecutionTools
     from src.tools.backtesting import BacktestingTools
-    from src.tools.portfolio import PortfolioTools
+    from src.tools.economic_calendar import EconomicCalendarTools
+    from src.tools.execution import ExecutionTools
+    from src.tools.fundamental import FundamentalAnalysisTools
     from src.tools.market_calendar import MarketCalendar
+    from src.tools.market_data import MarketDataTools
+    from src.tools.news import NewsAggregator
+    from src.tools.on_chain import OnChainAnalytics
+    from src.tools.portfolio import PortfolioTools
+    from src.tools.risk_management import RiskManagementTools
+    from src.tools.sentiment import SocialSentimentAnalyzer
+    from src.tools.technical_analysis import TechnicalAnalysisTools
 
     register_tool("market_data", MarketDataTools)
     register_tool("technical_analysis", TechnicalAnalysisTools)
@@ -103,6 +103,7 @@ def _ensure_registered() -> None:
     # Monitoring tools
     try:
         from src.tools.monitoring import MonitoringTools
+
         register_tool("monitoring", MonitoringTools)
     except ImportError:
         pass
@@ -110,12 +111,14 @@ def _ensure_registered() -> None:
     # Knowledge tools (may have unmet dependencies)
     try:
         from src.tools.knowledge import KnowledgeTools
+
         register_tool("knowledge", KnowledgeTools)
     except ImportError:
         pass
 
     try:
         from src.tools.knowledge_graph import KnowledgeGraphTools
+
         register_tool("knowledge_graph", KnowledgeGraphTools)
     except ImportError:
         pass
@@ -123,36 +126,42 @@ def _ensure_registered() -> None:
     # Risk tool extensions
     try:
         from src.tools.stop_loss_calculator import StopLossCalculator
+
         register_tool("stop_loss_calculator", StopLossCalculator)
     except ImportError:
         pass
 
     try:
         from src.tools.take_profit_calculator import TakeProfitCalculator
+
         register_tool("take_profit_calculator", TakeProfitCalculator)
     except ImportError:
         pass
 
     try:
         from src.tools.fee_calculator import FeeCalculator
+
         register_tool("fee_calculator", FeeCalculator)
     except ImportError:
         pass
 
     try:
         from src.tools.correlation import CorrelationAnalyzer
+
         register_tool("correlation", CorrelationAnalyzer)
     except ImportError:
         pass
 
     try:
         from src.tools.volatility import VolatilityAnalyzer
+
         register_tool("volatility", VolatilityAnalyzer)
     except ImportError:
         pass
 
     try:
         from src.tools.order_router import SmartOrderRouter
+
         register_tool("order_router", SmartOrderRouter)
     except ImportError:
         pass
@@ -160,18 +169,21 @@ def _ensure_registered() -> None:
     # MEV Protection tools
     try:
         from src.tools.mev_protection import MEVProtectionTools
+
         register_tool("mev_protection", MEVProtectionTools)
     except ImportError:
         pass
 
     try:
         from src.tools.pattern_recognition import PatternRecognitionTools
+
         register_tool("pattern_recognition", PatternRecognitionTools)
     except ImportError:
         pass
 
     try:
         from src.tools.multi_timeframe import MultiTimeframeAnalyzer
+
         register_tool("multi_timeframe", MultiTimeframeAnalyzer)
     except ImportError:
         pass
@@ -179,6 +191,7 @@ def _ensure_registered() -> None:
     # Settlement & L2 optimization tools
     try:
         from src.tools.settlement import SettlementTools
+
         register_tool("settlement", SettlementTools)
     except ImportError:
         pass
@@ -186,12 +199,14 @@ def _ensure_registered() -> None:
     # Information Asymmetry Tools (Anti-Loss: breaks the 78% retail disadvantage)
     try:
         from src.tools.order_flow import OrderFlowTools
+
         register_tool("order_flow", OrderFlowTools)
     except ImportError:
         pass
 
     try:
         from src.tools.market_microstructure import MarketMicrostructureTools
+
         register_tool("market_microstructure", MarketMicrostructureTools)
     except ImportError:
         pass
@@ -199,12 +214,20 @@ def _ensure_registered() -> None:
     # DeFi execution tools (requires web3, solana, cryptography)
     try:
         from src.tools.defi_execution import DeFiExecutionTools
+
         register_tool("defi_execution", DeFiExecutionTools)
     except ImportError:
         pass
 
     try:
-        from src.tools.monitoring import PnLTracker, WinRateTracker, EquityCurve, RiskStateMonitor, AlertGenerator
+        from src.tools.monitoring import (
+            AlertGenerator,
+            EquityCurve,
+            PnLTracker,
+            RiskStateMonitor,
+            WinRateTracker,
+        )
+
         register_tool("pnl_tracker", PnLTracker)
         register_tool("win_rate_tracker", WinRateTracker)
         register_tool("equity_curve", EquityCurve)
@@ -216,6 +239,7 @@ def _ensure_registered() -> None:
     # Flywheel health monitoring
     try:
         from src.tools.flywheel_health import FlywheelHealthTool
+
         register_tool("flywheel_health", FlywheelHealthTool)
     except ImportError:
         pass
@@ -223,6 +247,7 @@ def _ensure_registered() -> None:
     # Cross-chain tools (bridge + intent execution)
     try:
         from src.tools.cross_chain import CrossChainTools
+
         register_tool("cross_chain", CrossChainTools)
     except ImportError:
         pass
@@ -230,6 +255,7 @@ def _ensure_registered() -> None:
     # DeFi yield optimization tools
     try:
         from src.tools.defi_yield import DeFiYieldTools
+
         register_tool("defi_yield", DeFiYieldTools)
     except ImportError:
         pass
@@ -237,42 +263,49 @@ def _ensure_registered() -> None:
     # ── Extended News Sources (News Gap Fix) ──────────────────────────
     try:
         from src.tools.news_sources.whale_alert import WhaleAlertClient
+
         register_tool("whale_alert", WhaleAlertClient)
     except ImportError:
         pass
 
     try:
         from src.tools.news_sources.regulatory_feeds import RegulatoryFeedMonitor
+
         register_tool("regulatory_feeds", RegulatoryFeedMonitor)
     except ImportError:
         pass
 
     try:
         from src.tools.news_sources.exploit_alerts import ExploitAlertMonitor
+
         register_tool("exploit_alerts", ExploitAlertMonitor)
     except ImportError:
         pass
 
     try:
         from src.tools.news_sources.twitter_monitor import TwitterCryptoMonitor
+
         register_tool("twitter_monitor", TwitterCryptoMonitor)
     except ImportError:
         pass
 
     try:
         from src.tools.news_sources.social_monitor import SocialChannelMonitor
+
         register_tool("social_monitor", SocialChannelMonitor)
     except ImportError:
         pass
 
     try:
         from src.tools.news_sources.llm_verification import LLMNewsVerifier
+
         register_tool("llm_news_verifier", LLMNewsVerifier)
     except ImportError:
         pass
 
     try:
         from src.tools.news_sources.accuracy_tracker import SourceAccuracyTracker
+
         register_tool("source_accuracy_tracker", SourceAccuracyTracker)
     except ImportError:
         pass

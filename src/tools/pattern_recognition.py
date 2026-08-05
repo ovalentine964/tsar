@@ -21,12 +21,12 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import numpy as np
-import pandas as pd
 
-from src.interfaces.types import OHLCV
+if TYPE_CHECKING:
+    from src.interfaces.types import OHLCV
 
 logger = logging.getLogger(__name__)
 
@@ -146,7 +146,7 @@ class PatternRecognitionTools:
         closes = np.array([c.close for c in ohlcv], dtype=float)
         highs = np.array([c.high for c in ohlcv], dtype=float)
         lows = np.array([c.low for c in ohlcv], dtype=float)
-        opens = np.array([c.open for c in ohlcv], dtype=float)
+        np.array([c.open for c in ohlcv], dtype=float)
 
         swing_window = max(3, len(ohlcv) // 20)
         swing_highs = self._find_swing_points(highs, swing_window, "high")
@@ -220,227 +220,279 @@ class PatternRecognitionTools:
                 continue
 
             prev_body = abs(c_prev.close - c_prev.open)
-            prev_range = c_prev.high - c_prev.low
+            c_prev.high - c_prev.low
 
             # ── Doji ──
             if body / total_range < 0.1:
                 # Long-legged doji
                 if upper_shadow > body * 5 and lower_shadow > body * 5:
-                    patterns.append(CandlestickPattern(
-                        pattern="long_legged_doji",
-                        direction="neutral",
-                        reliability=0.55,
-                        bar_index=i,
-                        description="Long-legged doji — strong indecision",
-                    ))
+                    patterns.append(
+                        CandlestickPattern(
+                            pattern="long_legged_doji",
+                            direction="neutral",
+                            reliability=0.55,
+                            bar_index=i,
+                            description="Long-legged doji — strong indecision",
+                        )
+                    )
                 # Dragonfly doji (long lower shadow, no upper)
                 elif lower_shadow > body * 5 and upper_shadow < body:
-                    patterns.append(CandlestickPattern(
-                        pattern="dragonfly_doji",
-                        direction="bullish",
-                        reliability=0.6,
-                        bar_index=i,
-                        description="Dragonfly doji — bullish reversal signal",
-                    ))
+                    patterns.append(
+                        CandlestickPattern(
+                            pattern="dragonfly_doji",
+                            direction="bullish",
+                            reliability=0.6,
+                            bar_index=i,
+                            description="Dragonfly doji — bullish reversal signal",
+                        )
+                    )
                 # Gravestone doji (long upper shadow, no lower)
                 elif upper_shadow > body * 5 and lower_shadow < body:
-                    patterns.append(CandlestickPattern(
-                        pattern="gravestone_doji",
+                    patterns.append(
+                        CandlestickPattern(
+                            pattern="gravestone_doji",
+                            direction="bearish",
+                            reliability=0.6,
+                            bar_index=i,
+                            description="Gravestone doji — bearish reversal signal",
+                        )
+                    )
+                else:
+                    patterns.append(
+                        CandlestickPattern(
+                            pattern="doji",
+                            direction="neutral",
+                            reliability=0.5,
+                            bar_index=i,
+                            description="Doji — indecision, potential reversal",
+                        )
+                    )
+
+            # ── Hammer (bullish reversal) ──
+            if lower_shadow > body * 2 and upper_shadow < body * 0.5 and c_prev.close < c_prev.open:
+                patterns.append(
+                    CandlestickPattern(
+                        pattern="hammer",
+                        direction="bullish",
+                        reliability=0.65,
+                        bar_index=i,
+                        description="Hammer — bullish reversal after downtrend",
+                    )
+                )
+
+            # ── Inverted Hammer ──
+            if upper_shadow > body * 2 and lower_shadow < body * 0.5 and c_prev.close < c_prev.open:
+                patterns.append(
+                    CandlestickPattern(
+                        pattern="inverted_hammer",
+                        direction="bullish",
+                        reliability=0.55,
+                        bar_index=i,
+                        description="Inverted Hammer — potential bullish reversal",
+                    )
+                )
+
+            # ── Hanging Man (bearish, same shape as hammer but after uptrend) ──
+            if lower_shadow > body * 2 and upper_shadow < body * 0.5 and c_prev.close > c_prev.open:
+                patterns.append(
+                    CandlestickPattern(
+                        pattern="hanging_man",
                         direction="bearish",
                         reliability=0.6,
                         bar_index=i,
-                        description="Gravestone doji — bearish reversal signal",
-                    ))
-                else:
-                    patterns.append(CandlestickPattern(
-                        pattern="doji",
-                        direction="neutral",
-                        reliability=0.5,
-                        bar_index=i,
-                        description="Doji — indecision, potential reversal",
-                    ))
-
-            # ── Hammer (bullish reversal) ──
-            if (lower_shadow > body * 2 and upper_shadow < body * 0.5
-                    and c_prev.close < c_prev.open):
-                patterns.append(CandlestickPattern(
-                    pattern="hammer",
-                    direction="bullish",
-                    reliability=0.65,
-                    bar_index=i,
-                    description="Hammer — bullish reversal after downtrend",
-                ))
-
-            # ── Inverted Hammer ──
-            if (upper_shadow > body * 2 and lower_shadow < body * 0.5
-                    and c_prev.close < c_prev.open):
-                patterns.append(CandlestickPattern(
-                    pattern="inverted_hammer",
-                    direction="bullish",
-                    reliability=0.55,
-                    bar_index=i,
-                    description="Inverted Hammer — potential bullish reversal",
-                ))
-
-            # ── Hanging Man (bearish, same shape as hammer but after uptrend) ──
-            if (lower_shadow > body * 2 and upper_shadow < body * 0.5
-                    and c_prev.close > c_prev.open):
-                patterns.append(CandlestickPattern(
-                    pattern="hanging_man",
-                    direction="bearish",
-                    reliability=0.6,
-                    bar_index=i,
-                    description="Hanging Man — bearish reversal after uptrend",
-                ))
+                        description="Hanging Man — bearish reversal after uptrend",
+                    )
+                )
 
             # ── Shooting Star (bearish) ──
-            if (upper_shadow > body * 2 and lower_shadow < body * 0.5
-                    and c_prev.close > c_prev.open):
-                patterns.append(CandlestickPattern(
-                    pattern="shooting_star",
-                    direction="bearish",
-                    reliability=0.65,
-                    bar_index=i,
-                    description="Shooting Star — bearish reversal after uptrend",
-                ))
+            if upper_shadow > body * 2 and lower_shadow < body * 0.5 and c_prev.close > c_prev.open:
+                patterns.append(
+                    CandlestickPattern(
+                        pattern="shooting_star",
+                        direction="bearish",
+                        reliability=0.65,
+                        bar_index=i,
+                        description="Shooting Star — bearish reversal after uptrend",
+                    )
+                )
 
             # ── Bullish Engulfing ──
-            if (c_prev.close < c_prev.open
-                    and c.close > c.open
-                    and c.open <= c_prev.close
-                    and c.close >= c_prev.open):
-                patterns.append(CandlestickPattern(
-                    pattern="bullish_engulfing",
-                    direction="bullish",
-                    reliability=0.7,
-                    bar_index=i,
-                    description="Bullish Engulfing — strong reversal signal",
-                ))
+            if (
+                c_prev.close < c_prev.open
+                and c.close > c.open
+                and c.open <= c_prev.close
+                and c.close >= c_prev.open
+            ):
+                patterns.append(
+                    CandlestickPattern(
+                        pattern="bullish_engulfing",
+                        direction="bullish",
+                        reliability=0.7,
+                        bar_index=i,
+                        description="Bullish Engulfing — strong reversal signal",
+                    )
+                )
 
             # ── Bearish Engulfing ──
-            if (c_prev.close > c_prev.open
-                    and c.close < c.open
-                    and c.open >= c_prev.close
-                    and c.close <= c_prev.open):
-                patterns.append(CandlestickPattern(
-                    pattern="bearish_engulfing",
-                    direction="bearish",
-                    reliability=0.7,
-                    bar_index=i,
-                    description="Bearish Engulfing — strong reversal signal",
-                ))
+            if (
+                c_prev.close > c_prev.open
+                and c.close < c.open
+                and c.open >= c_prev.close
+                and c.close <= c_prev.open
+            ):
+                patterns.append(
+                    CandlestickPattern(
+                        pattern="bearish_engulfing",
+                        direction="bearish",
+                        reliability=0.7,
+                        bar_index=i,
+                        description="Bearish Engulfing — strong reversal signal",
+                    )
+                )
 
             # ── Morning Star ──
-            if (c_prev2.close < c_prev2.open
-                    and prev_body < (c_prev2.high - c_prev2.low) * 0.3
-                    and c.close > c.open
-                    and c.close > (c_prev2.open + c_prev2.close) / 2):
-                patterns.append(CandlestickPattern(
-                    pattern="morning_star",
-                    direction="bullish",
-                    reliability=0.75,
-                    bar_index=i,
-                    description="Morning Star — strong bullish reversal",
-                ))
+            if (
+                c_prev2.close < c_prev2.open
+                and prev_body < (c_prev2.high - c_prev2.low) * 0.3
+                and c.close > c.open
+                and c.close > (c_prev2.open + c_prev2.close) / 2
+            ):
+                patterns.append(
+                    CandlestickPattern(
+                        pattern="morning_star",
+                        direction="bullish",
+                        reliability=0.75,
+                        bar_index=i,
+                        description="Morning Star — strong bullish reversal",
+                    )
+                )
 
             # ── Evening Star ──
-            if (c_prev2.close > c_prev2.open
-                    and prev_body < (c_prev2.high - c_prev2.low) * 0.3
-                    and c.close < c.open
-                    and c.close < (c_prev2.open + c_prev2.close) / 2):
-                patterns.append(CandlestickPattern(
-                    pattern="evening_star",
-                    direction="bearish",
-                    reliability=0.75,
-                    bar_index=i,
-                    description="Evening Star — strong bearish reversal",
-                ))
+            if (
+                c_prev2.close > c_prev2.open
+                and prev_body < (c_prev2.high - c_prev2.low) * 0.3
+                and c.close < c.open
+                and c.close < (c_prev2.open + c_prev2.close) / 2
+            ):
+                patterns.append(
+                    CandlestickPattern(
+                        pattern="evening_star",
+                        direction="bearish",
+                        reliability=0.75,
+                        bar_index=i,
+                        description="Evening Star — strong bearish reversal",
+                    )
+                )
 
             # ── Three White Soldiers ──
-            if (i >= 2
-                    and ohlcv[i - 2].close > ohlcv[i - 2].open
-                    and ohlcv[i - 1].close > ohlcv[i - 1].open
-                    and c.close > c.open
-                    and ohlcv[i - 1].close > ohlcv[i - 2].close
-                    and c.close > ohlcv[i - 1].close):
-                patterns.append(CandlestickPattern(
-                    pattern="three_white_soldiers",
-                    direction="bullish",
-                    reliability=0.7,
-                    bar_index=i,
-                    description="Three White Soldiers — strong bullish continuation",
-                ))
+            if (
+                i >= 2
+                and ohlcv[i - 2].close > ohlcv[i - 2].open
+                and ohlcv[i - 1].close > ohlcv[i - 1].open
+                and c.close > c.open
+                and ohlcv[i - 1].close > ohlcv[i - 2].close
+                and c.close > ohlcv[i - 1].close
+            ):
+                patterns.append(
+                    CandlestickPattern(
+                        pattern="three_white_soldiers",
+                        direction="bullish",
+                        reliability=0.7,
+                        bar_index=i,
+                        description="Three White Soldiers — strong bullish continuation",
+                    )
+                )
 
             # ── Three Black Crows ──
-            if (i >= 2
-                    and ohlcv[i - 2].close < ohlcv[i - 2].open
-                    and ohlcv[i - 1].close < ohlcv[i - 1].open
-                    and c.close < c.open
-                    and ohlcv[i - 1].close < ohlcv[i - 2].close
-                    and c.close < ohlcv[i - 1].close):
-                patterns.append(CandlestickPattern(
-                    pattern="three_black_crows",
-                    direction="bearish",
-                    reliability=0.7,
-                    bar_index=i,
-                    description="Three Black Crows — strong bearish continuation",
-                ))
+            if (
+                i >= 2
+                and ohlcv[i - 2].close < ohlcv[i - 2].open
+                and ohlcv[i - 1].close < ohlcv[i - 1].open
+                and c.close < c.open
+                and ohlcv[i - 1].close < ohlcv[i - 2].close
+                and c.close < ohlcv[i - 1].close
+            ):
+                patterns.append(
+                    CandlestickPattern(
+                        pattern="three_black_crows",
+                        direction="bearish",
+                        reliability=0.7,
+                        bar_index=i,
+                        description="Three Black Crows — strong bearish continuation",
+                    )
+                )
 
             # ── Piercing Line ──
-            if (c_prev.close < c_prev.open
-                    and c.open < c_prev.low
-                    and c.close > (c_prev.open + c_prev.close) / 2
-                    and c.close < c_prev.open
-                    and c.close > c.open):
-                patterns.append(CandlestickPattern(
-                    pattern="piercing_line",
-                    direction="bullish",
-                    reliability=0.65,
-                    bar_index=i,
-                    description="Piercing Line — bullish reversal",
-                ))
+            if (
+                c_prev.close < c_prev.open
+                and c.open < c_prev.low
+                and c.close > (c_prev.open + c_prev.close) / 2
+                and c.close < c_prev.open
+                and c.close > c.open
+            ):
+                patterns.append(
+                    CandlestickPattern(
+                        pattern="piercing_line",
+                        direction="bullish",
+                        reliability=0.65,
+                        bar_index=i,
+                        description="Piercing Line — bullish reversal",
+                    )
+                )
 
             # ── Dark Cloud Cover ──
-            if (c_prev.close > c_prev.open
-                    and c.open > c_prev.high
-                    and c.close < (c_prev.open + c_prev.close) / 2
-                    and c.close > c_prev.open
-                    and c.close < c.open):
-                patterns.append(CandlestickPattern(
-                    pattern="dark_cloud_cover",
-                    direction="bearish",
-                    reliability=0.65,
-                    bar_index=i,
-                    description="Dark Cloud Cover — bearish reversal",
-                ))
+            if (
+                c_prev.close > c_prev.open
+                and c.open > c_prev.high
+                and c.close < (c_prev.open + c_prev.close) / 2
+                and c.close > c_prev.open
+                and c.close < c.open
+            ):
+                patterns.append(
+                    CandlestickPattern(
+                        pattern="dark_cloud_cover",
+                        direction="bearish",
+                        reliability=0.65,
+                        bar_index=i,
+                        description="Dark Cloud Cover — bearish reversal",
+                    )
+                )
 
             # ── Bullish Harami ──
-            if (c_prev.close < c_prev.open
-                    and c.close > c.open
-                    and c.open > c_prev.close
-                    and c.close < c_prev.open
-                    and body < prev_body * 0.6):
-                patterns.append(CandlestickPattern(
-                    pattern="bullish_harami",
-                    direction="bullish",
-                    reliability=0.55,
-                    bar_index=i,
-                    description="Bullish Harami — potential reversal",
-                ))
+            if (
+                c_prev.close < c_prev.open
+                and c.close > c.open
+                and c.open > c_prev.close
+                and c.close < c_prev.open
+                and body < prev_body * 0.6
+            ):
+                patterns.append(
+                    CandlestickPattern(
+                        pattern="bullish_harami",
+                        direction="bullish",
+                        reliability=0.55,
+                        bar_index=i,
+                        description="Bullish Harami — potential reversal",
+                    )
+                )
 
             # ── Bearish Harami ──
-            if (c_prev.close > c_prev.open
-                    and c.close < c.open
-                    and c.open < c_prev.close
-                    and c.close > c_prev.open
-                    and body < prev_body * 0.6):
-                patterns.append(CandlestickPattern(
-                    pattern="bearish_harami",
-                    direction="bearish",
-                    reliability=0.55,
-                    bar_index=i,
-                    description="Bearish Harami — potential reversal",
-                ))
+            if (
+                c_prev.close > c_prev.open
+                and c.close < c.open
+                and c.open < c_prev.close
+                and c.close > c_prev.open
+                and body < prev_body * 0.6
+            ):
+                patterns.append(
+                    CandlestickPattern(
+                        pattern="bearish_harami",
+                        direction="bearish",
+                        reliability=0.55,
+                        bar_index=i,
+                        description="Bearish Harami — potential reversal",
+                    )
+                )
 
         return patterns
 
@@ -530,7 +582,7 @@ class PatternRecognitionTools:
         """
         points: list[tuple[int, float]] = []
         for i in range(window, len(data) - window):
-            segment = data[i - window: i + window + 1]
+            segment = data[i - window : i + window + 1]
             if point_type == "high":
                 if data[i] == np.max(segment):
                     points.append((i, float(data[i])))
@@ -566,7 +618,7 @@ class PatternRecognitionTools:
             return None
 
         # Neckline = lowest low between the two highs
-        neckline = float(np.min(lows[h1_idx:h2_idx + 1]))
+        neckline = float(np.min(lows[h1_idx : h2_idx + 1]))
         current = float(closes[-1])
         pattern_height = h1_price - neckline
 
@@ -627,7 +679,7 @@ class PatternRecognitionTools:
         if pct_diff > 0.03:
             return None
 
-        neckline = float(np.max(highs[l1_idx:l2_idx + 1]))
+        neckline = float(np.max(highs[l1_idx : l2_idx + 1]))
         current = float(closes[-1])
         pattern_height = neckline - l1_price
 
@@ -834,62 +886,68 @@ class PatternRecognitionTools:
         h_slope = self._compute_slope(high_indices, high_prices)
         l_slope = self._compute_slope(low_indices, low_prices)
 
-        h_range = max(high_prices) - min(high_prices) if high_prices else 0
-        l_range = max(low_prices) - min(low_prices) if low_prices else 0
+        max(high_prices) - min(high_prices) if high_prices else 0
+        max(low_prices) - min(low_prices) if low_prices else 0
         avg_price = float(closes[-1])
 
         # Ascending triangle: flat top, rising bottom
         if abs(h_slope) < 0.001 and l_slope > 0.001:
             resistance = float(np.mean(high_prices))
             target = resistance + (resistance - min(low_prices))
-            results.append(ChartPattern(
-                pattern="ascending_triangle",
-                direction="bullish",
-                confidence=0.65,
-                target_price=round(target, 8),
-                entry_price=round(resistance, 8),
-                stop_loss=round(min(low_prices) * 0.995, 8),
-                description=(
-                    f"Ascending triangle: flat resistance {resistance:.2f}, "
-                    f"rising support. Breakout target {target:.2f}"
-                ),
-                bars_involved=high_indices[-1] - high_indices[0],
-            ))
+            results.append(
+                ChartPattern(
+                    pattern="ascending_triangle",
+                    direction="bullish",
+                    confidence=0.65,
+                    target_price=round(target, 8),
+                    entry_price=round(resistance, 8),
+                    stop_loss=round(min(low_prices) * 0.995, 8),
+                    description=(
+                        f"Ascending triangle: flat resistance {resistance:.2f}, "
+                        f"rising support. Breakout target {target:.2f}"
+                    ),
+                    bars_involved=high_indices[-1] - high_indices[0],
+                )
+            )
 
         # Descending triangle: falling top, flat bottom
         if h_slope < -0.001 and abs(l_slope) < 0.001:
             support = float(np.mean(low_prices))
             target = support - (max(high_prices) - support)
-            results.append(ChartPattern(
-                pattern="descending_triangle",
-                direction="bearish",
-                confidence=0.65,
-                target_price=round(target, 8),
-                entry_price=round(support, 8),
-                stop_loss=round(max(high_prices) * 1.005, 8),
-                description=(
-                    f"Descending triangle: flat support {support:.2f}, "
-                    f"falling resistance. Breakdown target {target:.2f}"
-                ),
-                bars_involved=low_indices[-1] - low_indices[0],
-            ))
+            results.append(
+                ChartPattern(
+                    pattern="descending_triangle",
+                    direction="bearish",
+                    confidence=0.65,
+                    target_price=round(target, 8),
+                    entry_price=round(support, 8),
+                    stop_loss=round(max(high_prices) * 1.005, 8),
+                    description=(
+                        f"Descending triangle: flat support {support:.2f}, "
+                        f"falling resistance. Breakdown target {target:.2f}"
+                    ),
+                    bars_involved=low_indices[-1] - low_indices[0],
+                )
+            )
 
         # Symmetric triangle: converging
         if h_slope < -0.001 and l_slope > 0.001:
             apex_price = (high_prices[-1] + low_prices[-1]) / 2
-            results.append(ChartPattern(
-                pattern="symmetric_triangle",
-                direction="neutral",
-                confidence=0.5,
-                target_price=round(apex_price, 8),
-                entry_price=round(avg_price, 8),
-                stop_loss=round(min(low_prices) * 0.995, 8),
-                description=(
-                    f"Symmetric triangle: converging from "
-                    f"{high_prices[0]:.2f}/{low_prices[0]:.2f}. Awaiting breakout"
-                ),
-                bars_involved=high_indices[-1] - high_indices[0],
-            ))
+            results.append(
+                ChartPattern(
+                    pattern="symmetric_triangle",
+                    direction="neutral",
+                    confidence=0.5,
+                    target_price=round(apex_price, 8),
+                    entry_price=round(avg_price, 8),
+                    stop_loss=round(min(low_prices) * 0.995, 8),
+                    description=(
+                        f"Symmetric triangle: converging from "
+                        f"{high_prices[0]:.2f}/{low_prices[0]:.2f}. Awaiting breakout"
+                    ),
+                    bars_involved=high_indices[-1] - high_indices[0],
+                )
+            )
 
         return results
 
@@ -927,38 +985,42 @@ class PatternRecognitionTools:
             # Converging upward → bearish
             support_level = low_prices[-1]
             target = support_level - (high_prices[-1] - low_prices[-1])
-            results.append(ChartPattern(
-                pattern="rising_wedge",
-                direction="bearish",
-                confidence=0.6,
-                target_price=round(target, 8),
-                entry_price=round(support_level, 8),
-                stop_loss=round(high_prices[-1] * 1.005, 8),
-                description=(
-                    f"Rising wedge: both trendlines rising and converging. "
-                    f"Bearish breakdown target {target:.2f}"
-                ),
-                bars_involved=high_indices[-1] - high_indices[0],
-            ))
+            results.append(
+                ChartPattern(
+                    pattern="rising_wedge",
+                    direction="bearish",
+                    confidence=0.6,
+                    target_price=round(target, 8),
+                    entry_price=round(support_level, 8),
+                    stop_loss=round(high_prices[-1] * 1.005, 8),
+                    description=(
+                        f"Rising wedge: both trendlines rising and converging. "
+                        f"Bearish breakdown target {target:.2f}"
+                    ),
+                    bars_involved=high_indices[-1] - high_indices[0],
+                )
+            )
 
         # Falling wedge: both slopes negative, converging
         if h_slope < 0 and l_slope < 0 and h_slope > l_slope:
             # Converging downward → bullish
             resistance_level = high_prices[-1]
             target = resistance_level + (high_prices[-1] - low_prices[-1])
-            results.append(ChartPattern(
-                pattern="falling_wedge",
-                direction="bullish",
-                confidence=0.6,
-                target_price=round(target, 8),
-                entry_price=round(resistance_level, 8),
-                stop_loss=round(low_prices[-1] * 0.995, 8),
-                description=(
-                    f"Falling wedge: both trendlines falling and converging. "
-                    f"Bullish breakout target {target:.2f}"
-                ),
-                bars_involved=high_indices[-1] - high_indices[0],
-            ))
+            results.append(
+                ChartPattern(
+                    pattern="falling_wedge",
+                    direction="bullish",
+                    confidence=0.6,
+                    target_price=round(target, 8),
+                    entry_price=round(resistance_level, 8),
+                    stop_loss=round(low_prices[-1] * 0.995, 8),
+                    description=(
+                        f"Falling wedge: both trendlines falling and converging. "
+                        f"Bullish breakout target {target:.2f}"
+                    ),
+                    bars_involved=high_indices[-1] - high_indices[0],
+                )
+            )
 
         return results
 
@@ -1005,7 +1067,7 @@ class PatternRecognitionTools:
         if flag_range > pole_range * 0.5:
             return None
 
-        current = float(closes[-1])
+        float(closes[-1])
 
         if pole_move > 0:
             # Bull flag: pole up, small pullback
@@ -1053,7 +1115,7 @@ class PatternRecognitionTools:
             return 0.0
         # Simple linear regression slope
         n = len(x)
-        denom = n * np.sum(x ** 2) - np.sum(x) ** 2
+        denom = n * np.sum(x**2) - np.sum(x) ** 2
         if denom == 0:
             return 0.0
         slope = (n * np.sum(x * y) - np.sum(x) * np.sum(y)) / denom

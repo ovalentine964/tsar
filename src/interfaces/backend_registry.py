@@ -170,9 +170,7 @@ class BackendRegistry:
         for backend_name in chain:
             cls = self._backends[interface_name][backend_name]
             try:
-                logger.info(
-                    "Attempting backend: %s → %s", interface_name, backend_name
-                )
+                logger.info("Attempting backend: %s → %s", interface_name, backend_name)
                 instance = cls(**merged_config)
                 if errors:
                     logger.warning(
@@ -192,8 +190,7 @@ class BackendRegistry:
                 )
 
         raise RuntimeError(
-            f"All backends failed for interface '{interface_name}'. "
-            f"Errors: {errors}"
+            f"All backends failed for interface '{interface_name}'. Errors: {errors}"
         )
 
     async def execute_with_fallback(
@@ -247,9 +244,7 @@ class BackendRegistry:
                 instance = cls(**merged_config)
                 method = getattr(instance, method_name, None)
                 if method is None:
-                    raise AttributeError(
-                        f"Backend '{backend_name}' has no method '{method_name}'"
-                    )
+                    raise AttributeError(f"Backend '{backend_name}' has no method '{method_name}'")
                 result = method(*args, **kwargs)
                 if errors:
                     logger.warning(
@@ -271,8 +266,7 @@ class BackendRegistry:
                 )
 
         raise RuntimeError(
-            f"All backends failed for {interface_name}.{method_name}. "
-            f"Errors: {errors}"
+            f"All backends failed for {interface_name}.{method_name}. Errors: {errors}"
         )
 
     # ═══════════════════════════════════════════════════════════════
@@ -328,10 +322,10 @@ class BackendRegistry:
     # CONFIG LOADING
     # ═══════════════════════════════════════════════════════════════
 
-
     def _register_defaults(self) -> None:
         """Register all default Python backends."""
         import os
+
         from src.backends.python.ccxt_exec_engine import CcxtExecEngine
         from src.backends.python.ccxt_gateway import CcxtGateway
         from src.backends.python.deepseek_provider import DeepSeekProvider
@@ -353,6 +347,7 @@ class BackendRegistry:
         ollama_enabled = os.environ.get("TSAR_ENABLE_OLLAMA", "").strip() in ("1", "true", "yes")
         if ollama_enabled:
             from src.backends.python.ollama_provider import OllamaProvider
+
             self.register("llm_provider", OllamaProvider.__name__, OllamaProvider)
         else:
             logger.info("Ollama disabled (TSAR_ENABLE_OLLAMA not set) — using cloud LLM only")
@@ -382,11 +377,13 @@ class BackendRegistry:
         if interface_name == "execution_engine":
             if trading_mode == "paper":
                 from src.backends.python.paper_execution_engine import PaperExecutionEngine
+
                 merged_config = {**self._configs.get(interface_name, {}), **(config or {})}
                 logger.info("Creating PaperExecutionEngine for paper mode")
                 return PaperExecutionEngine(config=merged_config)
             else:
                 from src.backends.python.ccxt_exec_engine import CcxtExecEngine
+
                 merged_config = {**self._configs.get(interface_name, {}), **(config or {})}
                 logger.info("Creating CcxtExecEngine for live mode")
                 return CcxtExecEngine(config=merged_config)

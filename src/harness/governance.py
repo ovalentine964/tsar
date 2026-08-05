@@ -26,9 +26,7 @@ Permission Model:
 
 from __future__ import annotations
 
-import asyncio
 import logging
-import time
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from enum import Enum
@@ -44,11 +42,12 @@ logger = logging.getLogger(__name__)
 
 class Permission(Enum):
     """Tool access permissions mapped to TSAR agent roles."""
-    READ = "read"               # Market data, analysis — no side effects
-    ANALYSIS = "analysis"       # Technical analysis, sentiment — read-heavy
-    TRADE_PREVIEW = "preview"   # Trade proposals — shows intent, no execution
-    TRADE_EXECUTE = "execute"   # Order placement — real side effects
-    TRADE_ADMIN = "admin"       # Kill switch, mandate, system control
+
+    READ = "read"  # Market data, analysis — no side effects
+    ANALYSIS = "analysis"  # Technical analysis, sentiment — read-heavy
+    TRADE_PREVIEW = "preview"  # Trade proposals — shows intent, no execution
+    TRADE_EXECUTE = "execute"  # Order placement — real side effects
+    TRADE_ADMIN = "admin"  # Kill switch, mandate, system control
 
 
 # Role → allowed permissions
@@ -56,8 +55,19 @@ ROLE_PERMISSIONS: dict[str, set[Permission]] = {
     "READ": {Permission.READ},
     "ANALYSIS": {Permission.READ, Permission.ANALYSIS},
     "TRADE_PREVIEW": {Permission.READ, Permission.ANALYSIS, Permission.TRADE_PREVIEW},
-    "TRADE_EXECUTE": {Permission.READ, Permission.ANALYSIS, Permission.TRADE_PREVIEW, Permission.TRADE_EXECUTE},
-    "TRADE_ADMIN": {Permission.READ, Permission.ANALYSIS, Permission.TRADE_PREVIEW, Permission.TRADE_EXECUTE, Permission.TRADE_ADMIN},
+    "TRADE_EXECUTE": {
+        Permission.READ,
+        Permission.ANALYSIS,
+        Permission.TRADE_PREVIEW,
+        Permission.TRADE_EXECUTE,
+    },
+    "TRADE_ADMIN": {
+        Permission.READ,
+        Permission.ANALYSIS,
+        Permission.TRADE_PREVIEW,
+        Permission.TRADE_EXECUTE,
+        Permission.TRADE_ADMIN,
+    },
 }
 
 # Tool → required permission
@@ -79,7 +89,6 @@ TOOL_PERMISSIONS: dict[str, Permission] = {
     "multi_timeframe": Permission.READ,
     "order_flow": Permission.READ,
     "market_microstructure": Permission.READ,
-
     # Analysis tools
     "backtesting": Permission.ANALYSIS,
     "monitoring": Permission.ANALYSIS,
@@ -88,14 +97,12 @@ TOOL_PERMISSIONS: dict[str, Permission] = {
     "equity_curve": Permission.ANALYSIS,
     "risk_state_monitor": Permission.ANALYSIS,
     "flywheel_health": Permission.ANALYSIS,
-
     # Trade preview (sizing, proposals)
     "risk_management": Permission.TRADE_PREVIEW,
     "stop_loss_calculator": Permission.TRADE_PREVIEW,
     "take_profit_calculator": Permission.TRADE_PREVIEW,
     "fee_calculator": Permission.TRADE_PREVIEW,
     "portfolio": Permission.TRADE_PREVIEW,
-
     # Trade execution
     "execution": Permission.TRADE_EXECUTE,
     "order_router": Permission.TRADE_EXECUTE,
@@ -105,7 +112,6 @@ TOOL_PERMISSIONS: dict[str, Permission] = {
     "cross_chain": Permission.TRADE_EXECUTE,
     "settlement": Permission.TRADE_EXECUTE,
     "mev_protection": Permission.TRADE_EXECUTE,
-
     # Admin tools
     "kill_switch": Permission.TRADE_ADMIN,
     "mandate_gate": Permission.TRADE_ADMIN,
@@ -140,18 +146,18 @@ class GovernanceConfig:
 @dataclass
 class GovernanceDecision:
     """Result of a governance check."""
+
     approved: bool
     reason: str = ""
     warnings: list[str] = field(default_factory=list)
     metadata: dict[str, Any] = field(default_factory=dict)
-    timestamp: str = field(
-        default_factory=lambda: datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
-    )
+    timestamp: str = field(default_factory=lambda: datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ"))
 
 
 @dataclass
 class AuditEntry:
     """Audit log entry for governance decisions."""
+
     timestamp: str
     tool_name: str
     agent_role: str
@@ -277,11 +283,7 @@ class Governance:
                 logger.warning("Kill switch check failed: %s", e)
 
         # 3. Mandate gate (only for live trading)
-        if (
-            self._config.enable_mandate_gate
-            and self._trading_mode == "live"
-            and self._mandate_gate
-        ):
+        if self._config.enable_mandate_gate and self._trading_mode == "live" and self._mandate_gate:
             try:
                 mandate_ok = await self._mandate_gate.check()
                 if not mandate_ok:
@@ -330,7 +332,7 @@ class Governance:
             tool_calls: The tool calls that were executed.
             results: The results from execution.
         """
-        for tc, result in zip(tool_calls, results):
+        for tc, result in zip(tool_calls, results, strict=False):
             if not self._is_trade_tool(tc.name):
                 continue
 
@@ -361,12 +363,15 @@ class Governance:
 
         try:
             from src.knowledge.trade_memory import TradeRecord
+
             record = TradeRecord(
                 symbol=tc.arguments.get("symbol", ""),
                 side=tc.arguments.get("side", "buy"),
                 quantity=tc.arguments.get("quantity", 0),
                 entry_price=tc.arguments.get("price", 0),
-                status="EXECUTED" if not isinstance(result, dict) or "error" not in result else "FAILED",
+                status="EXECUTED"
+                if not isinstance(result, dict) or "error" not in result
+                else "FAILED",
                 strategy_id=tc.arguments.get("strategy_id", "harness"),
             )
             self._trade_memory.record_trade(record)
@@ -381,12 +386,14 @@ class Governance:
 
         try:
             if hasattr(self._flywheel, "on_trade_executed"):
-                await self._flywheel.on_trade_executed({
-                    "tool": tc.name,
-                    "arguments": tc.arguments,
-                    "result": result,
-                    "timestamp": datetime.now(UTC).isoformat(),
-                })
+                await self._flywheel.on_trade_executed(
+                    {
+                        "tool": tc.name,
+                        "arguments": tc.arguments,
+                        "result": result,
+                        "timestamp": datetime.now(UTC).isoformat(),
+                    }
+                )
                 logger.debug("Flywheel triggered for %s", tc.name)
         except Exception as e:
             logger.warning("Flywheel trigger failed: %s", e)
@@ -471,8 +478,12 @@ class Governance:
     def _is_trade_tool(tool_name: str) -> bool:
         """Check if a tool is trade-related."""
         return tool_name in {
-            "execution", "order_router", "defi_execution",
-            "dex_executor", "intent_executor", "cross_chain",
+            "execution",
+            "order_router",
+            "defi_execution",
+            "dex_executor",
+            "intent_executor",
+            "cross_chain",
             "settlement",
         }
 

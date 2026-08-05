@@ -21,11 +21,12 @@ from __future__ import annotations
 
 import logging
 import re
-import time
-from dataclasses import dataclass, field
-from datetime import UTC, datetime
+from dataclasses import dataclass
 from enum import StrEnum
-from typing import Any
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from datetime import datetime
 
 logger = logging.getLogger(__name__)
 
@@ -36,30 +37,30 @@ logger = logging.getLogger(__name__)
 
 
 class NewsSeverity(StrEnum):
-    CRITICAL = "critical"   # VETO: Halt all trading immediately
-    HIGH     = "high"       # BLOCK: Reject new entries, warn on existing
-    MEDIUM   = "medium"     # ALERT: Include in SQF scoring, reduce size
-    LOW      = "low"        # TRACK: Log only, no trading impact
+    CRITICAL = "critical"  # VETO: Halt all trading immediately
+    HIGH = "high"  # BLOCK: Reject new entries, warn on existing
+    MEDIUM = "medium"  # ALERT: Include in SQF scoring, reduce size
+    LOW = "low"  # TRACK: Log only, no trading impact
 
 
 class NewsCategory(StrEnum):
     EXCHANGE_COMPROMISE = "exchange_compromise"
-    REGULATORY_BAN      = "regulatory_ban"
-    STABLECOIN_DEPEG    = "stablecoin_depeg"
-    MAJOR_EXPLOIT       = "major_exploit"
-    PROTOCOL_DEATH      = "protocol_death"
-    ETF_DECISION        = "etf_decision"
-    MAJOR_PARTNERSHIP   = "major_partnership"
-    PROTOCOL_UPGRADE    = "protocol_upgrade"
-    WHALE_MOVEMENT      = "whale_movement"
-    MAJOR_LAWSUIT       = "major_lawsuit"
-    MARKET_ANALYSIS     = "market_analysis"
-    MINOR_PARTNERSHIP   = "minor_partnership"
-    PRICE_PREDICTION    = "price_prediction"
-    EDUCATIONAL         = "educational"
-    OPINION             = "opinion"
-    MINOR_UPDATE        = "minor_update"
-    UNKNOWN             = "unknown"
+    REGULATORY_BAN = "regulatory_ban"
+    STABLECOIN_DEPEG = "stablecoin_depeg"
+    MAJOR_EXPLOIT = "major_exploit"
+    PROTOCOL_DEATH = "protocol_death"
+    ETF_DECISION = "etf_decision"
+    MAJOR_PARTNERSHIP = "major_partnership"
+    PROTOCOL_UPGRADE = "protocol_upgrade"
+    WHALE_MOVEMENT = "whale_movement"
+    MAJOR_LAWSUIT = "major_lawsuit"
+    MARKET_ANALYSIS = "market_analysis"
+    MINOR_PARTNERSHIP = "minor_partnership"
+    PRICE_PREDICTION = "price_prediction"
+    EDUCATIONAL = "educational"
+    OPINION = "opinion"
+    MINOR_UPDATE = "minor_update"
+    UNKNOWN = "unknown"
 
 
 # Source reliability scores (0-1)
@@ -121,9 +122,9 @@ class ClassificationResult:
 
     severity: NewsSeverity
     category: NewsCategory
-    sentiment: float           # -1.0 to +1.0
-    confidence: float          # 0.0 to 1.0
-    relevance: float           # 0.0 to 1.0
+    sentiment: float  # -1.0 to +1.0
+    confidence: float  # 0.0 to 1.0
+    relevance: float  # 0.0 to 1.0
     source_reliability: float  # 0.0 to 1.0
     is_breaking: bool
     flags: tuple[str, ...] = ()  # Verification flags (e.g., "UNVERIFIED_CRITICAL")
@@ -156,12 +157,35 @@ class VerificationResult:
 # KEYWORD TAXONOMY
 # ═══════════════════════════════════════════════════════════════════════
 
-_CRYPTO_CONTEXT = frozenset({
-    "crypto", "bitcoin", "btc", "ethereum", "eth", "blockchain",
-    "defi", "token", "coin", "exchange", "binance", "coinbase",
-    "kraken", "okx", "bybit", "stablecoin", "usdt", "usdc", "dai",
-    "web3", "nft", "altcoin", "mining", "staking", "wallet",
-})
+_CRYPTO_CONTEXT = frozenset(
+    {
+        "crypto",
+        "bitcoin",
+        "btc",
+        "ethereum",
+        "eth",
+        "blockchain",
+        "defi",
+        "token",
+        "coin",
+        "exchange",
+        "binance",
+        "coinbase",
+        "kraken",
+        "okx",
+        "bybit",
+        "stablecoin",
+        "usdt",
+        "usdc",
+        "dai",
+        "web3",
+        "nft",
+        "altcoin",
+        "mining",
+        "staking",
+        "wallet",
+    }
+)
 
 # Patterns: list of (compiled_regex, context_required: bool)
 _CRITICAL_PATTERNS: dict[NewsCategory, list[tuple[re.Pattern, bool]]] = {
@@ -173,8 +197,14 @@ _CRITICAL_PATTERNS: dict[NewsCategory, list[tuple[re.Pattern, bool]]] = {
         (re.compile(r"breach(?:ed)?", re.I), True),
         (re.compile(r"compromised?", re.I), True),
         (re.compile(r"hot\s*wallet.*(?:drain|hack|stolen)", re.I), False),
-        (re.compile(r"(?:binance|coinbase|kraken|okx|bybit|ftx).*"
-                     r"(?:hack|exploit|breach|drain)", re.I), False),
+        (
+            re.compile(
+                r"(?:binance|coinbase|kraken|okx|bybit|ftx).*"
+                r"(?:hack|exploit|breach|drain)",
+                re.I,
+            ),
+            False,
+        ),
         (re.compile(r"security\s+(?:incident|breach|vulnerability)", re.I), True),
     ],
     NewsCategory.REGULATORY_BAN: [
@@ -182,27 +212,66 @@ _CRITICAL_PATTERNS: dict[NewsCategory, list[tuple[re.Pattern, bool]]] = {
         (re.compile(r"emergency\s+(?:order|action|measure)", re.I), True),
         (re.compile(r"SEC.*(?:sue|sues|sued|lawsuit|charges?|enforcement|action)", re.I), False),
         (re.compile(r"CFTC.*(?:sue|sues|sued|lawsuit|charges?|enforcement)", re.I), False),
-        (re.compile(r"(?:china|india|russia|nigeria).*"
-                     r"(?:ban|bans|banned|prohibit).*"
-                     r"(?:crypto|bitcoin|mining|trading)", re.I), False),
+        (
+            re.compile(
+                r"(?:china|india|russia|nigeria).*"
+                r"(?:ban|bans|banned|prohibit).*"
+                r"(?:crypto|bitcoin|mining|trading)",
+                re.I,
+            ),
+            False,
+        ),
         (re.compile(r"(?:crack\s*down|crackdown).*(?:crypto|bitcoin|exchange)", re.I), True),
     ],
     NewsCategory.STABLECOIN_DEPEG: [
-        (re.compile(r"(?:USDT|USDC|DAI|BUSD|TUSD|FRAX).*(?:de-?peg|break|below\s+\$0\.\d+)", re.I), False),
+        (
+            re.compile(
+                r"(?:USDT|USDC|DAI|BUSD|TUSD|FRAX).*(?:de-?peg|break|below\s+\$0\.\d+)", re.I
+            ),
+            False,
+        ),
         (re.compile(r"stablecoin.*(?:crisis|fail|collapse|de-?peg|break)", re.I), False),
-        (re.compile(r"(?:tether|circle).*(?:insolvency|bankruptcy|reserve.*fail|audit.*fail)", re.I), False),
+        (
+            re.compile(
+                r"(?:tether|circle).*(?:insolvency|bankruptcy|reserve.*fail|audit.*fail)", re.I
+            ),
+            False,
+        ),
         (re.compile(r"(?:USDT|USDC).*\$(?:0\.[0-8]\d|0\.9[0-4])", re.I), False),
     ],
     NewsCategory.MAJOR_EXPLOIT: [
-        (re.compile(r"(?:bridge|protocol|smart\s*contract|vault|pool).*(?:exploit|hack|drain|stolen)", re.I), False),
+        (
+            re.compile(
+                r"(?:bridge|protocol|smart\s*contract|vault|pool).*(?:exploit|hack|drain|stolen)",
+                re.I,
+            ),
+            False,
+        ),
         (re.compile(r"\$[\d,]+\.?\d*[MBK]?.*(?:stolen|drained|exploited|hack|lost)", re.I), True),
-        (re.compile(r"(?:flash\s*loan|reentrancy|oracle\s*manipulation|rug\s*pull).*(?:attack|exploit)", re.I), False),
+        (
+            re.compile(
+                r"(?:flash\s*loan|reentrancy|oracle\s*manipulation|rug\s*pull).*(?:attack|exploit)",
+                re.I,
+            ),
+            False,
+        ),
         (re.compile(r"(?:multisig|governance).*(?:attack|compromise|takeover)", re.I), True),
         (re.compile(r"(?:infinite\s*approval|approval.*exploit)", re.I), True),
     ],
     NewsCategory.PROTOCOL_DEATH: [
-        (re.compile(r"(?:collaps|fail|bankrupt|insolv|deceased|dead).*(?:protocol|project|token|coin)", re.I), True),
-        (re.compile(r"(?:luna|terra|ftx|celsius|voyager|3ac|blockfi).*(?:collaps|fail|bankrupt)", re.I), False),
+        (
+            re.compile(
+                r"(?:collaps|fail|bankrupt|insolv|deceased|dead).*(?:protocol|project|token|coin)",
+                re.I,
+            ),
+            True,
+        ),
+        (
+            re.compile(
+                r"(?:luna|terra|ftx|celsius|voyager|3ac|blockfi).*(?:collaps|fail|bankrupt)", re.I
+            ),
+            False,
+        ),
         (re.compile(r"bankruptcy\s+(?:fil|protection|chapter)", re.I), True),
         (re.compile(r"(?:ponzi|fraud|scam).*(?:scheme|alleg|charge)", re.I), True),
     ],
@@ -216,26 +285,59 @@ _HIGH_PATTERNS: dict[NewsCategory, list[tuple[re.Pattern, bool]]] = {
         (re.compile(r"(?:spot|futures)\s+(?:bitcoin|ethereum|crypto)\s+ETF", re.I), False),
     ],
     NewsCategory.MAJOR_PARTNERSHIP: [
-        (re.compile(r"(?:blackrock|fidelity|jpmorgan|goldman|sachs|visa|mastercard|paypal|"
-                     r"google|apple|microsoft|amazon|tesla).*(?:crypto|bitcoin|blockchain|web3)", re.I), False),
-        (re.compile(r"(?:institutional|wall\s*street|fortune\s*500|s&p\s*500)."
-                     r"*(?:adopt|partner|invest|buy|acquire)", re.I), True),
-        (re.compile(r"(?:sovereign\s+wealth|pension\s+fund|endowment).*(?:invest|buy|allocat)", re.I), True),
+        (
+            re.compile(
+                r"(?:blackrock|fidelity|jpmorgan|goldman|sachs|visa|mastercard|paypal|"
+                r"google|apple|microsoft|amazon|tesla).*(?:crypto|bitcoin|blockchain|web3)",
+                re.I,
+            ),
+            False,
+        ),
+        (
+            re.compile(
+                r"(?:institutional|wall\s*street|fortune\s*500|s&p\s*500)."
+                r"*(?:adopt|partner|invest|buy|acquire)",
+                re.I,
+            ),
+            True,
+        ),
+        (
+            re.compile(
+                r"(?:sovereign\s+wealth|pension\s+fund|endowment).*(?:invest|buy|allocat)", re.I
+            ),
+            True,
+        ),
     ],
     NewsCategory.PROTOCOL_UPGRADE: [
-        (re.compile(r"(?:upgrade|hard\s*fork|soft\s*fork|merge|shanghai|cancun|pectra)", re.I), True),
+        (
+            re.compile(r"(?:upgrade|hard\s*fork|soft\s*fork|merge|shanghai|cancun|pectra)", re.I),
+            True,
+        ),
         (re.compile(r"(?:EIP|BIP|SIP)-\d+.*(?:implement|activ|live|launch)", re.I), False),
         (re.compile(r"(?:mainnet|testnet).*(?:launch|deploy|go\s*live)", re.I), True),
         (re.compile(r"(?:layer\s*2|L2|rollup).*(?:launch|mainnet|upgrade)", re.I), True),
     ],
     NewsCategory.WHALE_MOVEMENT: [
         (re.compile(r"whale.*(?:mov|transfer|deposit|withdraw|send)", re.I), True),
-        (re.compile(r"(?:satoshi|nakamoto|vitalik).*wallet.*(?:active|mov|transfer|wake)", re.I), False),
-        (re.compile(r"(?:\d[\d,]*\.?\d*\s*(?:BTC|ETH|BTC)).*(?:exchange|binance|coinbase|deposit)", re.I), False),
+        (
+            re.compile(r"(?:satoshi|nakamoto|vitalik).*wallet.*(?:active|mov|transfer|wake)", re.I),
+            False,
+        ),
+        (
+            re.compile(
+                r"(?:\d[\d,]*\.?\d*\s*(?:BTC|ETH|BTC)).*(?:exchange|binance|coinbase|deposit)", re.I
+            ),
+            False,
+        ),
         (re.compile(r"(?:large|massive|巨鲸).*(?:transfer|mov|deposit).*(?:exchange)", re.I), True),
     ],
     NewsCategory.MAJOR_LAWSUIT: [
-        (re.compile(r"(?:SEC|CFTC|DOJ|FBI).*(?:sue|sues|sued|lawsuit|charges?|indict|criminal)", re.I), False),
+        (
+            re.compile(
+                r"(?:SEC|CFTC|DOJ|FBI).*(?:sue|sues|sued|lawsuit|charges?|indict|criminal)", re.I
+            ),
+            False,
+        ),
         (re.compile(r"(?:class\s*action|lawsuit|litigation|legal\s+action)", re.I), True),
         (re.compile(r"(?:settl|verdict|ruling|judgment).*(?:\$\d|million|billion)", re.I), True),
     ],
@@ -243,7 +345,13 @@ _HIGH_PATTERNS: dict[NewsCategory, list[tuple[re.Pattern, bool]]] = {
 
 _MEDIUM_PATTERNS: dict[NewsCategory, list[tuple[re.Pattern, bool]]] = {
     NewsCategory.MARKET_ANALYSIS: [
-        (re.compile(r"(?:head\s*(?:and|&)\s*shoulders|double\s*(?:top|bottom)|cup\s*(?:and|&)\s*handle)", re.I), False),
+        (
+            re.compile(
+                r"(?:head\s*(?:and|&)\s*shoulders|double\s*(?:top|bottom)|cup\s*(?:and|&)\s*handle)",
+                re.I,
+            ),
+            False,
+        ),
         (re.compile(r"(?:support|resistance|breakout|breakdown|consolidat)", re.I), True),
         (re.compile(r"(?:bullish|bearish).*(?:pattern|signal|setup|outlook)", re.I), True),
         (re.compile(r"(?:undervalu|overvalu|fair\s*value|intrinsic)", re.I), True),
@@ -260,11 +368,25 @@ _MEDIUM_PATTERNS: dict[NewsCategory, list[tuple[re.Pattern, bool]]] = {
 }
 
 # Hype/P&D keywords
-_HYPE_KEYWORDS = frozenset({
-    "100x", "10x", "1000x", "moon", "gem", "next bitcoin",
-    "guaranteed", "risk-free", "easy money", "get rich",
-    "pump", "to the moon", "send it", "ape", "yolo",
-})
+_HYPE_KEYWORDS = frozenset(
+    {
+        "100x",
+        "10x",
+        "1000x",
+        "moon",
+        "gem",
+        "next bitcoin",
+        "guaranteed",
+        "risk-free",
+        "easy money",
+        "get rich",
+        "pump",
+        "to the moon",
+        "send it",
+        "ape",
+        "yolo",
+    }
+)
 
 
 # ═══════════════════════════════════════════════════════════════════════
@@ -317,9 +439,7 @@ class NewsClassifier:
         category, severity, matched = self._keyword_classify(text, title)
 
         # Derive sentiment from category
-        base_sentiment, base_confidence = CATEGORY_SENTIMENT.get(
-            category, (0.0, 0.1)
-        )
+        base_sentiment, base_confidence = CATEGORY_SENTIMENT.get(category, (0.0, 0.1))
 
         # Adjust sentiment for directional keywords
         sentiment = self._adjust_sentiment(base_sentiment, text_lower)
@@ -339,9 +459,9 @@ class NewsClassifier:
         # Decay rate by severity
         decay_rates = {
             NewsSeverity.CRITICAL: 1440,  # 24h half-life
-            NewsSeverity.HIGH: 360,       # 6h
-            NewsSeverity.MEDIUM: 120,     # 2h
-            NewsSeverity.LOW: 30,         # 30min
+            NewsSeverity.HIGH: 360,  # 6h
+            NewsSeverity.MEDIUM: 120,  # 2h
+            NewsSeverity.LOW: 30,  # 30min
         }
 
         # Flags
@@ -410,62 +530,70 @@ class NewsClassifier:
         # Check 1: Multi-source (required for CRITICAL)
         if classification.severity == NewsSeverity.CRITICAL:
             reliable_sources = [
-                s for s in all_sources
-                if self._source_reliability.get(s, 0.2) >= 0.70
+                s for s in all_sources if self._source_reliability.get(s, 0.2) >= 0.70
             ]
             multi_source = len(set(reliable_sources)) >= self._min_sources_critical
-            checks.append(VerificationCheck(
-                name="multi_source",
-                passed=multi_source,
-                required=True,
-                flag="" if multi_source else "UNVERIFIED_CRITICAL",
-                action="" if multi_source else "DOWNGRADE_TO_HIGH",
-            ))
+            checks.append(
+                VerificationCheck(
+                    name="multi_source",
+                    passed=multi_source,
+                    required=True,
+                    flag="" if multi_source else "UNVERIFIED_CRITICAL",
+                    action="" if multi_source else "DOWNGRADE_TO_HIGH",
+                )
+            )
         else:
-            checks.append(VerificationCheck(
-                name="multi_source",
-                passed=True,
-                required=False,
-            ))
+            checks.append(
+                VerificationCheck(
+                    name="multi_source",
+                    passed=True,
+                    required=False,
+                )
+            )
 
         # Check 2: Source reliability (any Tier 1 source)
-        has_tier1 = any(
-            self._source_reliability.get(s, 0) >= 0.85
-            for s in all_sources
+        has_tier1 = any(self._source_reliability.get(s, 0) >= 0.85 for s in all_sources)
+        checks.append(
+            VerificationCheck(
+                name="tier1_source",
+                passed=has_tier1,
+                required=False,
+                flag="" if has_tier1 else "NO_TIER1_COVERAGE",
+            )
         )
-        checks.append(VerificationCheck(
-            name="tier1_source",
-            passed=has_tier1,
-            required=False,
-            flag="" if has_tier1 else "NO_TIER1_COVERAGE",
-        ))
 
         # Check 3: Coordinated FUD detection
         is_fud = self._detect_coordinated_fud(all_items)
-        checks.append(VerificationCheck(
-            name="coordinated_fud",
-            passed=not is_fud,
-            required=True,
-            flag="" if not is_fud else "COORDINATED_FUD",
-            action="" if not is_fud else "SUPPRESS",
-        ))
+        checks.append(
+            VerificationCheck(
+                name="coordinated_fud",
+                passed=not is_fud,
+                required=True,
+                flag="" if not is_fud else "COORDINATED_FUD",
+                action="" if not is_fud else "SUPPRESS",
+            )
+        )
 
         # Check 4: Hype/P&D detection
         has_hype = any("HYPE_DETECTED" in c.flags for c in all_items)
         if has_hype and not has_tier1:
-            checks.append(VerificationCheck(
-                name="pump_and_dump",
-                passed=False,
-                required=False,
-                flag="PUMP_AND_DUMP_SIGNAL",
-                action="SUPPRESS",
-            ))
+            checks.append(
+                VerificationCheck(
+                    name="pump_and_dump",
+                    passed=False,
+                    required=False,
+                    flag="PUMP_AND_DUMP_SIGNAL",
+                    action="SUPPRESS",
+                )
+            )
         else:
-            checks.append(VerificationCheck(
-                name="pump_and_dump",
-                passed=True,
-                required=False,
-            ))
+            checks.append(
+                VerificationCheck(
+                    name="pump_and_dump",
+                    passed=True,
+                    required=False,
+                )
+            )
 
         # Aggregate
         required_checks = [c for c in checks if c.required]
@@ -526,18 +654,49 @@ class NewsClassifier:
     def _adjust_sentiment(base_sentiment: float, text_lower: str) -> float:
         """Adjust sentiment based on directional keywords in text."""
         bullish_words = {
-            "surge", "rally", "bullish", "rise", "gain", "jump", "soar",
-            "breakout", "record", "high", "adoption", "approval",
-            "approve", "approved", "approves", "launch", "upgrade",
-            "milestone", "growth", "positive",
+            "surge",
+            "rally",
+            "bullish",
+            "rise",
+            "gain",
+            "jump",
+            "soar",
+            "breakout",
+            "record",
+            "high",
+            "adoption",
+            "approval",
+            "approve",
+            "approved",
+            "approves",
+            "launch",
+            "upgrade",
+            "milestone",
+            "growth",
+            "positive",
         }
         bearish_words = {
-            "crash", "drop", "fall", "bearish", "plunge", "decline",
-            "hack", "exploit", "ban", "regulation", "lawsuit", "fraud",
-            "bankruptcy", "sell-off", "dump", "fear", "concern", "negative",
+            "crash",
+            "drop",
+            "fall",
+            "bearish",
+            "plunge",
+            "decline",
+            "hack",
+            "exploit",
+            "ban",
+            "regulation",
+            "lawsuit",
+            "fraud",
+            "bankruptcy",
+            "sell-off",
+            "dump",
+            "fear",
+            "concern",
+            "negative",
         }
 
-        words = set(re.findall(r'\b\w+\b', text_lower))
+        words = set(re.findall(r"\b\w+\b", text_lower))
         bullish_hits = len(words & bullish_words)
         bearish_hits = len(words & bearish_words)
 
@@ -575,14 +734,8 @@ class NewsClassifier:
         if len(items) < 3:
             return False
 
-        negative_low = [
-            i for i in items
-            if i.sentiment < -0.3 and i.source_reliability < 0.50
-        ]
-        tier1 = [
-            i for i in items
-            if i.source_reliability >= 0.85
-        ]
+        negative_low = [i for i in items if i.sentiment < -0.3 and i.source_reliability < 0.50]
+        tier1 = [i for i in items if i.source_reliability >= 0.85]
 
         return len(negative_low) >= 3 and len(tier1) == 0
 

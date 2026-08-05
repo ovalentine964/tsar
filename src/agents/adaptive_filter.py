@@ -16,9 +16,10 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
-from src.agents.signal_quality_db import SignalQualityDB
+if TYPE_CHECKING:
+    from src.agents.signal_quality_db import SignalQualityDB
 
 logger = logging.getLogger(__name__)
 
@@ -68,7 +69,9 @@ class AdaptiveFilter:
         self._loosen_above_wr = adaptive_config.get("loosen_above_wr", 0.80)
         self._loss_streak_emergency = adaptive_config.get("loss_streak_emergency", 3)
         self._win_streak_maintain = adaptive_config.get("win_streak_maintain", 5)
-        self._disable_signal_type_below_wr = adaptive_config.get("disable_signal_type_below_wr", 0.65)
+        self._disable_signal_type_below_wr = adaptive_config.get(
+            "disable_signal_type_below_wr", 0.65
+        )
         self._blacklist_symbol_below_wr = adaptive_config.get("blacklist_symbol_below_wr", 0.60)
         self._blacklist_hours = adaptive_config.get("blacklist_symbol_hours", 24)
         self._absolute_min_score = adaptive_config.get("absolute_min_score", 0.50)
@@ -161,8 +164,10 @@ class AdaptiveFilter:
         logger.info(
             "AdaptiveFilter: WR=%.1f%% (%d trades) — filters unchanged "
             "(min_score=%.2f, min_factors=%d)",
-            overall_wr * 100, trade_count,
-            self._state.min_score, self._state.min_factors,
+            overall_wr * 100,
+            trade_count,
+            self._state.min_score,
+            self._state.min_factors,
         )
 
     async def _emergency_tighten(self) -> None:
@@ -206,7 +211,7 @@ class AdaptiveFilter:
         self._state.min_factors = max(self._state.min_factors, self._absolute_min_factors)
 
         reason = (
-            f"Win rate {win_rate*100:.1f}% below {self._tighten_below_wr*100:.0f}% "
+            f"Win rate {win_rate * 100:.1f}% below {self._tighten_below_wr * 100:.0f}% "
             f"({trade_count} trades). Tightened: score {old_score:.2f}→{self._state.min_score:.2f}, "
             f"factors {old_factors}→{self._state.min_factors}"
         )
@@ -229,7 +234,7 @@ class AdaptiveFilter:
         self._state.min_score = max(self._absolute_min_score, self._state.min_score - 0.03)
 
         reason = (
-            f"Win rate {win_rate*100:.1f}% above {self._loosen_above_wr*100:.0f}% "
+            f"Win rate {win_rate * 100:.1f}% above {self._loosen_above_wr * 100:.0f}% "
             f"({trade_count} trades). Loosened: score {old_score:.2f}→{self._state.min_score:.2f}"
         )
 
@@ -251,9 +256,10 @@ class AdaptiveFilter:
                 if sig_type not in (self._state.disabled_signal_types or {}):
                     self._state.disabled_signal_types[sig_type] = "disabled"
                     logger.warning(
-                        "🚫 AdaptiveFilter: Disabled signal type '%s' "
-                        "(WR=%.1f%%, %d trades)",
-                        sig_type, wr * 100, count,
+                        "🚫 AdaptiveFilter: Disabled signal type '%s' (WR=%.1f%%, %d trades)",
+                        sig_type,
+                        wr * 100,
+                        count,
                     )
 
         # Check symbols
@@ -262,9 +268,10 @@ class AdaptiveFilter:
                 if symbol not in (self._state.blacklisted_symbols or {}):
                     self._state.blacklisted_symbols[symbol] = "blacklisted"
                     logger.warning(
-                        "🚫 AdaptiveFilter: Blacklisted symbol '%s' "
-                        "(WR=%.1f%%, %d trades)",
-                        symbol, wr * 100, count,
+                        "🚫 AdaptiveFilter: Blacklisted symbol '%s' (WR=%.1f%%, %d trades)",
+                        symbol,
+                        wr * 100,
+                        count,
                     )
 
     def is_signal_type_disabled(self, signal_type: str) -> bool:

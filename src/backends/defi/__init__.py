@@ -43,22 +43,22 @@ Usage:
 
 from __future__ import annotations
 
-from src.backends.defi.dex_executor import DexExecutor
-from src.backends.defi.wallet_manager import WalletManager
-from src.backends.defi.mev_protection import MEVProtection
-from src.backends.defi.oracle_client import OracleClient
-from src.backends.defi.settlement import SettlementEngine
-from src.backends.defi.l2_optimizer import L2Optimizer
-from src.backends.defi.bridge_client import BridgeClient
-from src.backends.defi.intent_executor import IntentExecutor
-from src.backends.defi.yield_optimizer import YieldOptimizer
 from src.backends.defi.analytics_providers import (
-    GlassnodeClient,
-    NansenClient,
     CryptoQuantClient,
     DeFiLlamaClient,
     FallbackChain,
+    GlassnodeClient,
+    NansenClient,
 )
+from src.backends.defi.bridge_client import BridgeClient
+from src.backends.defi.dex_executor import DexExecutor
+from src.backends.defi.intent_executor import IntentExecutor
+from src.backends.defi.l2_optimizer import L2Optimizer
+from src.backends.defi.mev_protection import MEVProtection
+from src.backends.defi.oracle_client import OracleClient
+from src.backends.defi.settlement import SettlementEngine
+from src.backends.defi.wallet_manager import WalletManager
+from src.backends.defi.yield_optimizer import YieldOptimizer
 
 __all__ = [
     "WalletManager",

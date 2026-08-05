@@ -44,7 +44,7 @@ from src.interfaces.types import (
 
 if TYPE_CHECKING:
     from collections.abc import Callable
-    import ccxt.async_support as ccxt
+
 
 logger = logging.getLogger(__name__)
 
@@ -58,6 +58,7 @@ def _get_ccxt() -> Any:
     global _ccxt
     if _ccxt is None:
         import ccxt.async_support as _ccxt_mod
+
         _ccxt = _ccxt_mod
     return _ccxt
 
@@ -68,14 +69,29 @@ def _get_ccxt_utils() -> dict[str, Any]:
     if _ccxt_utils is None:
         from ccxt import (
             DECIMAL_PLACES as _dp,
+        )
+        from ccxt import (
             ROUND as _r,
+        )
+        from ccxt import (
             ROUND_DOWN as _rd,
+        )
+        from ccxt import (
             ROUND_UP as _ru,
+        )
+        from ccxt import (
             SIGNIFICANT_DIGITS as _sd,
+        )
+        from ccxt import (
             TICK_SIZE as _ts,
+        )
+        from ccxt import (
             TRUNCATE as _tr,
+        )
+        from ccxt import (
             decimal_to_precision as _dtp,
         )
+
         _ccxt_utils = {
             "DECIMAL_PLACES": _dp,
             "ROUND": _r,
@@ -94,13 +110,16 @@ def _ccxt_network_errors() -> tuple[type, ...]:
     ccxt = _get_ccxt()
     return (ccxt.NetworkError, ccxt.ExchangeNotAvailable, ccxt.RequestTimeout)
 
+
 def _ccxt_auth_errors() -> tuple[type, ...]:
     ccxt = _get_ccxt()
     return (ccxt.AuthenticationError, ccxt.PermissionDenied)
 
+
 def _ccxt_rate_limit_errors() -> tuple[type, ...]:
     ccxt = _get_ccxt()
     return (ccxt.RateLimitExceeded,)
+
 
 # Freqtrade-inspired retry constants
 API_RETRY_COUNT = 4  # Max retries (called RETRY_COUNT + 1 times total)
@@ -120,6 +139,7 @@ def _calculate_backoff(retrycount: int, max_retries: int) -> float:
 # PRECISION HANDLING (from Freqtrade exchange_utils.py)
 # ═══════════════════════════════════════════════════════════════════════
 
+
 def _amount_to_precision(
     amount: float,
     amount_precision: float | None,
@@ -132,7 +152,9 @@ def _amount_to_precision(
     """
     if amount_precision is not None and precision_mode is not None:
         utils = _get_ccxt_utils()
-        precision = int(amount_precision) if precision_mode != utils["TICK_SIZE"] else amount_precision
+        precision = (
+            int(amount_precision) if precision_mode != utils["TICK_SIZE"] else amount_precision
+        )
         amount = float(
             utils["decimal_to_precision"](
                 amount,
@@ -165,31 +187,32 @@ def _price_to_precision(
                 utils["decimal_to_precision"](
                     price,
                     rounding_mode,
-                    int(price_precision) if precision_mode != utils["TICK_SIZE"] else price_precision,
+                    int(price_precision)
+                    if precision_mode != utils["TICK_SIZE"]
+                    else price_precision,
                     precision_mode,
                 )
             )
 
         if precision_mode == utils["TICK_SIZE"]:
             from decimal import Decimal
+
             prec = Decimal(str(price_precision))
             dec = Decimal(str(price))
             missing = dec % prec
-            if missing != Decimal('0'):
-                if rounding_mode == utils["ROUND_UP"]:
-                    res = dec - missing + prec
-                else:
-                    res = dec - missing
+            if missing != Decimal("0"):
+                res = dec - missing + prec if rounding_mode == utils["ROUND_UP"] else dec - missing
                 return round(float(str(res)), 14)
             return price
         elif precision_mode == utils["DECIMAL_PLACES"]:
             from math import ceil, floor
+
             ndigits = round(price_precision)
-            ticks = price * (10 ** ndigits)
+            ticks = price * (10**ndigits)
             if rounding_mode == utils["ROUND_UP"]:
-                return ceil(ticks) / (10 ** ndigits)
+                return ceil(ticks) / (10**ndigits)
             if rounding_mode == utils["ROUND_DOWN"]:
-                return floor(ticks) / (10 ** ndigits)
+                return floor(ticks) / (10**ndigits)
 
     return price
 
@@ -197,11 +220,15 @@ def _price_to_precision(
 def _utcnow() -> datetime:
     """Return timezone-aware UTC now."""
     return datetime.now(UTC)
+
+
 def _ts_to_dt(ts_ms: int | float | None) -> datetime:
     """Convert millisecond timestamp to timezone-aware datetime."""
     if ts_ms is None:
         return _utcnow()
     return datetime.fromtimestamp(float(ts_ms) / 1000, tz=UTC)
+
+
 # ═══════════════════════════════════════════════════════════════════════
 # REDIS MARKET DATA CACHE (H-020)
 # ═══════════════════════════════════════════════════════════════════════
@@ -316,7 +343,9 @@ class MarketDataCache:
         except (KeyError, ValueError):
             return None
 
-    async def set_ohlcv(self, symbol: str, timeframe: str, limit: int, candles: list[OHLCV]) -> None:
+    async def set_ohlcv(
+        self, symbol: str, timeframe: str, limit: int, candles: list[OHLCV]
+    ) -> None:
         """Cache OHLCV data."""
         key = f"tsar:ohlcv:{symbol}:{timeframe}:{limit}"
         data = [
@@ -344,12 +373,10 @@ class MarketDataCache:
             return OrderBook(
                 symbol=data["symbol"],
                 bids=tuple(
-                    OrderBookLevel(price=float(b[0]), quantity=float(b[1]))
-                    for b in data["bids"]
+                    OrderBookLevel(price=float(b[0]), quantity=float(b[1])) for b in data["bids"]
                 ),
                 asks=tuple(
-                    OrderBookLevel(price=float(a[0]), quantity=float(a[1]))
-                    for a in data["asks"]
+                    OrderBookLevel(price=float(a[0]), quantity=float(a[1])) for a in data["asks"]
                 ),
                 timestamp=datetime.fromisoformat(data["timestamp"]),
             )
@@ -407,6 +434,8 @@ class MarketDataCache:
             stale = [k for k, (exp, _) in self._mem_cache.items() if now >= exp]
             for k in stale:
                 del self._mem_cache[k]
+
+
 class CcxtGateway(ExchangeGateway):
     """Exchange gateway using ccxt REST API + WebSocket streaming.
 
@@ -646,9 +675,7 @@ class CcxtGateway(ExchangeGateway):
             return cached
 
         try:
-            raw = await self._retry_on_transient(
-                self._exchange.fetch_ticker, symbol
-            )
+            raw = await self._retry_on_transient(self._exchange.fetch_ticker, symbol)
             price = Price(
                 symbol=symbol,
                 last=float(raw["last"] or 0),
@@ -803,15 +830,12 @@ class CcxtGateway(ExchangeGateway):
         Raises:
             ConnectionError: Not connected to the exchange.
         """
-        
 
         self._ensure_connected()
         assert self._exchange is not None
 
         try:
-            raw_positions = await self._retry_on_transient(
-                self._exchange.fetch_positions
-            )
+            raw_positions = await self._retry_on_transient(self._exchange.fetch_positions)
         except Exception as exc:
             logger.warning("fetch_positions failed, returning empty: %s", exc)
             return []
@@ -825,20 +849,21 @@ class CcxtGateway(ExchangeGateway):
             side_str = raw.get("side", "long")
             side = OrderSide.BUY if side_str == "long" else OrderSide.SELL
 
-            positions.append(Position(
-                symbol=raw.get("symbol", ""),
-                side=side,
-                quantity=size,
-                entry_price=float(raw.get("entryPrice", 0) or 0),
-                current_price=float(raw.get("markPrice", 0) or raw.get("lastPrice", 0) or 0),
-                unrealized_pnl=float(raw.get("unrealizedPnl", 0) or 0),
-                leverage=float(raw.get("leverage", 1) or 1),
-                liquidation_price=(
-                    float(raw["liquidationPrice"])
-                    if raw.get("liquidationPrice") else None
-                ),
-                timestamp=_ts_to_dt(raw.get("timestamp")),
-            ))
+            positions.append(
+                Position(
+                    symbol=raw.get("symbol", ""),
+                    side=side,
+                    quantity=size,
+                    entry_price=float(raw.get("entryPrice", 0) or 0),
+                    current_price=float(raw.get("markPrice", 0) or raw.get("lastPrice", 0) or 0),
+                    unrealized_pnl=float(raw.get("unrealizedPnl", 0) or 0),
+                    leverage=float(raw.get("leverage", 1) or 1),
+                    liquidation_price=(
+                        float(raw["liquidationPrice"]) if raw.get("liquidationPrice") else None
+                    ),
+                    timestamp=_ts_to_dt(raw.get("timestamp")),
+                )
+            )
 
         return positions
 
@@ -877,17 +902,19 @@ class CcxtGateway(ExchangeGateway):
         for raw in raw_trades:
             side_str = raw.get("side", "buy")
             side = OrderSide.BUY if side_str == "buy" else OrderSide.SELL
-            trades.append(Trade(
-                id=str(raw.get("id", "")),
-                symbol=raw.get("symbol", symbol),
-                side=side,
-                price=float(raw.get("price", 0) or 0),
-                quantity=float(raw.get("amount", 0) or 0),
-                cost=float(raw.get("cost", 0) or 0),
-                fee=float((raw.get("fee", {}) or {}).get("cost", 0) or 0),
-                fee_currency=(raw.get("fee", {}) or {}).get("currency", ""),
-                timestamp=_ts_to_dt(raw.get("timestamp")),
-            ))
+            trades.append(
+                Trade(
+                    id=str(raw.get("id", "")),
+                    symbol=raw.get("symbol", symbol),
+                    side=side,
+                    price=float(raw.get("price", 0) or 0),
+                    quantity=float(raw.get("amount", 0) or 0),
+                    cost=float(raw.get("cost", 0) or 0),
+                    fee=float((raw.get("fee", {}) or {}).get("cost", 0) or 0),
+                    fee_currency=(raw.get("fee", {}) or {}).get("currency", ""),
+                    timestamp=_ts_to_dt(raw.get("timestamp")),
+                )
+            )
 
         return trades
 
@@ -905,9 +932,7 @@ class CcxtGateway(ExchangeGateway):
         assert self._exchange is not None
 
         try:
-            await self._retry_on_transient(
-                self._exchange.cancel_order, order_id, symbol
-            )
+            await self._retry_on_transient(self._exchange.cancel_order, order_id, symbol)
             logger.info("Order %%s cancelled on %%s", order_id, symbol)
             return True
         except _get_ccxt().OrderNotFound as exc:
@@ -1032,8 +1057,7 @@ class CcxtGateway(ExchangeGateway):
         """
         if self._status != ConnectionStatus.CONNECTED:
             raise ConnectionError(
-                f"Not connected to {self._exchange_id} "
-                f"(status={self._status.value})"
+                f"Not connected to {self._exchange_id} (status={self._status.value})"
             )
 
         if symbol in self._ws_tasks:
@@ -1176,8 +1200,7 @@ class CcxtGateway(ExchangeGateway):
         """Raise ConnectionError if not connected."""
         if self._exchange is None or self._status != ConnectionStatus.CONNECTED:
             raise ConnectionError(
-                f"Not connected to {self._exchange_id} "
-                f"(status={self._status.value})"
+                f"Not connected to {self._exchange_id} (status={self._status.value})"
             )
 
     # ═══════════════════════════════════════════════════════════════
@@ -1229,7 +1252,10 @@ class CcxtGateway(ExchangeGateway):
             rounding_mode: ROUND (default), ROUND_UP, or ROUND_DOWN.
         """
         return _price_to_precision(
-            price, self.get_precision_price(symbol), self.precision_mode, rounding_mode=rounding_mode
+            price,
+            self.get_precision_price(symbol),
+            self.precision_mode,
+            rounding_mode=rounding_mode,
         )
 
     def get_market_limits(self, symbol: str) -> dict[str, Any]:
@@ -1357,7 +1383,11 @@ class CcxtGateway(ExchangeGateway):
                         exc,
                     )
 
-            except (_get_ccxt().AuthenticationError, _get_ccxt().BadSymbol, _get_ccxt().InvalidOrder):
+            except (
+                _get_ccxt().AuthenticationError,
+                _get_ccxt().BadSymbol,
+                _get_ccxt().InvalidOrder,
+            ):
                 raise
 
         assert last_exc is not None
@@ -1370,9 +1400,7 @@ class CcxtGateway(ExchangeGateway):
             window = 60.0  # 1-minute sliding window
 
             # Prune timestamps outside the window
-            self._request_timestamps = [
-                ts for ts in self._request_timestamps if now - ts < window
-            ]
+            self._request_timestamps = [ts for ts in self._request_timestamps if now - ts < window]
 
             if len(self._request_timestamps) >= self._rate_limit_per_minute:
                 # Calculate how long to wait for the oldest request to expire
@@ -1466,7 +1494,11 @@ class CcxtGateway(ExchangeGateway):
         if not sufficient_liquidity:
             logger.warning(
                 "Insufficient liquidity for %s %s %.6f — %.6f unfilled (%d levels consumed)",
-                symbol, side.value, quantity, remaining_qty, levels_consumed,
+                symbol,
+                side.value,
+                quantity,
+                remaining_qty,
+                levels_consumed,
             )
 
         return {
@@ -1518,7 +1550,7 @@ class CcxtGateway(ExchangeGateway):
         # Tight spread + high depth = high score
         spread_score = max(0, 1.0 - spread_bps / 50.0)  # 50bps = 0 score
         depth_score = min(1.0, total_depth / 1_000_000)  # $1M = max score
-        liquidity_score = (spread_score * 0.4 + depth_score * 0.6)
+        liquidity_score = spread_score * 0.4 + depth_score * 0.6
 
         return {
             "symbol": symbol,

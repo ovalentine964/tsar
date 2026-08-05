@@ -19,7 +19,7 @@ import asyncio
 import logging
 import re
 import time
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import Any
 
@@ -112,17 +112,50 @@ class SentimentTrend:
 # SENTIMENT KEYWORDS & PATTERNS
 # ═══════════════════════════════════════════════════════════════════════
 
-_BULLISH_KEYWORDS = frozenset({
-    "moon", "bullish", "pump", "buy", "hold", "hodl", "accumulate",
-    "breakout", "rally", "surge", "ATH", "bullrun", "to the moon",
-    "diamond hands", "undervalued", "gem", "100x", "10x",
-})
+_BULLISH_KEYWORDS = frozenset(
+    {
+        "moon",
+        "bullish",
+        "pump",
+        "buy",
+        "hold",
+        "hodl",
+        "accumulate",
+        "breakout",
+        "rally",
+        "surge",
+        "ATH",
+        "bullrun",
+        "to the moon",
+        "diamond hands",
+        "undervalued",
+        "gem",
+        "100x",
+        "10x",
+    }
+)
 
-_BEARISH_KEYWORDS = frozenset({
-    "dump", "crash", "bear", "sell", "short", "rug", "scam",
-    "overvalued", "dead", "ponzi", "bubble", "collapse", "rekt",
-    "paper hands", "exit", "liquidation", "capitulation",
-})
+_BEARISH_KEYWORDS = frozenset(
+    {
+        "dump",
+        "crash",
+        "bear",
+        "sell",
+        "short",
+        "rug",
+        "scam",
+        "overvalued",
+        "dead",
+        "ponzi",
+        "bubble",
+        "collapse",
+        "rekt",
+        "paper hands",
+        "exit",
+        "liquidation",
+        "capitulation",
+    }
+)
 
 _CRYPTO_SUBREDDITS = [
     "CryptoCurrency",
@@ -248,10 +281,15 @@ class SocialSentimentAnalyzer:
             # Mention count estimation from follower activity
             # More followers = more mentions, roughly logarithmic
             import math
-            estimated_mentions = int(math.log10(max(twitter_followers, 1)) * 500) if twitter_followers > 0 else 0
+
+            estimated_mentions = (
+                int(math.log10(max(twitter_followers, 1)) * 500) if twitter_followers > 0 else 0
+            )
 
             # Trending score based on follower count and engagement
-            trending_score = min(1.0, twitter_followers / 2_000_000) if twitter_followers > 0 else 0.0
+            trending_score = (
+                min(1.0, twitter_followers / 2_000_000) if twitter_followers > 0 else 0.0
+            )
 
             # Engagement score
             engagement = min(1.0, (twitter_followers / 1_000_000 + abs(twitter_sentiment)) / 2)
@@ -550,11 +588,7 @@ class SocialSentimentAnalyzer:
         composite = max(-1.0, min(1.0, composite))
 
         # Trending detection: any platform trending
-        trending = any(
-            p.trending_score > 0.5
-            for p in [tw, rd, tg]
-            if p is not None
-        )
+        trending = any(p.trending_score > 0.5 for p in [tw, rd, tg] if p is not None)
 
         # Fear/Greed index estimation
         fear_greed = int((composite + 1) / 2 * 100)
@@ -699,10 +733,7 @@ class SocialSentimentAnalyzer:
             sentiment_down = data.get("sentiment_votes_down_percentage", 50)
 
             total_votes = sentiment_up + sentiment_down
-            if total_votes > 0:
-                sentiment = (sentiment_up - sentiment_down) / total_votes
-            else:
-                sentiment = 0.0
+            sentiment = (sentiment_up - sentiment_down) / total_votes if total_votes > 0 else 0.0
 
             return {
                 "twitter_followers": community.get("twitter_followers", 0),
@@ -724,7 +755,7 @@ class SocialSentimentAnalyzer:
         This is a fallback when NLP APIs aren't available.
         """
         text_lower = text.lower()
-        words = set(re.findall(r'\b\w+\b', text_lower))
+        words = set(re.findall(r"\b\w+\b", text_lower))
 
         bullish_hits = len(words & _BULLISH_KEYWORDS)
         bearish_hits = len(words & _BEARISH_KEYWORDS)

@@ -254,12 +254,14 @@ class TradePhilosopher(BaseAgent):
                         pattern_tags = structured.get("pattern_tags", [])
                         for tag in pattern_tags:
                             matched = self._knowledge_tools.pattern_library.match_pattern(
-                                pattern_name=tag, min_confidence=0.5,
+                                pattern_name=tag,
+                                min_confidence=0.5,
                             )
                             if matched:
                                 logger.info(
                                     "TradePhilosopher: pattern '%s' matched %d library entries",
-                                    tag, len(matched),
+                                    tag,
+                                    len(matched),
                                 )
                     except Exception:
                         logger.debug("Pattern library matching failed", exc_info=True)
@@ -288,11 +290,7 @@ class TradePhilosopher(BaseAgent):
         """
         # Build prompt with schema instructions
         base_prompt = self.prompts.get("t3_trade_narrative", str(trade))
-        prompt = (
-            f"{base_prompt}\n\n"
-            f"{REFLECTION_JSON_INSTRUCTIONS}\n\n"
-            f"Trade ID: {trade_id}"
-        )
+        prompt = f"{base_prompt}\n\n{REFLECTION_JSON_INSTRUCTIONS}\n\nTrade ID: {trade_id}"
 
         try:
             response = await self.llm_provider.generate(
@@ -309,13 +307,13 @@ class TradePhilosopher(BaseAgent):
             except json.JSONDecodeError:
                 # Try to extract JSON from markdown code blocks
                 import re
+
                 json_match = re.search(r"```(?:json)?\s*({.*?})\s*```", raw_text, re.DOTALL)
                 if json_match:
                     parsed = json.loads(json_match.group(1))
                 else:
                     logger.warning(
-                        "TradePhilosopher: LLM output not valid JSON for trade %s, "
-                        "using fallback",
+                        "TradePhilosopher: LLM output not valid JSON for trade %s, using fallback",
                         trade_id,
                     )
                     parsed = {}

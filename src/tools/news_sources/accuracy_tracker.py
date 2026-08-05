@@ -25,12 +25,11 @@ Accuracy Metrics:
 
 from __future__ import annotations
 
-import json
 import logging
 import sqlite3
 import time
 from dataclasses import dataclass, field
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime
 from enum import StrEnum
 from pathlib import Path
 from typing import Any
@@ -208,9 +207,7 @@ class SourceAccuracyTracker:
         self._db_path.parent.mkdir(parents=True, exist_ok=True)
 
         # Resolution window: how long to wait before checking actual price
-        self._resolution_window_s = self._config.get(
-            "resolution_window_hours", 24
-        ) * 3600
+        self._resolution_window_s = self._config.get("resolution_window_hours", 24) * 3600
 
         # Pruning: how long to keep records
         self._prune_days = self._config.get("prune_days", 90)
@@ -268,8 +265,7 @@ class SourceAccuracyTracker:
                      published_at, title, created_at)
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?)
                 """,
-                (news_id, source, symbol, direction, sentiment_score,
-                 now, title, now),
+                (news_id, source, symbol, direction, sentiment_score, now, title, now),
             )
             conn.commit()
             return conn.total_changes > 0
@@ -446,8 +442,7 @@ class SourceAccuracyTracker:
                          weight, last_updated)
                     VALUES (?, ?, ?, ?, ?, ?, ?, ?)
                     """,
-                    (source, total, correct, direction_accuracy,
-                     avg_conf, composite, weight, now),
+                    (source, total, correct, direction_accuracy, avg_conf, composite, weight, now),
                 )
 
             conn.commit()
@@ -466,8 +461,7 @@ class SourceAccuracyTracker:
         conn = self._get_conn()
         try:
             rows = conn.execute(
-                "SELECT source, weight, direction_accuracy, total_predictions "
-                "FROM source_accuracy"
+                "SELECT source, weight, direction_accuracy, total_predictions FROM source_accuracy"
             ).fetchall()
 
             weights: dict[str, float] = {}
@@ -522,7 +516,8 @@ class SourceAccuracyTracker:
                 composite_score=row["composite_score"],
                 weight=row["weight"],
                 last_updated=datetime.fromtimestamp(row["last_updated"], tz=UTC)
-                if row["last_updated"] else None,
+                if row["last_updated"]
+                else None,
             )
 
         except sqlite3.Error as exc:
@@ -545,17 +540,20 @@ class SourceAccuracyTracker:
 
             results: list[AccuracyResult] = []
             for row in rows:
-                results.append(AccuracyResult(
-                    source=row["source"],
-                    total_predictions=row["total_predictions"],
-                    correct_predictions=row["correct_predictions"],
-                    direction_accuracy=row["direction_accuracy"],
-                    avg_confidence=row["avg_confidence"],
-                    composite_score=row["composite_score"],
-                    weight=row["weight"],
-                    last_updated=datetime.fromtimestamp(row["last_updated"], tz=UTC)
-                    if row["last_updated"] else None,
-                ))
+                results.append(
+                    AccuracyResult(
+                        source=row["source"],
+                        total_predictions=row["total_predictions"],
+                        correct_predictions=row["correct_predictions"],
+                        direction_accuracy=row["direction_accuracy"],
+                        avg_confidence=row["avg_confidence"],
+                        composite_score=row["composite_score"],
+                        weight=row["weight"],
+                        last_updated=datetime.fromtimestamp(row["last_updated"], tz=UTC)
+                        if row["last_updated"]
+                        else None,
+                    )
+                )
 
             return results
 
@@ -649,9 +647,7 @@ class SourceAccuracyTracker:
             correct = conn.execute(
                 "SELECT COUNT(*) FROM predictions WHERE is_correct = 1"
             ).fetchone()[0]
-            sources = conn.execute(
-                "SELECT COUNT(DISTINCT source) FROM predictions"
-            ).fetchone()[0]
+            sources = conn.execute("SELECT COUNT(DISTINCT source) FROM predictions").fetchone()[0]
 
             return {
                 "total_predictions": total,

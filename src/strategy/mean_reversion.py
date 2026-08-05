@@ -407,6 +407,7 @@ class MeanReversionStrategy(BaseStrategy):
         entry_time = position.get("entry_time")
         if entry_time is not None:
             from datetime import datetime
+
             now = datetime.now(UTC)
             if isinstance(entry_time, str):
                 entry_time = datetime.fromisoformat(entry_time.replace("Z", "+00:00"))
@@ -421,12 +422,12 @@ class MeanReversionStrategy(BaseStrategy):
     def get_risk_params(self) -> dict[str, Any]:
         """Return risk parameters for this strategy."""
         return {
-            "stop_loss_pct": 0.015,       # 1.5% (ATR-adaptive)
-            "take_profit_pct": 0.03,      # 3% (2:1 R:R minimum)
-            "max_hold_hours": 4,          # Time stop
-            "min_score": 0.6,             # Min signal score
-            "max_position_pct": 0.15,     # Max 15% of portfolio
-            "risk_per_trade_pct": 0.02,   # 2% risk per trade
+            "stop_loss_pct": 0.015,  # 1.5% (ATR-adaptive)
+            "take_profit_pct": 0.03,  # 3% (2:1 R:R minimum)
+            "max_hold_hours": 4,  # Time stop
+            "min_score": 0.6,  # Min signal score
+            "max_position_pct": 0.15,  # Max 15% of portfolio
+            "risk_per_trade_pct": 0.02,  # 2% risk per trade
             "method": "half_kelly",
             # Entry optimization
             "use_limit_orders": True,

@@ -39,9 +39,9 @@ class Regulator(StrEnum):
     SEC = "SEC"
     CFTC = "CFTC"
     DOJ = "DOJ"
-    FCA = "FCA"         # UK Financial Conduct Authority
-    MAS = "MAS"         # Monetary Authority of Singapore
-    ESMA = "ESMA"       # European Securities and Markets Authority
+    FCA = "FCA"  # UK Financial Conduct Authority
+    MAS = "MAS"  # Monetary Authority of Singapore
+    ESMA = "ESMA"  # European Securities and Markets Authority
     RIPPLE_CASE = "RIPPLE_CASE"  # SEC v. Ripple special tracking
     OTHER = "OTHER"
 
@@ -50,9 +50,9 @@ class RegulatorySeverity(StrEnum):
     """Severity of regulatory action."""
 
     CRITICAL = "critical"  # Enforcement action against major entity
-    HIGH = "high"         # New regulation, policy change, lawsuit filing
-    MEDIUM = "medium"     # Guidance, commentary, proposed rules
-    LOW = "low"           # General commentary, speeches
+    HIGH = "high"  # New regulation, policy change, lawsuit filing
+    MEDIUM = "medium"  # Guidance, commentary, proposed rules
+    LOW = "low"  # General commentary, speeches
 
 
 @dataclass(frozen=True)
@@ -112,26 +112,63 @@ _FEEDS: dict[str, str] = {
 }
 
 # Keywords that indicate crypto-related enforcement
-_CRYPTO_ENFORCEMENT_KEYWORDS = frozenset({
-    "crypto", "cryptocurrency", "digital asset", "virtual asset",
-    "bitcoin", "ethereum", "blockchain", "token", "defi",
-    "stablecoin", "binance", "coinbase", "ripple", "xrp",
-    "securities fraud", "unregistered", "exchange", "ico",
-    "staking", "lending", "mining", "nft",
-})
+_CRYPTO_ENFORCEMENT_KEYWORDS = frozenset(
+    {
+        "crypto",
+        "cryptocurrency",
+        "digital asset",
+        "virtual asset",
+        "bitcoin",
+        "ethereum",
+        "blockchain",
+        "token",
+        "defi",
+        "stablecoin",
+        "binance",
+        "coinbase",
+        "ripple",
+        "xrp",
+        "securities fraud",
+        "unregistered",
+        "exchange",
+        "ico",
+        "staking",
+        "lending",
+        "mining",
+        "nft",
+    }
+)
 
 # Keywords that indicate severity
-_CRITICAL_KEYWORDS = frozenset({
-    "charges filed", "enforcement action", "emergency order",
-    "asset freeze", "temporary restraining order", "fraud",
-    "ponzi", "manipulation", "insider trading",
-})
+_CRITICAL_KEYWORDS = frozenset(
+    {
+        "charges filed",
+        "enforcement action",
+        "emergency order",
+        "asset freeze",
+        "temporary restraining order",
+        "fraud",
+        "ponzi",
+        "manipulation",
+        "insider trading",
+    }
+)
 
-_HIGH_KEYWORDS = frozenset({
-    "proposed rule", "final rule", "guidance", "framework",
-    "settlement", "consent order", "penalty", "fine",
-    "lawsuit", "complaint", "investigation",
-})
+_HIGH_KEYWORDS = frozenset(
+    {
+        "proposed rule",
+        "final rule",
+        "guidance",
+        "framework",
+        "settlement",
+        "consent order",
+        "penalty",
+        "fine",
+        "lawsuit",
+        "complaint",
+        "investigation",
+    }
+)
 
 
 # ═══════════════════════════════════════════════════════════════════════
@@ -237,9 +274,7 @@ class RegulatoryFeedMonitor:
         )
 
         # Build digest
-        critical_count = sum(
-            1 for i in items if i.severity == RegulatorySeverity.CRITICAL
-        )
+        critical_count = sum(1 for i in items if i.severity == RegulatorySeverity.CRITICAL)
         enforcement_count = sum(1 for i in items if i.is_enforcement)
 
         affected_symbols: set[str] = set()
@@ -498,9 +533,7 @@ class RegulatoryFeedMonitor:
         if symbol in item.affected_assets:
             return True
         # CRITICAL items are always relevant
-        if item.severity == RegulatorySeverity.CRITICAL:
-            return True
-        return False
+        return item.severity == RegulatorySeverity.CRITICAL
 
     # ── Utilities ────────────────────────────────────────────────────
 

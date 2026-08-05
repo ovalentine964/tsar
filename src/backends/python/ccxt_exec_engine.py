@@ -21,7 +21,7 @@ import contextlib
 import logging
 import uuid
 from datetime import UTC, datetime
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
 from src.interfaces.execution_engine import ExecutionEngine
 from src.interfaces.types import (
@@ -34,19 +34,6 @@ from src.interfaces.types import (
     OrderType,
 )
 
-if TYPE_CHECKING:
-    import ccxt.async_support as ccxt
-    from ccxt import (
-        DECIMAL_PLACES,
-        ROUND,
-        ROUND_DOWN,
-        ROUND_UP,
-        SIGNIFICANT_DIGITS,
-        TICK_SIZE,
-        TRUNCATE,
-        decimal_to_precision,
-    )
-
 # ── Lazy ccxt loader (cold-start fix: defers 8.1s import) ──────
 _ccxt = None  # type: ignore[assignment]
 _ccxt_utils = None  # type: ignore[assignment]
@@ -57,6 +44,7 @@ def _get_ccxt() -> Any:
     global _ccxt
     if _ccxt is None:
         import ccxt.async_support as _ccxt_mod
+
         _ccxt = _ccxt_mod
     return _ccxt
 
@@ -67,14 +55,29 @@ def _get_ccxt_utils() -> dict[str, Any]:
     if _ccxt_utils is None:
         from ccxt import (
             DECIMAL_PLACES as _dp,
+        )
+        from ccxt import (
             ROUND as _r,
+        )
+        from ccxt import (
             ROUND_DOWN as _rd,
+        )
+        from ccxt import (
             ROUND_UP as _ru,
+        )
+        from ccxt import (
             SIGNIFICANT_DIGITS as _sd,
+        )
+        from ccxt import (
             TICK_SIZE as _ts,
+        )
+        from ccxt import (
             TRUNCATE as _tr,
+        )
+        from ccxt import (
             decimal_to_precision as _dtp,
         )
+
         _ccxt_utils = {
             "DECIMAL_PLACES": _dp,
             "ROUND": _r,
@@ -86,6 +89,7 @@ def _get_ccxt_utils() -> dict[str, Any]:
             "decimal_to_precision": _dtp,
         }
     return _ccxt_utils
+
 
 logger = logging.getLogger(__name__)
 
@@ -216,8 +220,7 @@ class CcxtExecEngine(ExecutionEngine):
             order.price is None or order.price <= 0
         ):
             raise ValueError(
-                f"{order.order_type.value} order requires a positive price, "
-                f"got {order.price}"
+                f"{order.order_type.value} order requires a positive price, got {order.price}"
             )
 
         if order.order_type in (OrderType.STOP_MARKET, OrderType.STOP_LIMIT) and (
@@ -229,9 +232,7 @@ class CcxtExecEngine(ExecutionEngine):
             )
 
         if not order.symbol or "/" not in order.symbol:
-            raise ValueError(
-                f"Invalid symbol format: '{order.symbol}' — expected 'BASE/QUOTE'"
-            )
+            raise ValueError(f"Invalid symbol format: '{order.symbol}' — expected 'BASE/QUOTE'")
 
         # Exchange-level validation (requires loaded markets)
         if self._exchange is not None and self._markets_loaded:
@@ -278,15 +279,13 @@ class CcxtExecEngine(ExecutionEngine):
             min_cost = limits.get("cost", {}).get("min")
             if min_cost is not None and cost < min_cost:
                 raise ValueError(
-                    f"Order cost {cost:.2f} below exchange minimum "
-                    f"{min_cost} for {order.symbol}"
+                    f"Order cost {cost:.2f} below exchange minimum {min_cost} for {order.symbol}"
                 )
 
             max_cost = limits.get("cost", {}).get("max")
             if max_cost is not None and cost > max_cost:
                 raise ValueError(
-                    f"Order cost {cost:.2f} above exchange maximum "
-                    f"{max_cost} for {order.symbol}"
+                    f"Order cost {cost:.2f} above exchange maximum {max_cost} for {order.symbol}"
                 )
 
     def _apply_precision(self, order: Order) -> Order:
@@ -425,7 +424,7 @@ class CcxtExecEngine(ExecutionEngine):
         )
 
         try:
-            ccxt = _get_ccxt()
+            _get_ccxt()
             raw = await exchange.create_order(
                 symbol=order.symbol,
                 type=ccxt_type,
@@ -530,7 +529,7 @@ class CcxtExecEngine(ExecutionEngine):
                 return False
 
         try:
-            ccxt = _get_ccxt()
+            _get_ccxt()
             await exchange.cancel_order(order_id, symbol=symbol)
             logger.info("Order %s cancelled", order_id)
             return True
@@ -595,10 +594,7 @@ class CcxtExecEngine(ExecutionEngine):
                 order_type=self._parse_order_type(raw.get("type", "")),
                 quantity=float(raw.get("amount", 0) or 0),
                 price=float(raw.get("price", 0) or None) if raw.get("price") else None,
-                stop_price=(
-                    float(raw["stopPrice"])
-                    if raw.get("stopPrice") else None
-                ),
+                stop_price=(float(raw["stopPrice"]) if raw.get("stopPrice") else None),
                 filled_quantity=float(raw.get("filled", 0) or 0),
                 status=OrderStatus.OPEN,
                 fee=float((raw.get("fee", {}) or {}).get("cost", 0) or 0),
@@ -645,34 +641,38 @@ class CcxtExecEngine(ExecutionEngine):
         raw_trades = raw.get("trades", []) or []
         if raw_trades:
             for i, trade in enumerate(raw_trades):
-                fills.append(Fill(
-                    fill_id=str(trade.get("id", f"{order_id}:fill:{i}")),
-                    order_id=order_id,
-                    symbol=symbol,
-                    side=side,
-                    price=float(trade.get("price", 0) or 0),
-                    quantity=float(trade.get("amount", 0) or 0),
-                    fee=float((trade.get("fee", {}) or {}).get("cost", 0) or 0),
-                    fee_currency=(trade.get("fee", {}) or {}).get("currency", ""),
-                    timestamp=_ts_to_dt(trade.get("timestamp")),
-                ))
+                fills.append(
+                    Fill(
+                        fill_id=str(trade.get("id", f"{order_id}:fill:{i}")),
+                        order_id=order_id,
+                        symbol=symbol,
+                        side=side,
+                        price=float(trade.get("price", 0) or 0),
+                        quantity=float(trade.get("amount", 0) or 0),
+                        fee=float((trade.get("fee", {}) or {}).get("cost", 0) or 0),
+                        fee_currency=(trade.get("fee", {}) or {}).get("currency", ""),
+                        timestamp=_ts_to_dt(trade.get("timestamp")),
+                    )
+                )
         else:
             # Synthesize a single fill from order data
             filled_qty = float(raw.get("filled", 0) or 0)
             if filled_qty > 0:
                 avg_price = float(raw.get("average", 0) or 0)
                 fee_info = raw.get("fee", {}) or {}
-                fills.append(Fill(
-                    fill_id=f"{order_id}:fill:0",
-                    order_id=order_id,
-                    symbol=symbol,
-                    side=side,
-                    price=avg_price,
-                    quantity=filled_qty,
-                    fee=float(fee_info.get("cost", 0) or 0),
-                    fee_currency=fee_info.get("currency", ""),
-                    timestamp=_ts_to_dt(raw.get("timestamp")),
-                ))
+                fills.append(
+                    Fill(
+                        fill_id=f"{order_id}:fill:0",
+                        order_id=order_id,
+                        symbol=symbol,
+                        side=side,
+                        price=avg_price,
+                        quantity=filled_qty,
+                        fee=float(fee_info.get("cost", 0) or 0),
+                        fee_currency=fee_info.get("currency", ""),
+                        timestamp=_ts_to_dt(raw.get("timestamp")),
+                    )
+                )
 
         # Sort by timestamp ascending
         fills.sort(key=lambda f: f.timestamp)
@@ -793,34 +793,38 @@ class CcxtExecEngine(ExecutionEngine):
 
         if raw_trades:
             for i, trade in enumerate(raw_trades):
-                fills.append(Fill(
-                    fill_id=str(trade.get("id", f"{order_id}:fill:{i}")),
-                    order_id=order_id,
-                    symbol=symbol,
-                    side=side,
-                    price=float(trade.get("price", 0) or 0),
-                    quantity=float(trade.get("amount", 0) or 0),
-                    fee=float((trade.get("fee", {}) or {}).get("cost", 0) or 0),
-                    fee_currency=(trade.get("fee", {}) or {}).get("currency", ""),
-                    timestamp=_ts_to_dt(trade.get("timestamp")),
-                ))
+                fills.append(
+                    Fill(
+                        fill_id=str(trade.get("id", f"{order_id}:fill:{i}")),
+                        order_id=order_id,
+                        symbol=symbol,
+                        side=side,
+                        price=float(trade.get("price", 0) or 0),
+                        quantity=float(trade.get("amount", 0) or 0),
+                        fee=float((trade.get("fee", {}) or {}).get("cost", 0) or 0),
+                        fee_currency=(trade.get("fee", {}) or {}).get("currency", ""),
+                        timestamp=_ts_to_dt(trade.get("timestamp")),
+                    )
+                )
         else:
             # Single fill from order summary
             filled_qty = float(raw.get("filled", 0) or 0)
             if filled_qty > 0:
                 avg_price = float(raw.get("average", 0) or 0)
                 fee_info = raw.get("fee", {}) or {}
-                fills.append(Fill(
-                    fill_id=f"{order_id}:fill:0",
-                    order_id=order_id,
-                    symbol=symbol,
-                    side=side,
-                    price=avg_price,
-                    quantity=filled_qty,
-                    fee=float(fee_info.get("cost", 0) or 0),
-                    fee_currency=fee_info.get("currency", ""),
-                    timestamp=_ts_to_dt(raw.get("timestamp")),
-                ))
+                fills.append(
+                    Fill(
+                        fill_id=f"{order_id}:fill:0",
+                        order_id=order_id,
+                        symbol=symbol,
+                        side=side,
+                        price=avg_price,
+                        quantity=filled_qty,
+                        fee=float(fee_info.get("cost", 0) or 0),
+                        fee_currency=fee_info.get("currency", ""),
+                        timestamp=_ts_to_dt(raw.get("timestamp")),
+                    )
+                )
 
         return fills
 
@@ -928,10 +932,8 @@ class CcxtExecEngine(ExecutionEngine):
             bracket.linked_order_ids.append(sl_result.order_id)
         except Exception as exc:
             logger.error("Failed to place stop-loss for bracket %s: %s", bracket_id, exc)
-            try:
+            with contextlib.suppress(Exception):
                 await self.cancel_order(entry_result.order_id)
-            except Exception:
-                pass
             bracket.status = "cancelled"
             raise
 
@@ -1127,24 +1129,24 @@ class CcxtExecEngine(ExecutionEngine):
                 if sl_id:
                     sl_status = await self.get_order_status(sl_id)
                     if sl_status == OrderStatus.FILLED:
-                        logger.info("Bracket %s: stop-loss filled, cancelling take-profit", bracket_id)
+                        logger.info(
+                            "Bracket %s: stop-loss filled, cancelling take-profit", bracket_id
+                        )
                         if tp_id:
-                            try:
+                            with contextlib.suppress(Exception):
                                 await self.cancel_order(tp_id)
-                            except Exception:
-                                pass
                         bracket.status = "closed"
                         return
 
                 if tp_id:
                     tp_status = await self.get_order_status(tp_id)
                     if tp_status == OrderStatus.FILLED:
-                        logger.info("Bracket %s: take-profit filled, cancelling stop-loss", bracket_id)
+                        logger.info(
+                            "Bracket %s: take-profit filled, cancelling stop-loss", bracket_id
+                        )
                         if sl_id:
-                            try:
+                            with contextlib.suppress(Exception):
                                 await self.cancel_order(sl_id)
-                            except Exception:
-                                pass
                         bracket.status = "closed"
                         return
 

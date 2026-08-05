@@ -10,8 +10,6 @@ All public methods return Telegram-safe HTML strings.
 
 from __future__ import annotations
 
-from typing import Any
-
 
 class TelegramFormatter:
     """Format trade education messages for Telegram."""

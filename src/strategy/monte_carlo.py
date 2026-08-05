@@ -214,7 +214,9 @@ class MonteCarloSimulator:
                 metric_name=metric_name,
                 percentiles=percentiles,
                 mean=round(float(np.mean(finite_values)), 6),
-                std=round(float(np.std(finite_values, ddof=1)) if len(finite_values) > 1 else 0.0, 6),
+                std=round(
+                    float(np.std(finite_values, ddof=1)) if len(finite_values) > 1 else 0.0, 6
+                ),
                 min_val=round(float(np.min(finite_values)), 6),
                 max_val=round(float(np.max(finite_values)), 6),
                 original=round(original, 6),
@@ -225,9 +227,9 @@ class MonteCarloSimulator:
         prob_profit = float(np.mean(sim_total_returns > 0))
         ruin_threshold = config.initial_capital * 0.5
         # Simulate which runs ended below ruin threshold
-        prob_ruin = float(np.mean(
-            config.initial_capital * (1 + sim_total_returns) < ruin_threshold
-        ))
+        prob_ruin = float(
+            np.mean(config.initial_capital * (1 + sim_total_returns) < ruin_threshold)
+        )
 
         logger.info(
             f"Monte Carlo complete: {n_sims} simulations, "
@@ -260,7 +262,7 @@ class MonteCarloSimulator:
         equity[0] = capital
 
         for i, ret in enumerate(pnl_pcts):
-            capital *= (1 + ret)
+            capital *= 1 + ret
             equity[i + 1] = capital
 
         return equity

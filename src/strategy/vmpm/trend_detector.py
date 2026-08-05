@@ -94,7 +94,9 @@ class TrendDetector:
             # All timeframes bullish — high probability setup
     """
 
-    def __init__(self, config: dict[str, Any] | None = None, *, genome: dict[str, Any] | None = None) -> None:
+    def __init__(
+        self, config: dict[str, Any] | None = None, *, genome: dict[str, Any] | None = None
+    ) -> None:
         self._config = config or genome or {}
         tech = self._config.get("technical", {}).get("moving_averages", {})
         self._fast_period = tech.get("fast_period", 50)
@@ -201,9 +203,7 @@ class TrendDetector:
             reasoning=", ".join(reasoning_parts),
         )
 
-    def _analyze_timeframe(
-        self, closes: list[float], timeframe: str
-    ) -> TimeframeTrend:
+    def _analyze_timeframe(self, closes: list[float], timeframe: str) -> TimeframeTrend:
         """Analyze trend for a single timeframe."""
         if len(closes) < self._slow_period + 10:
             return self._neutral_trend(timeframe)
@@ -239,14 +239,10 @@ class TrendDetector:
         structure = self._analyze_structure(swing_points)
 
         # Determine direction from MA + structure
-        direction = self._determine_direction(
-            ma_spread_pct, price_vs_ma, structure
-        )
+        direction = self._determine_direction(ma_spread_pct, price_vs_ma, structure)
 
         # Calculate strength
-        strength = self._calculate_strength(
-            ma_spread_pct, ma_slope, structure, swing_points
-        )
+        strength = self._calculate_strength(ma_spread_pct, ma_slope, structure, swing_points)
 
         return TimeframeTrend(
             timeframe=timeframe,
@@ -267,9 +263,7 @@ class TrendDetector:
             return None
         return sum(data[-period:]) / period
 
-    def _detect_swings(
-        self, closes: list[float], timeframe: str
-    ) -> list[SwingPoint]:
+    def _detect_swings(self, closes: list[float], timeframe: str) -> list[SwingPoint]:
         """Detect swing highs and lows using a 5-bar window.
 
         A swing high is a bar whose high is higher than the 2 bars
@@ -281,17 +275,21 @@ class TrendDetector:
         swings: list[SwingPoint] = []
         for i in range(2, len(closes) - 2):
             # Swing high
-            if (closes[i] > closes[i - 1] and closes[i] > closes[i - 2] and
-                    closes[i] > closes[i + 1] and closes[i] > closes[i + 2]):
-                swings.append(SwingPoint(
-                    price=closes[i], index=i, swing_type=SwingType.HH
-                ))
+            if (
+                closes[i] > closes[i - 1]
+                and closes[i] > closes[i - 2]
+                and closes[i] > closes[i + 1]
+                and closes[i] > closes[i + 2]
+            ):
+                swings.append(SwingPoint(price=closes[i], index=i, swing_type=SwingType.HH))
             # Swing low
-            elif (closes[i] < closes[i - 1] and closes[i] < closes[i - 2] and
-                  closes[i] < closes[i + 1] and closes[i] < closes[i + 2]):
-                swings.append(SwingPoint(
-                    price=closes[i], index=i, swing_type=SwingType.HL
-                ))
+            elif (
+                closes[i] < closes[i - 1]
+                and closes[i] < closes[i - 2]
+                and closes[i] < closes[i + 1]
+                and closes[i] < closes[i + 2]
+            ):
+                swings.append(SwingPoint(price=closes[i], index=i, swing_type=SwingType.HL))
 
         # Classify swings as HH/HL/LH/LL
         classified: list[SwingPoint] = []
@@ -305,18 +303,14 @@ class TrendDetector:
                 else:
                     st = SwingType.HH
                 last_high = swing.price
-                classified.append(SwingPoint(
-                    price=swing.price, index=swing.index, swing_type=st
-                ))
+                classified.append(SwingPoint(price=swing.price, index=swing.index, swing_type=st))
             else:  # It's a low
                 if last_low is not None:
                     st = SwingType.HL if swing.price > last_low else SwingType.LL
                 else:
                     st = SwingType.HL
                 last_low = swing.price
-                classified.append(SwingPoint(
-                    price=swing.price, index=swing.index, swing_type=st
-                ))
+                classified.append(SwingPoint(price=swing.price, index=swing.index, swing_type=st))
 
         return classified
 

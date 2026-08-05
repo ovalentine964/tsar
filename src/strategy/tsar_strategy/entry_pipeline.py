@@ -1,5 +1,5 @@
 """
-VMPM Entry Pipeline — Full entry logic sequence.
+TSAR Entry Pipeline — Full entry logic sequence.
 
 Pipeline stages (in order):
   1. News Gate      — No high-impact news in blackout window
@@ -20,15 +20,16 @@ from __future__ import annotations
 import logging
 from dataclasses import dataclass
 from enum import StrEnum
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
-from src.strategy.vmpm.fundamental_analyzer import FundamentalBias, BiasDirection
-from src.strategy.vmpm.trend_detector import TrendState, TrendDirection
-from src.strategy.vmpm.level_mapper import (
-    MappedLevels,
-    SRLevel,
-    LevelSide,
-)
+from src.strategy.tsar_strategy.trend_detector import TrendDirection, TrendState
+
+if TYPE_CHECKING:
+    from src.strategy.tsar_strategy.fundamental_analyzer import FundamentalBias
+    from src.strategy.tsar_strategy.level_mapper import (
+        MappedLevels,
+        SRLevel,
+    )
 
 logger = logging.getLogger(__name__)
 
@@ -86,7 +87,7 @@ class PipelineResult:
 
 
 class EntryPipeline:
-    """Full VMPM entry pipeline.
+    """Full TSAR entry pipeline.
 
     Evaluates all stages in sequence. Short-circuits on critical
     failures (news gate, trend alignment). Returns a PipelineResult
@@ -169,7 +170,7 @@ class EntryPipeline:
         session_score: float = 1.0,
         volume_ratio: float = 1.0,
     ) -> PipelineResult:
-        """Run the full VMPM entry pipeline.
+        """Run the full TSAR entry pipeline.
 
         Args:
             current_price: Current market price.
@@ -203,8 +204,11 @@ class EntryPipeline:
         # Short-circuit on critical failures
         if failed_critical:
             return self._build_result(
-                passed=False, stages=stages, side="none",
-                current_price=current_price, atr=atr,
+                passed=False,
+                stages=stages,
+                side="none",
+                current_price=current_price,
+                atr=atr,
                 session_score=session_score,
                 reasoning="Pipeline failed at critical stage",
             )
@@ -213,15 +217,11 @@ class EntryPipeline:
         side = "buy" if trend_state.direction == TrendDirection.BULLISH else "sell"
 
         # -- Stage 3: S/R Proximity --
-        sr_result, nearest_level = self._stage_sr_proximity(
-            current_price, mapped_levels, side
-        )
+        sr_result, nearest_level = self._stage_sr_proximity(current_price, mapped_levels, side)
         stages.append(sr_result)
 
         # -- Stage 4: Retest Confirmation --
-        retest_result = self._stage_retest(
-            ohlcv, current_price, nearest_level, side
-        )
+        retest_result = self._stage_retest(ohlcv, current_price, nearest_level, side)
         stages.append(retest_result)
 
         # -- Stage 5: RSI Filter --
@@ -237,16 +237,11 @@ class EntryPipeline:
         total_score *= session_score  # Apply session multiplier
         total_score = min(1.0, total_score)
 
-        passed = (
-            total_score >= self._min_score
-            and all(s.passed for s in stages)
-        )
+        passed = total_score >= self._min_score and all(s.passed for s in stages)
 
         # -- Calculate trade parameters --
         entry_price = current_price
-        stop_loss, take_profit = self._calculate_levels(
-            current_price, atr, side, nearest_level
-        )
+        stop_loss, take_profit = self._calculate_levels(current_price, atr, side, nearest_level)
 
         # Validate R:R
         risk = abs(entry_price - stop_loss)
@@ -254,23 +249,29 @@ class EntryPipeline:
         if risk > 0 and reward / risk < self._min_rr_ratio:
             passed = False
             stages = list(stages)
-            stages.append(StageResult(
-                stage=PipelineStage.EXECUTE,
-                passed=False,
-                score=0.0,
-                reasoning=f"R:R {reward/risk:.2f} < {self._min_rr_ratio}",
-            ))
+            stages.append(
+                StageResult(
+                    stage=PipelineStage.EXECUTE,
+                    passed=False,
+                    score=0.0,
+                    reasoning=f"R:R {reward / risk:.2f} < {self._min_rr_ratio}",
+                )
+            )
 
         reasoning_parts = [s.reasoning for s in stages if s.passed]
         reasoning = " | ".join(reasoning_parts)
 
         return self._build_result(
-            passed=passed, stages=stages, side=side if passed else "none",
-            current_price=current_price, atr=atr,
+            passed=passed,
+            stages=stages,
+            side=side if passed else "none",
+            current_price=current_price,
+            atr=atr,
             session_score=session_score,
             nearest_level=nearest_level,
             candle_pattern=pattern,
-            stop_loss=stop_loss, take_profit=take_profit,
+            stop_loss=stop_loss,
+            take_profit=take_profit,
             reasoning=reasoning,
         )
 
@@ -330,10 +331,7 @@ class EntryPipeline:
         """Stage 3: Price near a mapped S/R level."""
         weight = self._STAGE_WEIGHTS[PipelineStage.SR_PROXIMITY]
 
-        if side == "buy":
-            target_levels = levels.supports
-        else:
-            target_levels = levels.resistances
+        target_levels = levels.supports if side == "buy" else levels.resistances
 
         nearest: SRLevel | None = None
         best_dist = float("inf")
@@ -381,15 +379,12 @@ class EntryPipeline:
                 reasoning="REJECTED: insufficient data for retest",
             )
 
-        recent = ohlcv[-self._retest_candles:]
+        recent = ohlcv[-self._retest_candles :]
         level_price = level.price
         zone_buffer = level_price * 0.001
 
         if side == "buy":
-            touched = any(
-                bar["low"] <= level_price + zone_buffer
-                for bar in recent
-            )
+            touched = any(bar["low"] <= level_price + zone_buffer for bar in recent)
             rejected = ohlcv[-1]["close"] > level_price
             last = ohlcv[-1]
             body_low = min(last["open"], last["close"])
@@ -397,10 +392,7 @@ class EntryPipeline:
             candle_range = last["high"] - last["low"]
             has_wick = candle_range > 0 and wick_low / candle_range > 0.3
         else:
-            touched = any(
-                bar["high"] >= level_price - zone_buffer
-                for bar in recent
-            )
+            touched = any(bar["high"] >= level_price - zone_buffer for bar in recent)
             rejected = ohlcv[-1]["close"] < level_price
             last = ohlcv[-1]
             body_high = max(last["open"], last["close"])
@@ -536,19 +528,24 @@ class EntryPipeline:
         # Bullish Engulfing
         is_prev_bearish = prev["close"] < prev["open"]
         is_curr_bullish = curr["close"] > curr["open"]
-        if (is_prev_bearish and is_curr_bullish and
-                curr_body > prev_body and
-                curr["close"] > prev["open"] and
-                curr["open"] < prev["close"]):
+        if (
+            is_prev_bearish
+            and is_curr_bullish
+            and curr_body > prev_body
+            and curr["close"] > prev["open"]
+            and curr["open"] < prev["close"]
+        ):
             return CandlePattern.BULLISH_ENGULFING, 0.85
 
         # Bullish Pin Bar
         body_low = min(curr["open"], curr["close"])
         lower_wick = body_low - curr["low"]
         upper_wick = curr["high"] - max(curr["open"], curr["close"])
-        if (lower_wick > curr_body * 2 and
-                upper_wick < curr_body * 0.5 and
-                curr["close"] > curr["open"]):
+        if (
+            lower_wick > curr_body * 2
+            and upper_wick < curr_body * 0.5
+            and curr["close"] > curr["open"]
+        ):
             return CandlePattern.BULLISH_PIN_BAR, 0.75
 
         # Morning Star
@@ -583,19 +580,24 @@ class EntryPipeline:
         # Bearish Engulfing
         is_prev_bullish = prev["close"] > prev["open"]
         is_curr_bearish = curr["close"] < curr["open"]
-        if (is_prev_bullish and is_curr_bearish and
-                curr_body > prev_body and
-                curr["close"] < prev["open"] and
-                curr["open"] > prev["close"]):
+        if (
+            is_prev_bullish
+            and is_curr_bearish
+            and curr_body > prev_body
+            and curr["close"] < prev["open"]
+            and curr["open"] > prev["close"]
+        ):
             return CandlePattern.BEARISH_ENGULFING, 0.85
 
         # Bearish Pin Bar
         body_high = max(curr["open"], curr["close"])
         upper_wick = curr["high"] - body_high
         lower_wick = min(curr["open"], curr["close"]) - curr["low"]
-        if (upper_wick > curr_body * 2 and
-                lower_wick < curr_body * 0.5 and
-                curr["close"] < curr["open"]):
+        if (
+            upper_wick > curr_body * 2
+            and lower_wick < curr_body * 0.5
+            and curr["close"] < curr["open"]
+        ):
             return CandlePattern.BEARISH_PIN_BAR, 0.75
 
         # Evening Star

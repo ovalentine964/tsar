@@ -214,7 +214,9 @@ class BaseAgent(ABC):
         self._running = True
         logger.info(
             "Starting agent: %s (role=%s, mode=%s)",
-            self.agent_id, self.ROLE, self.trading_mode,
+            self.agent_id,
+            self.ROLE,
+            self.trading_mode,
         )
 
         # Initialize
@@ -223,6 +225,7 @@ class BaseAgent(ABC):
         # Start kill switch event subscription
         try:
             from src.comms.event_bus import get_shared_bus
+
             shared_bus = get_shared_bus()
             shared_bus.subscribe(
                 "tsar.risk.kill_switch.activated.v1",
@@ -337,7 +340,10 @@ class BaseAgent(ABC):
         self._events_published += 1
         logger.debug(
             "[%s] Published %s to %s (msg_id=%s)",
-            self.agent_id, event_type, stream, msg_id,
+            self.agent_id,
+            event_type,
+            stream,
+            msg_id,
         )
         return msg_id
 
@@ -356,18 +362,25 @@ class BaseAgent(ABC):
         Returns:
             Async event handler callback.
         """
+
         async def handler(event: CloudEvent) -> None:
             self._events_received += 1
             logger.info(
                 "[%s] Received event: %s from %s (stream=%s, trace=%s)",
-                self.agent_id, event.type, event.source, stream, event.traceid,
+                self.agent_id,
+                event.type,
+                event.source,
+                stream,
+                event.traceid,
             )
             try:
                 await self.handle_event(stream, event)
             except Exception:
                 self._errors_count += 1
                 logger.exception(
-                    "[%s] Error handling event %s", self.agent_id, event.type,
+                    "[%s] Error handling event %s",
+                    self.agent_id,
+                    event.type,
                 )
 
         return handler
@@ -383,7 +396,10 @@ class BaseAgent(ABC):
             event: The CloudEvent to process.
         """
         logger.debug(
-            "[%s] Unhandled event: %s (stream=%s)", self.agent_id, event.type, stream,
+            "[%s] Unhandled event: %s (stream=%s)",
+            self.agent_id,
+            event.type,
+            stream,
         )
 
     # ═══════════════════════════════════════════════════════════════
@@ -399,7 +415,8 @@ class BaseAgent(ABC):
         reason = data.get("reason", "unknown")
         logger.critical(
             "🔴 [%s] Kill switch ACTIVATED — stopping trading: %s",
-            self.agent_id, reason,
+            self.agent_id,
+            reason,
         )
         self._kill_switch_active = True
 

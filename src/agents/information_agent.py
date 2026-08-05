@@ -24,19 +24,11 @@ from __future__ import annotations
 
 import asyncio
 import logging
-import time
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from typing import Any
 
 from src.agents.base import BaseAgent
-from src.tools.order_flow import (
-    COTReport,
-    InstitutionalFlow,
-    NetPositioning,
-    OrderFlowTools,
-    RetailPositioning,
-)
 from src.tools.market_microstructure import (
     LiquidityHeatmap,
     MarketMicrostructureTools,
@@ -44,6 +36,12 @@ from src.tools.market_microstructure import (
     SpreadAnalysis,
     TickAnalysis,
     VolumeProfile,
+)
+from src.tools.order_flow import (
+    InstitutionalFlow,
+    NetPositioning,
+    OrderFlowTools,
+    RetailPositioning,
 )
 
 logger = logging.getLogger(__name__)
@@ -143,7 +141,9 @@ class InformationSnapshot:
             "volume_profile": self._safe_dict(self.volume_profile),
             "liquidity_heatmap": self._safe_dict(self.liquidity_heatmap),
             "tick_analysis": self._safe_dict(self.tick_analysis),
-            "contrarian_signal": self.contrarian_signal.to_dict() if self.contrarian_signal else None,
+            "contrarian_signal": self.contrarian_signal.to_dict()
+            if self.contrarian_signal
+            else None,
             "information_edge_signals": [s.to_dict() for s in self.information_edge_signals],
             "timestamp": self.timestamp,
         }
@@ -192,9 +192,14 @@ class InformationAgent(BaseAgent):
 
     # Default assets to monitor
     DEFAULT_ASSETS = [
-        "BTC/USDT", "ETH/USDT", "SOL/USDT",
-        "EUR/USD", "GBP/USD", "USD/JPY",
-        "GOLD", "SP500",
+        "BTC/USDT",
+        "ETH/USDT",
+        "SOL/USDT",
+        "EUR/USD",
+        "GBP/USD",
+        "USD/JPY",
+        "GOLD",
+        "SP500",
     ]
 
     def __init__(
@@ -239,7 +244,8 @@ class InformationAgent(BaseAgent):
         self._cycle_count += 1
         logger.info(
             "InformationAgent cycle #%d — analyzing %d assets",
-            self._cycle_count, len(self.assets),
+            self._cycle_count,
+            len(self.assets),
         )
 
         # Analyze all assets (with some concurrency control)
@@ -278,7 +284,8 @@ class InformationAgent(BaseAgent):
 
             logger.info(
                 "Published %d information edge signals (from %d total)",
-                len(top_signals), len(signals),
+                len(top_signals),
+                len(signals),
             )
 
         # Publish summary
@@ -313,10 +320,16 @@ class InformationAgent(BaseAgent):
 
         # Unpack results (graceful on failures)
         names = [
-            "net_positioning", "institutional_flow", "retail_sentiment",
-            "spread", "orderbook", "volume_profile", "liquidity", "ticks",
+            "net_positioning",
+            "institutional_flow",
+            "retail_sentiment",
+            "spread",
+            "orderbook",
+            "volume_profile",
+            "liquidity",
+            "ticks",
         ]
-        for name, result in zip(names, results):
+        for name, result in zip(names, results, strict=False):
             if isinstance(result, Exception):
                 logger.debug("%s failed for %s: %s", name, asset, result)
                 continue
@@ -340,9 +353,7 @@ class InformationAgent(BaseAgent):
 
         return snapshot
 
-    def _generate_signals(
-        self, snapshot: InformationSnapshot
-    ) -> list[InformationEdgeSignal]:
+    def _generate_signals(self, snapshot: InformationSnapshot) -> list[InformationEdgeSignal]:
         """Generate information edge signals from a snapshot.
 
         Args:
@@ -360,21 +371,23 @@ class InformationAgent(BaseAgent):
         # ─────────────────────────────────────────────────────────────
         if snapshot.institutional_flow and snapshot.institutional_flow.divergence:
             flow = snapshot.institutional_flow
-            signals.append(InformationEdgeSignal(
-                asset=asset,
-                signal_type="institutional_divergence",
-                direction=flow.smart_money_signal,
-                strength=flow.confidence,
-                confidence=flow.confidence,
-                reasoning=(
-                    f"Institutions are {flow.institutional_bias} while retail is "
-                    f"{flow.retail_bias}. Follow smart money."
-                ),
-                retail_positioning=flow.retail_bias,
-                institutional_positioning=flow.institutional_bias,
-                components=flow.components,
-                timestamp=now,
-            ))
+            signals.append(
+                InformationEdgeSignal(
+                    asset=asset,
+                    signal_type="institutional_divergence",
+                    direction=flow.smart_money_signal,
+                    strength=flow.confidence,
+                    confidence=flow.confidence,
+                    reasoning=(
+                        f"Institutions are {flow.institutional_bias} while retail is "
+                        f"{flow.retail_bias}. Follow smart money."
+                    ),
+                    retail_positioning=flow.retail_bias,
+                    institutional_positioning=flow.institutional_bias,
+                    components=flow.components,
+                    timestamp=now,
+                )
+            )
 
         # ─────────────────────────────────────────────────────────────
         # Signal 2: Retail Is Wrong (Contrarian)
@@ -384,21 +397,23 @@ class InformationAgent(BaseAgent):
             if retail.crowd_wrong_probability > 0.5:
                 # Retail is likely wrong — fade them
                 direction = "short" if retail.sentiment_bias == "bullish" else "long"
-                signals.append(InformationEdgeSignal(
-                    asset=asset,
-                    signal_type="contrarian_retail",
-                    direction=direction,
-                    strength=retail.crowd_wrong_probability,
-                    confidence=retail.crowd_wrong_probability * 0.8,
-                    reasoning=(
-                        f"Retail is {retail.long_pct:.0f}% long / {retail.short_pct:.0f}% short. "
-                        f"At this extreme, retail is wrong {retail.crowd_wrong_probability:.0%} "
-                        f"of the time. Fade the crowd."
-                    ),
-                    retail_positioning=f"{retail.long_pct:.0f}% long",
-                    components=1,
-                    timestamp=now,
-                ))
+                signals.append(
+                    InformationEdgeSignal(
+                        asset=asset,
+                        signal_type="contrarian_retail",
+                        direction=direction,
+                        strength=retail.crowd_wrong_probability,
+                        confidence=retail.crowd_wrong_probability * 0.8,
+                        reasoning=(
+                            f"Retail is {retail.long_pct:.0f}% long / {retail.short_pct:.0f}% short. "
+                            f"At this extreme, retail is wrong {retail.crowd_wrong_probability:.0%} "
+                            f"of the time. Fade the crowd."
+                        ),
+                        retail_positioning=f"{retail.long_pct:.0f}% long",
+                        components=1,
+                        timestamp=now,
+                    )
+                )
 
         # ─────────────────────────────────────────────────────────────
         # Signal 3: Order Book Pressure
@@ -407,20 +422,22 @@ class InformationAgent(BaseAgent):
             ob = snapshot.orderbook_imbalance
             if ob.pressure_strength > 0.5:
                 direction = "long" if ob.pressure == "buy_pressure" else "short"
-                signals.append(InformationEdgeSignal(
-                    asset=asset,
-                    signal_type="orderbook_pressure",
-                    direction=direction,
-                    strength=ob.pressure_strength,
-                    confidence=ob.pressure_strength * 0.7,
-                    reasoning=(
-                        f"Order book shows {ob.pressure} with ratio {ob.imbalance_ratio:.2f}. "
-                        f"Bid wall: {ob.bid_wall:.0f}, Ask wall: {ob.ask_wall:.0f}."
-                    ),
-                    microstructure_bias=ob.pressure,
-                    components=1,
-                    timestamp=now,
-                ))
+                signals.append(
+                    InformationEdgeSignal(
+                        asset=asset,
+                        signal_type="orderbook_pressure",
+                        direction=direction,
+                        strength=ob.pressure_strength,
+                        confidence=ob.pressure_strength * 0.7,
+                        reasoning=(
+                            f"Order book shows {ob.pressure} with ratio {ob.imbalance_ratio:.2f}. "
+                            f"Bid wall: {ob.bid_wall:.0f}, Ask wall: {ob.ask_wall:.0f}."
+                        ),
+                        microstructure_bias=ob.pressure,
+                        components=1,
+                        timestamp=now,
+                    )
+                )
 
         # ─────────────────────────────────────────────────────────────
         # Signal 4: Tick-Level Flow
@@ -428,21 +445,23 @@ class InformationAgent(BaseAgent):
         if snapshot.tick_analysis:
             ticks = snapshot.tick_analysis
             if ticks.micro_trend != "neutral":
-                signals.append(InformationEdgeSignal(
-                    asset=asset,
-                    signal_type="tick_flow",
-                    direction=ticks.micro_trend,
-                    strength=min(abs(ticks.taker_buy_ratio - 0.5) * 2, 1.0),
-                    confidence=0.5,
-                    reasoning=(
-                        f"Tick analysis: {ticks.micro_trend} micro-trend. "
-                        f"Taker buy ratio: {ticks.taker_buy_ratio:.2f}. "
-                        f"Large trade pct: {ticks.large_trade_pct:.1f}%."
-                    ),
-                    microstructure_bias=ticks.micro_trend,
-                    components=1,
-                    timestamp=now,
-                ))
+                signals.append(
+                    InformationEdgeSignal(
+                        asset=asset,
+                        signal_type="tick_flow",
+                        direction=ticks.micro_trend,
+                        strength=min(abs(ticks.taker_buy_ratio - 0.5) * 2, 1.0),
+                        confidence=0.5,
+                        reasoning=(
+                            f"Tick analysis: {ticks.micro_trend} micro-trend. "
+                            f"Taker buy ratio: {ticks.taker_buy_ratio:.2f}. "
+                            f"Large trade pct: {ticks.large_trade_pct:.1f}%."
+                        ),
+                        microstructure_bias=ticks.micro_trend,
+                        components=1,
+                        timestamp=now,
+                    )
+                )
 
         # ─────────────────────────────────────────────────────────────
         # Signal 5: Volume Profile (POC Magnet)
@@ -454,20 +473,22 @@ class InformationAgent(BaseAgent):
                 distance_pct = (sp.mid_price - vp.poc_price) / vp.poc_price * 100
                 if abs(distance_pct) > 1.0:
                     direction = "short" if distance_pct > 0 else "long"
-                    signals.append(InformationEdgeSignal(
-                        asset=asset,
-                        signal_type="poc_magnet",
-                        direction=direction,
-                        strength=min(abs(distance_pct) / 5.0, 0.8),
-                        confidence=0.5,
-                        reasoning=(
-                            f"Price ({sp.mid_price:.2f}) is {abs(distance_pct):.1f}% "
-                            f"{'above' if distance_pct > 0 else 'below'} the POC ({vp.poc_price:.2f}). "
-                            f"Volume profile suggests price is drawn to POC."
-                        ),
-                        components=1,
-                        timestamp=now,
-                    ))
+                    signals.append(
+                        InformationEdgeSignal(
+                            asset=asset,
+                            signal_type="poc_magnet",
+                            direction=direction,
+                            strength=min(abs(distance_pct) / 5.0, 0.8),
+                            confidence=0.5,
+                            reasoning=(
+                                f"Price ({sp.mid_price:.2f}) is {abs(distance_pct):.1f}% "
+                                f"{'above' if distance_pct > 0 else 'below'} the POC ({vp.poc_price:.2f}). "
+                                f"Volume profile suggests price is drawn to POC."
+                            ),
+                            components=1,
+                            timestamp=now,
+                        )
+                    )
 
         # ─────────────────────────────────────────────────────────────
         # Signal 6: Composite Net Positioning
@@ -475,23 +496,25 @@ class InformationAgent(BaseAgent):
         if snapshot.net_positioning:
             net = snapshot.net_positioning
             if net.signal_strength > 0.4:
-                signals.append(InformationEdgeSignal(
-                    asset=asset,
-                    signal_type="composite_positioning",
-                    direction=net.composite_signal,
-                    strength=net.signal_strength,
-                    confidence=net.signal_strength * 0.85,
-                    reasoning=(
-                        f"Composite positioning: {net.composite_signal} "
-                        f"(strength: {net.signal_strength:.2f}). "
-                        f"COT: {net.cot_signal}, Retail: {net.retail_signal}, "
-                        f"Whale: {net.whale_signal}, Derivatives: {net.derivatives_signal}."
-                    ),
-                    retail_positioning=net.retail_signal,
-                    institutional_positioning=net.cot_signal,
-                    components=4,
-                    timestamp=now,
-                ))
+                signals.append(
+                    InformationEdgeSignal(
+                        asset=asset,
+                        signal_type="composite_positioning",
+                        direction=net.composite_signal,
+                        strength=net.signal_strength,
+                        confidence=net.signal_strength * 0.85,
+                        reasoning=(
+                            f"Composite positioning: {net.composite_signal} "
+                            f"(strength: {net.signal_strength:.2f}). "
+                            f"COT: {net.cot_signal}, Retail: {net.retail_signal}, "
+                            f"Whale: {net.whale_signal}, Derivatives: {net.derivatives_signal}."
+                        ),
+                        retail_positioning=net.retail_signal,
+                        institutional_positioning=net.cot_signal,
+                        components=4,
+                        timestamp=now,
+                    )
+                )
 
         return signals
 
@@ -510,7 +533,8 @@ class InformationAgent(BaseAgent):
             The strongest contrarian signal, or None.
         """
         contrarian_signals = [
-            s for s in snapshot.information_edge_signals
+            s
+            for s in snapshot.information_edge_signals
             if s.signal_type in ("contrarian_retail", "institutional_divergence")
         ]
 
@@ -642,12 +666,12 @@ class InformationAgent(BaseAgent):
         return {
             "assets_analyzed": len(self._last_snapshot),
             "total_signals": len(all_signals),
-            "contrarian_signals": len([
-                s for s in all_signals if s.signal_type.startswith("contrarian")
-            ]),
-            "divergence_signals": len([
-                s for s in all_signals if s.signal_type == "institutional_divergence"
-            ]),
+            "contrarian_signals": len(
+                [s for s in all_signals if s.signal_type.startswith("contrarian")]
+            ),
+            "divergence_signals": len(
+                [s for s in all_signals if s.signal_type == "institutional_divergence"]
+            ),
             "current_regime": self._last_regime,
             "cycle_count": self._cycle_count,
             "timestamp": datetime.now(UTC).isoformat(),

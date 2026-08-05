@@ -26,8 +26,8 @@ from src.agents.base import BaseAgent
 
 # ── Domain Tools (Tools-to-Agents Wiring) ──────────────────────────
 from src.tools.correlation import CorrelationAnalyzer
-from src.tools.market_data import MarketDataTools
 from src.tools.fundamental import FundamentalAnalysisTools
+from src.tools.market_data import MarketDataTools
 
 logger = logging.getLogger(__name__)
 
@@ -83,8 +83,12 @@ class CartographyResult:
 
     def to_dict(self) -> dict[str, Any]:
         return {
-            "crypto_correlations": self.crypto_correlations.to_dict() if self.crypto_correlations else None,
-            "macro_correlations": self.macro_correlations.to_dict() if self.macro_correlations else None,
+            "crypto_correlations": self.crypto_correlations.to_dict()
+            if self.crypto_correlations
+            else None,
+            "macro_correlations": self.macro_correlations.to_dict()
+            if self.macro_correlations
+            else None,
             "anomalies": [
                 {
                     "pair": a.pair,
@@ -229,18 +233,20 @@ class CorrelationEngine:
             if z_score > self._anomaly_z:
                 severity = "critical" if z_score > 3.0 else "warning"
                 direction = "strengthened" if current_corr > hist_mean else "weakened"
-                anomalies.append(CorrelationAnomaly(
-                    pair=pair_key,
-                    current_corr=round(current_corr, 4),
-                    historical_corr=round(hist_mean, 4),
-                    z_score=round(z_score, 2),
-                    description=(
-                        f"{sym_a}↔{sym_b} correlation {direction}: "
-                        f"{current_corr:.3f} vs historical {hist_mean:.3f} "
-                        f"(z={z_score:.1f})"
-                    ),
-                    severity=severity,
-                ))
+                anomalies.append(
+                    CorrelationAnomaly(
+                        pair=pair_key,
+                        current_corr=round(current_corr, 4),
+                        historical_corr=round(hist_mean, 4),
+                        z_score=round(z_score, 2),
+                        description=(
+                            f"{sym_a}↔{sym_b} correlation {direction}: "
+                            f"{current_corr:.3f} vs historical {hist_mean:.3f} "
+                            f"(z={z_score:.1f})"
+                        ),
+                        severity=severity,
+                    )
+                )
 
         return anomalies
 
@@ -318,13 +324,15 @@ class MarketCartographer(BaseAgent):
             gateway = get_exchange_gateway()
             self._correlation_analyzer = CorrelationAnalyzer(config=self.config)
             self._market_data_tools = MarketDataTools(
-                gateway=gateway, config=self.config.get("market_data", {}),
+                gateway=gateway,
+                config=self.config.get("market_data", {}),
             )
             self._fundamental_tools = FundamentalAnalysisTools(config=self.config)
             logger.info(
                 "MarketCartographer initialized: crypto=%s, macro=%s, "
                 "tools=[correlation, market_data, fundamental]",
-                self._crypto_symbols, self._macro_symbols,
+                self._crypto_symbols,
+                self._macro_symbols,
             )
         except Exception as e:
             logger.warning("MarketCartographer tool init failed: %s", e)
@@ -375,7 +383,8 @@ class MarketCartographer(BaseAgent):
 
         # ── Compute crypto correlations ──
         crypto_pairs = [
-            (a, b) for a, b in CorrelationEngine.CRYPTO_PAIRS
+            (a, b)
+            for a, b in CorrelationEngine.CRYPTO_PAIRS
             if a in crypto_returns and b in crypto_returns
         ]
         if crypto_pairs:
@@ -401,7 +410,8 @@ class MarketCartographer(BaseAgent):
 
         # ── Compute macro cross-asset correlations ──
         macro_pairs = [
-            (a, b) for a, b in CorrelationEngine.MACRO_PAIRS
+            (a, b)
+            for a, b in CorrelationEngine.MACRO_PAIRS
             if a in macro_returns and b in macro_returns
         ]
         if macro_pairs:
@@ -417,7 +427,9 @@ class MarketCartographer(BaseAgent):
 
         logger.info(
             "Cartography complete: %d crypto pairs, %d macro pairs, %d anomalies",
-            len(crypto_pairs), len(macro_pairs), len(result.anomalies),
+            len(crypto_pairs),
+            len(macro_pairs),
+            len(result.anomalies),
         )
 
         return result
@@ -427,7 +439,9 @@ class MarketCartographer(BaseAgent):
         try:
             ohlcv = await self._pricing_engine.get_ohlcv(symbol, "1h", limit=self._lookback + 10)
             if ohlcv is None or len(ohlcv) < 20:
-                logger.debug("Insufficient data for %s (%d bars)", symbol, len(ohlcv) if ohlcv else 0)
+                logger.debug(
+                    "Insufficient data for %s (%d bars)", symbol, len(ohlcv) if ohlcv else 0
+                )
                 return None
 
             df = pd.DataFrame(ohlcv)

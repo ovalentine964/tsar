@@ -31,6 +31,7 @@ logger = logging.getLogger(__name__)
 @dataclass(frozen=True)
 class GuardResult:
     """Result of a single guard check."""
+
     passed: bool = True
     guard_name: str = ""
     reason: str = ""
@@ -46,7 +47,6 @@ class Guard:
     def check(self, order: Any) -> GuardResult:
         """Check an order against this guard. Override in subclasses."""
         return GuardResult(passed=True, guard_name=self.name)
-
 
 
 @dataclass(frozen=True)
@@ -319,13 +319,11 @@ class AntiBehavioralGuards:
             if consec_wins >= 10:
                 return (
                     0.5,
-                    f"Anti-Overconfidence: {consec_wins}-win streak! "
-                    f"Position size capped at 50%.",
+                    f"Anti-Overconfidence: {consec_wins}-win streak! Position size capped at 50%.",
                 )
             return (
                 0.7,
-                f"Anti-Overconfidence: {consec_wins}-win streak. "
-                f"Position size capped at 70%.",
+                f"Anti-Overconfidence: {consec_wins}-win streak. Position size capped at 70%.",
             )
 
         return 1.0, ""

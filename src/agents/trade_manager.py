@@ -24,7 +24,6 @@ Pipeline position:
 from __future__ import annotations
 
 import logging
-import time
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from enum import Enum
@@ -45,14 +44,16 @@ logger = logging.getLogger(__name__)
 
 class TrailingStage(Enum):
     """Trailing stop stages."""
-    INITIAL = "initial"          # ATR-based initial stop
-    BREAKEVEN = "breakeven"      # Stop moved to break-even
-    TRAILING = "trailing"        # Active trailing stop
+
+    INITIAL = "initial"  # ATR-based initial stop
+    BREAKEVEN = "breakeven"  # Stop moved to break-even
+    TRAILING = "trailing"  # Active trailing stop
     TIGHT_TRAIL = "tight_trail"  # Tightened trail after 2:1 R:R
 
 
 class ExitReason(Enum):
     """Reasons for exiting a position."""
+
     TAKE_PROFIT = "take_profit"
     STOP_LOSS = "stop_loss"
     TRAILING_STOP = "trailing_stop"
@@ -67,6 +68,7 @@ class ExitReason(Enum):
 @dataclass
 class ManagedPosition:
     """A position being actively managed by the Trade Manager."""
+
     position_id: str
     symbol: str
     side: str  # "buy" or "sell"
@@ -127,6 +129,7 @@ class ManagedPosition:
 @dataclass
 class TradeAction:
     """An action to take on a position."""
+
     position_id: str
     action: str  # "partial_exit", "update_stop", "close", "alert"
     quantity: float = 0.0
@@ -151,11 +154,11 @@ class SessionTiming:
 
     # Session windows (UTC hours)
     SESSIONS = {
-        "asian": (0, 7),       # Low liquidity, wide spreads
-        "london": (7, 16),     # High liquidity, institutional
+        "asian": (0, 7),  # Low liquidity, wide spreads
+        "london": (7, 16),  # High liquidity, institutional
         "new_york": (13, 22),  # Highest volume
-        "overlap": (13, 16),   # London-NY overlap (BEST)
-        "dead_zone": (22, 24), # Session transition
+        "overlap": (13, 16),  # London-NY overlap (BEST)
+        "dead_zone": (22, 24),  # Session transition
     }
 
     # Session quality scores (0-1)
@@ -213,9 +216,9 @@ class SessionTiming:
         quality = cls.get_session_quality()
 
         if session == "dead_zone":
-            return False, f"Dead zone session (22:00-00:00 UTC) — low conviction"
+            return False, "Dead zone session (22:00-00:00 UTC) — low conviction"
         if session == "asian":
-            return False, f"Asian session (00:00-07:00 UTC) — low liquidity, wide spreads"
+            return False, "Asian session (00:00-07:00 UTC) — low liquidity, wide spreads"
         if quality < 0.4:
             return False, f"Low session quality ({quality:.2f}) — poor day/time combination"
 
@@ -257,10 +260,10 @@ class NewsProximity:
 
     # Blackout windows before events (minutes)
     BLACKOUT_WINDOWS = {
-        "critical": 120,   # 2 hours before critical events
-        "high": 60,        # 1 hour before high-impact events
-        "medium": 30,      # 30 minutes before medium events
-        "low": 0,          # No blackout for low-impact events
+        "critical": 120,  # 2 hours before critical events
+        "high": 60,  # 1 hour before high-impact events
+        "medium": 30,  # 30 minutes before medium events
+        "low": 0,  # No blackout for low-impact events
     }
 
     # Post-event cooldown (minutes)
@@ -311,8 +314,7 @@ class NewsProximity:
 
             if minutes_until <= blackout_minutes:
                 reason = (
-                    f"Blackout: {event.event} ({impact}) in "
-                    f"{minutes_until:.0f}min — no new entries"
+                    f"Blackout: {event.event} ({impact}) in {minutes_until:.0f}min — no new entries"
                 )
                 risk_mult = 0.3 if impact == "critical" else 0.5
                 return True, reason, risk_mult
@@ -358,12 +360,11 @@ class NewsProximity:
             impact = event.impact.lower()
 
             # Critical event within 30min: close if < 1:1 R:R
-            if impact == "critical" and minutes_until <= 30:
-                if position_rr < 1.0:
-                    return True, (
-                        f"Critical event ({event.event}) in {minutes_until:.0f}min — "
-                        f"closing low-R:R position"
-                    )
+            if impact == "critical" and minutes_until <= 30 and position_rr < 1.0:
+                return True, (
+                    f"Critical event ({event.event}) in {minutes_until:.0f}min — "
+                    f"closing low-R:R position"
+                )
 
             # High event within 15min: move to break-even (handled by stop logic)
             # Don't close, just tighten
@@ -405,18 +406,15 @@ class TradeManager(BaseAgent):
         "trailing_enabled": True,
         "trailing_atr_multiplier": 1.0,
         "tight_trailing_atr_multiplier": 0.75,
-        "trailing_trigger_rr": 1.5,      # Start trailing after 1.5:1 R:R
-        "tight_trail_trigger_rr": 2.0,   # Tighten trail after 2:1 R:R
-
+        "trailing_trigger_rr": 1.5,  # Start trailing after 1.5:1 R:R
+        "tight_trail_trigger_rr": 2.0,  # Tighten trail after 2:1 R:R
         # Break-even
-        "breakeven_trigger_rr": 1.0,     # Move to BE after 1:1 R:R
-        "breakeven_buffer_pct": 0.001,   # 0.1% above entry for fees
-
+        "breakeven_trigger_rr": 1.0,  # Move to BE after 1:1 R:R
+        "breakeven_buffer_pct": 0.001,  # 0.1% above entry for fees
         # Partial exits
         "partial_exits_enabled": True,
         "partial_exit_schedule": [0.4, 0.3, 0.3],  # 40%, 30%, 30%
         "partial_exit_rr_levels": [1.0, 2.0, 3.0],
-
         # Time stops
         "time_stop_enabled": True,
         "time_stop_hours": {
@@ -426,11 +424,9 @@ class TradeManager(BaseAgent):
         },
         "stale_trade_hours": 4,
         "stale_trade_threshold_pct": 0.5,
-
         # Weekend management
         "weekend_close_enabled": True,
         "weekend_close_hour_utc": 20,  # Friday 20:00 UTC
-
         # Regime exits
         "regime_exit_enabled": True,
     }
@@ -518,7 +514,7 @@ class TradeManager(BaseAgent):
         # Check each position
         actions: list[TradeAction] = []
 
-        for pos_id, pos in self._positions.items():
+        for _pos_id, pos in self._positions.items():
             current_price = prices.get(pos.symbol)
             if current_price is None:
                 continue
@@ -606,10 +602,14 @@ class TradeManager(BaseAgent):
         self._positions[position_id] = position
 
         logger.info(
-            "📋 Registered position for management: %s %s %s entry=%.2f "
-            "sl=%.2f tp=%.2f qty=%.6f",
-            position_id, symbol, side, entry_price,
-            stop_loss, take_profit, quantity,
+            "📋 Registered position for management: %s %s %s entry=%.2f sl=%.2f tp=%.2f qty=%.6f",
+            position_id,
+            symbol,
+            side,
+            entry_price,
+            stop_loss,
+            take_profit,
+            quantity,
         )
 
     # ── Trailing Stop Logic ────────────────────────────────────────
@@ -676,8 +676,11 @@ class TradeManager(BaseAgent):
         if new_stage != pos.trailing_stage:
             logger.info(
                 "📊 %s: Trailing stage %s → %s (RR=%.2f, new_stop=%.2f)",
-                pos.position_id, pos.trailing_stage.value,
-                new_stage.value, current_rr, new_stop,
+                pos.position_id,
+                pos.trailing_stage.value,
+                new_stage.value,
+                current_rr,
+                new_stop,
             )
             pos.trailing_stage = new_stage
 
@@ -716,17 +719,23 @@ class TradeManager(BaseAgent):
         # Calculate exit quantity
         exit_quantity = pos.quantity * exit_pct
         # Don't exit more than remaining
-        exit_quantity = min(exit_quantity, pos.remaining_quantity * exit_pct / (1 - sum(
-            self._config["partial_exit_schedule"][:pos.partial_exits_taken]
-        )))
+        exit_quantity = min(
+            exit_quantity,
+            pos.remaining_quantity
+            * exit_pct
+            / (1 - sum(self._config["partial_exit_schedule"][: pos.partial_exits_taken])),
+        )
 
         if exit_quantity <= 0:
             return None
 
         logger.info(
             "💰 %s: Partial exit #%d — %.1f%% at RR=%.2f (target=%.1f)",
-            pos.position_id, pos.partial_exits_taken + 1,
-            exit_pct * 100, current_rr, next_rr_level,
+            pos.position_id,
+            pos.partial_exits_taken + 1,
+            exit_pct * 100,
+            current_rr,
+            next_rr_level,
         )
 
         return TradeAction(
@@ -734,7 +743,7 @@ class TradeManager(BaseAgent):
             action="partial_exit",
             quantity=exit_quantity,
             reason=ExitReason.PARTIAL_EXIT,
-            details=f"Partial exit #{pos.partial_exits_taken + 1}: {exit_pct*100:.0f}% at {current_rr:.1f}R",
+            details=f"Partial exit #{pos.partial_exits_taken + 1}: {exit_pct * 100:.0f}% at {current_rr:.1f}R",
             timestamp=datetime.now(UTC),
         )
 
@@ -771,7 +780,8 @@ class TradeManager(BaseAgent):
 
         logger.info(
             "🔒 %s: Break-even stop triggered at RR=%.2f",
-            pos.position_id, current_rr,
+            pos.position_id,
+            current_rr,
         )
 
         return TradeAction(
@@ -812,7 +822,10 @@ class TradeManager(BaseAgent):
 
             logger.info(
                 "⏰ %s: Time stop after %.1fh (strategy=%s, pnl=%.2f%%)",
-                pos.position_id, hours_held, pos.strategy, pnl_pct * 100,
+                pos.position_id,
+                hours_held,
+                pos.strategy,
+                pnl_pct * 100,
             )
 
             return TradeAction(
@@ -848,14 +861,16 @@ class TradeManager(BaseAgent):
         if move_pct < self._config["stale_trade_threshold_pct"] / 100:
             logger.info(
                 "💤 %s: Stale trade — %.1fh held, only %.2f%% move",
-                pos.position_id, hours_held, move_pct * 100,
+                pos.position_id,
+                hours_held,
+                move_pct * 100,
             )
 
             return TradeAction(
                 position_id=pos.position_id,
                 action="close",
                 reason=ExitReason.STALE_TRADE,
-                details=f"Stale: {hours_held:.1f}h, {move_pct*100:.2f}% move",
+                details=f"Stale: {hours_held:.1f}h, {move_pct * 100:.2f}% move",
                 timestamp=now,
             )
 
@@ -891,12 +906,13 @@ class TradeManager(BaseAgent):
 
         logger.info(
             "🔄 Regime change: %s → %s — checking all positions",
-            old_regime, new_regime,
+            old_regime,
+            new_regime,
         )
 
         actions = []
 
-        for pos_id, pos in self._positions.items():
+        for _pos_id, pos in self._positions.items():
             action = self._evaluate_regime_exit(pos, old_regime, new_regime)
             if action:
                 actions.append(action)
@@ -940,7 +956,7 @@ class TradeManager(BaseAgent):
                 position_id=pos.position_id,
                 action="close",
                 reason=ExitReason.REGIME_CHANGE,
-                details=f"Regime: crisis — closing all positions",
+                details="Regime: crisis — closing all positions",
                 timestamp=datetime.now(UTC),
             )
 
@@ -956,7 +972,7 @@ class TradeManager(BaseAgent):
                 action="update_stop",
                 new_stop=new_stop,
                 reason=ExitReason.REGIME_CHANGE,
-                details=f"Regime: high_volatility — tightening stop",
+                details="Regime: high_volatility — tightening stop",
                 timestamp=datetime.now(UTC),
             )
 
@@ -974,21 +990,24 @@ class TradeManager(BaseAgent):
 
         logger.warning(
             "📰 Breaking news (impact=%s, sentiment=%.2f) — checking positions",
-            impact, sentiment,
+            impact,
+            sentiment,
         )
 
         actions = []
-        for pos_id, pos in self._positions.items():
+        for pos_id, _pos in self._positions.items():
             current_rr = 0  # Would need current price
             should_exit, reason = NewsProximity.should_exit_for_news(None, current_rr)
             if should_exit:
-                actions.append(TradeAction(
-                    position_id=pos_id,
-                    action="close",
-                    reason=ExitReason.NEWS_EVENT,
-                    details=reason,
-                    timestamp=datetime.now(UTC),
-                ))
+                actions.append(
+                    TradeAction(
+                        position_id=pos_id,
+                        action="close",
+                        reason=ExitReason.NEWS_EVENT,
+                        details=reason,
+                        timestamp=datetime.now(UTC),
+                    )
+                )
 
         for action in actions:
             await self._execute_action(action)
@@ -1004,8 +1023,10 @@ class TradeManager(BaseAgent):
 
         logger.info(
             "🎯 Trade action: %s %s — %s (%s)",
-            action.action.upper(), action.position_id,
-            action.details, action.reason.value,
+            action.action.upper(),
+            action.position_id,
+            action.details,
+            action.reason.value,
         )
 
         if action.action == "update_stop":
@@ -1089,7 +1110,7 @@ class TradeManager(BaseAgent):
         """Update position tracking data."""
         now = datetime.now(UTC)
 
-        for pos_id, pos in self._positions.items():
+        for _pos_id, pos in self._positions.items():
             current_price = prices.get(pos.symbol)
             if current_price is None:
                 continue
@@ -1117,8 +1138,6 @@ class TradeManager(BaseAgent):
                 "trailing_stage": pos.trailing_stage.value,
                 "partial_exits_taken": pos.partial_exits_taken,
                 "breakeven_triggered": pos.breakeven_triggered,
-                "hours_held": (
-                    (datetime.now(UTC) - pos.entry_time).total_seconds() / 3600
-                ),
+                "hours_held": ((datetime.now(UTC) - pos.entry_time).total_seconds() / 3600),
             }
         return summary

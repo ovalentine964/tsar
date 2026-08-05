@@ -22,29 +22,18 @@ Usage::
 
 from __future__ import annotations
 
-import asyncio
 import logging
 import time
-from dataclasses import dataclass, field
-from typing import Any
+from dataclasses import dataclass
 
-from src.tools import register_tool
 from src.backends.defi.mev_protection import (
     MEVProtection,
-    MEVRiskAssessment,
     MEVRiskLevel,
-    ProtectedQuote,
-    GasEstimate,
-    SubmissionMethod,
 )
 from src.backends.defi.oracle_client import (
     OracleClient,
-    OraclePrice,
-    TWAPResult,
-    PriceDeviation,
-    DeviationSeverity,
-    OracleProvider,
 )
+from src.tools import register_tool
 
 logger = logging.getLogger(__name__)
 
@@ -70,6 +59,7 @@ class MEVRiskResult:
         priority_fee_gwei: Recommended priority fee.
         summary: One-line summary for the agent.
     """
+
     pair: str
     amount: float
     risk_level: str
@@ -98,6 +88,7 @@ class ProtectedQuoteResult:
         valid_for_seconds: Quote validity.
         summary: One-line summary.
     """
+
     pair: str
     input_amount: float
     output_amount: float
@@ -124,6 +115,7 @@ class OnChainPriceResult:
         is_stale: Whether oracle data is stale.
         recommendation: What the agent should do.
     """
+
     token: str
     oracle_price: float
     oracle_provider: str
@@ -146,6 +138,7 @@ class GasPriorityResult:
         block_number: Current block.
         recommendation: Which tier to use and why.
     """
+
     base_fee_gwei: float
     low_gwei: float
     medium_gwei: float
@@ -174,7 +167,9 @@ class MEVProtectionTools:
         pyth_hermes_url: Pyth Hermes API URL.
     """
 
-    description = "MEV protection, sandwich detection, oracle price verification, and gas optimization"
+    description = (
+        "MEV protection, sandwich detection, oracle price verification, and gas optimization"
+    )
 
     def __init__(
         self,
@@ -244,8 +239,7 @@ class MEVProtectionTools:
             )
         else:
             summary = (
-                f"🟢 Low MEV risk for {pair} swap of {amount}. "
-                f"Standard submission acceptable."
+                f"🟢 Low MEV risk for {pair} swap of {amount}. Standard submission acceptable."
             )
 
         return MEVRiskResult(
@@ -370,7 +364,9 @@ class MEVProtectionTools:
                 f"Proceed with caution."
             )
         else:
-            recommendation = f"✅ Oracle price ({oracle_price.provider.value}) is aligned with exchange."
+            recommendation = (
+                f"✅ Oracle price ({oracle_price.provider.value}) is aligned with exchange."
+            )
 
         return OnChainPriceResult(
             token=pair,

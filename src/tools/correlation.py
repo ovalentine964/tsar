@@ -28,7 +28,6 @@ from dataclasses import dataclass
 from typing import Any
 
 import numpy as np
-import pandas as pd
 
 logger = logging.getLogger(__name__)
 
@@ -175,8 +174,12 @@ class CorrelationAnalyzer:
         """
         if len(prices_a) < window + 1 or len(prices_b) < window + 1:
             return CorrelationResult(
-                asset_a="", asset_b="", correlation=0.0,
-                window=window, p_value=1.0, lag=0,
+                asset_a="",
+                asset_b="",
+                correlation=0.0,
+                window=window,
+                p_value=1.0,
+                lag=0,
                 interpretation="Insufficient data",
             )
 
@@ -206,7 +209,7 @@ class CorrelationAnalyzer:
         best_corr = abs(corr)
         for lag in range(1, min(5, window // 4)):
             if len(ret_a) > lag + window:
-                c, _ = self._pearson_corr(ret_a[-window - lag:-lag], ret_b[-window:])
+                c, _ = self._pearson_corr(ret_a[-window - lag : -lag], ret_b[-window:])
                 if abs(c) > best_corr:
                     best_corr = abs(c)
                     best_lag = lag
@@ -246,9 +249,12 @@ class CorrelationAnalyzer:
 
         if n < 2:
             return CorrelationMatrix(
-                assets=tuple(symbols), matrix=np.array([]),
-                avg_correlation=0.0, max_correlation=0.0,
-                min_correlation=0.0, regime="insufficient_data",
+                assets=tuple(symbols),
+                matrix=np.array([]),
+                avg_correlation=0.0,
+                max_correlation=0.0,
+                min_correlation=0.0,
+                regime="insufficient_data",
             )
 
         # Compute log returns for all assets
@@ -358,9 +364,7 @@ class CorrelationAnalyzer:
                     continue
 
                 # Current correlation
-                curr_corr, _ = self._pearson_corr(
-                    ret_i[-current_window:], ret_j[-current_window:]
-                )
+                curr_corr, _ = self._pearson_corr(ret_i[-current_window:], ret_j[-current_window:])
 
                 # Historical rolling correlations
                 hist_corrs: list[float] = []
@@ -390,16 +394,18 @@ class CorrelationAnalyzer:
                     else:
                         severity = "mild"
 
-                    anomalies.append(CorrelationAnomaly(
-                        asset_a=symbols[i],
-                        asset_b=symbols[j],
-                        current_corr=round(curr_corr, 4),
-                        historical_mean=round(hist_mean, 4),
-                        historical_std=round(hist_std, 4),
-                        z_score=round(z, 2),
-                        direction=direction,
-                        severity=severity,
-                    ))
+                    anomalies.append(
+                        CorrelationAnomaly(
+                            asset_a=symbols[i],
+                            asset_b=symbols[j],
+                            current_corr=round(curr_corr, 4),
+                            historical_mean=round(hist_mean, 4),
+                            historical_std=round(hist_std, 4),
+                            z_score=round(z, 2),
+                            direction=direction,
+                            severity=severity,
+                        )
+                    )
 
         return anomalies
 
@@ -430,9 +436,13 @@ class CorrelationAnalyzer:
         min_len = min(len(a), len(b))
         if min_len < 30:
             return CointegrationResult(
-                asset_a="", asset_b="", is_cointegrated=False,
-                adf_statistic=0.0, p_value=1.0,
-                hedge_ratio=1.0, half_life=0.0,
+                asset_a="",
+                asset_b="",
+                is_cointegrated=False,
+                adf_statistic=0.0,
+                p_value=1.0,
+                hedge_ratio=1.0,
+                half_life=0.0,
             )
 
         a = a[-min_len:]
@@ -493,7 +503,7 @@ class CorrelationAnalyzer:
         if abs(corr) >= 1.0:
             return corr, 0.0
 
-        t_stat = corr * np.sqrt((n - 2) / (1 - corr ** 2))
+        t_stat = corr * np.sqrt((n - 2) / (1 - corr**2))
         # Approximate p-value (two-tailed)
         df = n - 2
         # Use a simple approximation for p-value
@@ -541,7 +551,9 @@ class CorrelationAnalyzer:
         y = diff[max_lag:]
         X_parts = [np.ones(len(y)), lagged]
         for lag in range(1, max_lag + 1):
-            X_parts.append(diff[max_lag - lag:-lag] if lag < len(diff) - max_lag else diff[max_lag - lag:])
+            X_parts.append(
+                diff[max_lag - lag : -lag] if lag < len(diff) - max_lag else diff[max_lag - lag :]
+            )
 
         min_len = min(len(y), min(len(x) for x in X_parts))
         y = y[:min_len]
@@ -551,7 +563,7 @@ class CorrelationAnalyzer:
         try:
             beta = np.linalg.lstsq(X, y, rcond=None)[0]
             residuals = y - X @ beta
-            se = np.sqrt(np.sum(residuals ** 2) / (len(y) - len(beta)))
+            se = np.sqrt(np.sum(residuals**2) / (len(y) - len(beta)))
             XtX_inv = np.linalg.inv(X.T @ X)
             se_beta = se * np.sqrt(np.diag(XtX_inv))
             adf_stat = float(beta[1] / se_beta[1]) if se_beta[1] > 0 else 0.0
@@ -652,7 +664,7 @@ def _t_cdf_approx(t: float, df: int) -> float:
 
     Uses the regularized incomplete beta function approximation.
     """
-    x = df / (df + t ** 2)
+    x = df / (df + t**2)
     # Simple approximation for the regularized incomplete beta function
     # This is a rough approximation sufficient for p-value estimation
     if x <= 0:
@@ -666,12 +678,13 @@ def _t_cdf_approx(t: float, df: int) -> float:
 
     # Simple beta function approximation
     try:
-        from math import lgamma, exp
-        log_beta = lgamma(a) + lgamma(b) - lgamma(a + b)
+        from math import lgamma
+
+        lgamma(a) + lgamma(b) - lgamma(a + b)
         # Incomplete beta (very rough approximation)
         if t > 0:
-            return 0.5 + 0.5 * min(1.0, t / (t ** 2 + df) ** 0.5)
+            return 0.5 + 0.5 * min(1.0, t / (t**2 + df) ** 0.5)
         else:
-            return 0.5 - 0.5 * min(1.0, abs(t) / (t ** 2 + df) ** 0.5)
+            return 0.5 - 0.5 * min(1.0, abs(t) / (t**2 + df) ** 0.5)
     except (ValueError, OverflowError):
         return 0.5

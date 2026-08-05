@@ -14,7 +14,7 @@ Levels are ranked by strength and proximity to current price.
 from __future__ import annotations
 
 import logging
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from enum import StrEnum
 from typing import Any
 
@@ -116,7 +116,9 @@ class LevelMapper:
             # Price near support — potential long setup
     """
 
-    def __init__(self, config: dict[str, Any] | None = None, *, genome: dict[str, Any] | None = None) -> None:
+    def __init__(
+        self, config: dict[str, Any] | None = None, *, genome: dict[str, Any] | None = None
+    ) -> None:
         self._config = config or genome or {}
         sr_config = self._config.get("sr_levels", {})
 
@@ -132,14 +134,17 @@ class LevelMapper:
         self._ob_proximity_pct = sr_config.get("order_blocks", {}).get("proximity_pct", 0.3)
 
         # Level strength weights
-        self._level_weights = sr_config.get("level_weights", {
-            "order_block": 1.0,
-            "asian_hl": 0.9,
-            "daily_hl": 0.8,
-            "weekly_hl": 0.7,
-            "monthly_hl": 0.6,
-            "yearly": 0.5,
-        })
+        self._level_weights = sr_config.get(
+            "level_weights",
+            {
+                "order_block": 1.0,
+                "asian_hl": 0.9,
+                "daily_hl": 0.8,
+                "weekly_hl": 0.7,
+                "monthly_hl": 0.6,
+                "yearly": 0.5,
+            },
+        )
 
         # Mutable params
         mutable = self._config.get("mutable_parameters", {})
@@ -180,10 +185,14 @@ class LevelMapper:
 
         # ── Daily OHLC levels ──
         if self._daily_enabled and d1_ohlcv and len(d1_ohlcv) >= 2:
-            levels.extend(self._map_period_levels(
-                d1_ohlcv, "D1", current_price,
-                include_open=True,
-            ))
+            levels.extend(
+                self._map_period_levels(
+                    d1_ohlcv,
+                    "D1",
+                    current_price,
+                    include_open=True,
+                )
+            )
 
         # ── Weekly levels (from daily bars) ──
         if self._weekly_enabled and d1_ohlcv and len(d1_ohlcv) >= 5:
@@ -209,55 +218,67 @@ class LevelMapper:
             # Convert OBs to SRLevels
             for ob in order_blocks:
                 if not ob.mitigated:
-                    levels.append(SRLevel(
-                        price=ob.mid,
-                        level_type=LevelType.ORDER_BLOCK,
-                        side=ob.side,
-                        strength=ob.strength,
-                        source=f"OB_{ob.timeframe}",
-                        timeframe=ob.timeframe,
-                        touches=0,
-                        last_test_distance_pct=abs(current_price - ob.mid) / current_price * 100,
-                    ))
+                    levels.append(
+                        SRLevel(
+                            price=ob.mid,
+                            level_type=LevelType.ORDER_BLOCK,
+                            side=ob.side,
+                            strength=ob.strength,
+                            source=f"OB_{ob.timeframe}",
+                            timeframe=ob.timeframe,
+                            touches=0,
+                            last_test_distance_pct=abs(current_price - ob.mid)
+                            / current_price
+                            * 100,
+                        )
+                    )
 
         # ── Swing structure levels ──
         if swing_highs:
             for sh in swing_highs[-3:]:
                 dist = abs(current_price - sh) / current_price * 100
-                levels.append(SRLevel(
-                    price=sh,
-                    level_type=LevelType.SWING_HIGH,
-                    side=LevelSide.RESISTANCE,
-                    strength=0.6,
-                    source="swing_structure",
-                    timeframe="H1",
-                    touches=1,
-                    last_test_distance_pct=dist,
-                ))
+                levels.append(
+                    SRLevel(
+                        price=sh,
+                        level_type=LevelType.SWING_HIGH,
+                        side=LevelSide.RESISTANCE,
+                        strength=0.6,
+                        source="swing_structure",
+                        timeframe="H1",
+                        touches=1,
+                        last_test_distance_pct=dist,
+                    )
+                )
 
         if swing_lows:
             for sl in swing_lows[-3:]:
                 dist = abs(current_price - sl) / current_price * 100
-                levels.append(SRLevel(
-                    price=sl,
-                    level_type=LevelType.SWING_LOW,
-                    side=LevelSide.SUPPORT,
-                    strength=0.6,
-                    source="swing_structure",
-                    timeframe="H1",
-                    touches=1,
-                    last_test_distance_pct=dist,
-                ))
+                levels.append(
+                    SRLevel(
+                        price=sl,
+                        level_type=LevelType.SWING_LOW,
+                        side=LevelSide.SUPPORT,
+                        strength=0.6,
+                        source="swing_structure",
+                        timeframe="H1",
+                        touches=1,
+                        last_test_distance_pct=dist,
+                    )
+                )
 
         # ── Classify and sort ──
-        supports = tuple(sorted(
-            [l for l in levels if l.side == LevelSide.SUPPORT],
-            key=lambda l: abs(l.price - current_price),
-        ))
-        resistances = tuple(sorted(
-            [l for l in levels if l.side == LevelSide.RESISTANCE],
-            key=lambda l: abs(l.price - current_price),
-        ))
+        supports = tuple(
+            sorted(
+                [l for l in levels if l.side == LevelSide.SUPPORT],
+                key=lambda l: abs(l.price - current_price),
+            )
+        )
+        resistances = tuple(
+            sorted(
+                [l for l in levels if l.side == LevelSide.RESISTANCE],
+                key=lambda l: abs(l.price - current_price),
+            )
+        )
 
         nearest_sup = supports[0] if supports else None
         nearest_res = resistances[0] if resistances else None
@@ -288,7 +309,7 @@ class LevelMapper:
         expected by map_levels().
         """
         d1_data = self._to_dict_ohlcv(ohlc_d1) if ohlc_d1 else None
-        h4_data = self._to_dict_ohlcv(ohlc_w1) if ohlc_w1 else None
+        self._to_dict_ohlcv(ohlc_w1) if ohlc_w1 else None
         h1_data = self._to_dict_ohlcv(ohlc_h1) if ohlc_h1 else None
 
         # Extract swing highs/lows from swing points
@@ -296,14 +317,11 @@ class LevelMapper:
         swing_lows: list[float] = []
         if swing_points:
             for sp in swing_points:
-                if hasattr(sp, 'price'):
-                    if hasattr(sp, 'swing_type'):
+                if hasattr(sp, "price"):
+                    if hasattr(sp, "swing_type"):
                         st = sp.swing_type
-                        if hasattr(st, 'value'):
-                            st_val = st.value
-                        else:
-                            st_val = str(st)
-                        if 'high' in st_val.upper() or 'HH' in str(st).upper():
+                        st_val = st.value if hasattr(st, "value") else str(st)
+                        if "high" in st_val.upper() or "HH" in str(st).upper():
                             swing_highs.append(sp.price)
                         else:
                             swing_lows.append(sp.price)
@@ -337,21 +355,25 @@ class LevelMapper:
         result = []
         for bar in data:
             if len(bar) >= 5:
-                result.append({
-                    "open": float(bar[0]),
-                    "high": float(bar[1]),
-                    "low": float(bar[2]),
-                    "close": float(bar[3]),
-                    "volume": float(bar[4]),
-                })
+                result.append(
+                    {
+                        "open": float(bar[0]),
+                        "high": float(bar[1]),
+                        "low": float(bar[2]),
+                        "close": float(bar[3]),
+                        "volume": float(bar[4]),
+                    }
+                )
             elif len(bar) >= 4:
-                result.append({
-                    "open": float(bar[0]),
-                    "high": float(bar[1]),
-                    "low": float(bar[2]),
-                    "close": float(bar[3]),
-                    "volume": 0.0,
-                })
+                result.append(
+                    {
+                        "open": float(bar[0]),
+                        "high": float(bar[1]),
+                        "low": float(bar[2]),
+                        "close": float(bar[3]),
+                        "volume": 0.0,
+                    }
+                )
         return result
 
     def update_genome(self, new_genome: dict[str, Any]) -> None:
@@ -414,12 +436,7 @@ class LevelMapper:
         touch_score = min(1.0, level.touches / 5.0)
 
         # Composite
-        score = (
-            proximity_score * 0.4 +
-            level.strength * 0.3 +
-            type_weight * 0.2 +
-            touch_score * 0.1
-        )
+        score = proximity_score * 0.4 + level.strength * 0.3 + type_weight * 0.2 + touch_score * 0.1
 
         return min(1.0, score)
 
@@ -437,29 +454,33 @@ class LevelMapper:
 
         if asian_high is not None:
             dist = abs(current_price - asian_high) / current_price * 100
-            levels.append(SRLevel(
-                price=asian_high,
-                level_type=LevelType.ASIAN_HIGH,
-                side=LevelSide.RESISTANCE,
-                strength=weight,
-                source="asian_session_high",
-                timeframe="D1",
-                touches=1,
-                last_test_distance_pct=dist,
-            ))
+            levels.append(
+                SRLevel(
+                    price=asian_high,
+                    level_type=LevelType.ASIAN_HIGH,
+                    side=LevelSide.RESISTANCE,
+                    strength=weight,
+                    source="asian_session_high",
+                    timeframe="D1",
+                    touches=1,
+                    last_test_distance_pct=dist,
+                )
+            )
 
         if asian_low is not None:
             dist = abs(current_price - asian_low) / current_price * 100
-            levels.append(SRLevel(
-                price=asian_low,
-                level_type=LevelType.ASIAN_LOW,
-                side=LevelSide.SUPPORT,
-                strength=weight,
-                source="asian_session_low",
-                timeframe="D1",
-                touches=1,
-                last_test_distance_pct=dist,
-            ))
+            levels.append(
+                SRLevel(
+                    price=asian_low,
+                    level_type=LevelType.ASIAN_LOW,
+                    side=LevelSide.SUPPORT,
+                    strength=weight,
+                    source="asian_session_low",
+                    timeframe="D1",
+                    touches=1,
+                    last_test_distance_pct=dist,
+                )
+            )
 
         return levels
 
@@ -480,44 +501,50 @@ class LevelMapper:
 
         # Previous high → resistance
         dist = abs(current_price - prev["high"]) / current_price * 100
-        levels.append(SRLevel(
-            price=prev["high"],
-            level_type=LevelType.DAILY_HIGH,
-            side=LevelSide.RESISTANCE,
-            strength=weight,
-            source=f"prev_{timeframe.lower()}_high",
-            timeframe=timeframe,
-            touches=1,
-            last_test_distance_pct=dist,
-        ))
+        levels.append(
+            SRLevel(
+                price=prev["high"],
+                level_type=LevelType.DAILY_HIGH,
+                side=LevelSide.RESISTANCE,
+                strength=weight,
+                source=f"prev_{timeframe.lower()}_high",
+                timeframe=timeframe,
+                touches=1,
+                last_test_distance_pct=dist,
+            )
+        )
 
         # Previous low → support
         dist = abs(current_price - prev["low"]) / current_price * 100
-        levels.append(SRLevel(
-            price=prev["low"],
-            level_type=LevelType.DAILY_LOW,
-            side=LevelSide.SUPPORT,
-            strength=weight,
-            source=f"prev_{timeframe.lower()}_low",
-            timeframe=timeframe,
-            touches=1,
-            last_test_distance_pct=dist,
-        ))
+        levels.append(
+            SRLevel(
+                price=prev["low"],
+                level_type=LevelType.DAILY_LOW,
+                side=LevelSide.SUPPORT,
+                strength=weight,
+                source=f"prev_{timeframe.lower()}_low",
+                timeframe=timeframe,
+                touches=1,
+                last_test_distance_pct=dist,
+            )
+        )
 
         # Open (can act as pivot)
         if include_open:
             dist = abs(current_price - prev["open"]) / current_price * 100
             side = LevelSide.SUPPORT if prev["open"] < current_price else LevelSide.RESISTANCE
-            levels.append(SRLevel(
-                price=prev["open"],
-                level_type=LevelType.DAILY_OPEN,
-                side=side,
-                strength=weight * 0.8,
-                source=f"prev_{timeframe.lower()}_open",
-                timeframe=timeframe,
-                touches=1,
-                last_test_distance_pct=dist,
-            ))
+            levels.append(
+                SRLevel(
+                    price=prev["open"],
+                    level_type=LevelType.DAILY_OPEN,
+                    side=side,
+                    strength=weight * 0.8,
+                    source=f"prev_{timeframe.lower()}_open",
+                    timeframe=timeframe,
+                    touches=1,
+                    last_test_distance_pct=dist,
+                )
+            )
 
         return levels
 
@@ -539,29 +566,47 @@ class LevelMapper:
         levels: list[SRLevel] = []
 
         dist = abs(current_price - week_high) / current_price * 100
-        levels.append(SRLevel(
-            price=week_high, level_type=LevelType.WEEKLY_HIGH,
-            side=LevelSide.RESISTANCE, strength=weight,
-            source="weekly_high", timeframe="W1", touches=1,
-            last_test_distance_pct=dist,
-        ))
+        levels.append(
+            SRLevel(
+                price=week_high,
+                level_type=LevelType.WEEKLY_HIGH,
+                side=LevelSide.RESISTANCE,
+                strength=weight,
+                source="weekly_high",
+                timeframe="W1",
+                touches=1,
+                last_test_distance_pct=dist,
+            )
+        )
 
         dist = abs(current_price - week_low) / current_price * 100
-        levels.append(SRLevel(
-            price=week_low, level_type=LevelType.WEEKLY_LOW,
-            side=LevelSide.SUPPORT, strength=weight,
-            source="weekly_low", timeframe="W1", touches=1,
-            last_test_distance_pct=dist,
-        ))
+        levels.append(
+            SRLevel(
+                price=week_low,
+                level_type=LevelType.WEEKLY_LOW,
+                side=LevelSide.SUPPORT,
+                strength=weight,
+                source="weekly_low",
+                timeframe="W1",
+                touches=1,
+                last_test_distance_pct=dist,
+            )
+        )
 
         dist = abs(current_price - week_open) / current_price * 100
         side = LevelSide.SUPPORT if week_open < current_price else LevelSide.RESISTANCE
-        levels.append(SRLevel(
-            price=week_open, level_type=LevelType.WEEKLY_OPEN,
-            side=side, strength=weight * 0.8,
-            source="weekly_open", timeframe="W1", touches=1,
-            last_test_distance_pct=dist,
-        ))
+        levels.append(
+            SRLevel(
+                price=week_open,
+                level_type=LevelType.WEEKLY_OPEN,
+                side=side,
+                strength=weight * 0.8,
+                source="weekly_open",
+                timeframe="W1",
+                touches=1,
+                last_test_distance_pct=dist,
+            )
+        )
 
         return levels
 
@@ -582,20 +627,32 @@ class LevelMapper:
         levels: list[SRLevel] = []
 
         dist = abs(current_price - month_high) / current_price * 100
-        levels.append(SRLevel(
-            price=month_high, level_type=LevelType.MONTHLY_HIGH,
-            side=LevelSide.RESISTANCE, strength=weight,
-            source="monthly_high", timeframe="MN", touches=1,
-            last_test_distance_pct=dist,
-        ))
+        levels.append(
+            SRLevel(
+                price=month_high,
+                level_type=LevelType.MONTHLY_HIGH,
+                side=LevelSide.RESISTANCE,
+                strength=weight,
+                source="monthly_high",
+                timeframe="MN",
+                touches=1,
+                last_test_distance_pct=dist,
+            )
+        )
 
         dist = abs(current_price - month_low) / current_price * 100
-        levels.append(SRLevel(
-            price=month_low, level_type=LevelType.MONTHLY_LOW,
-            side=LevelSide.SUPPORT, strength=weight,
-            source="monthly_low", timeframe="MN", touches=1,
-            last_test_distance_pct=dist,
-        ))
+        levels.append(
+            SRLevel(
+                price=month_low,
+                level_type=LevelType.MONTHLY_LOW,
+                side=LevelSide.SUPPORT,
+                strength=weight,
+                source="monthly_low",
+                timeframe="MN",
+                touches=1,
+                last_test_distance_pct=dist,
+            )
+        )
 
         return levels
 
@@ -618,28 +675,46 @@ class LevelMapper:
 
         dist = abs(current_price - year_open) / current_price * 100
         side = LevelSide.SUPPORT if year_open < current_price else LevelSide.RESISTANCE
-        levels.append(SRLevel(
-            price=year_open, level_type=LevelType.YEARLY_OPEN,
-            side=side, strength=weight,
-            source="yearly_open", timeframe="Y1", touches=1,
-            last_test_distance_pct=dist,
-        ))
+        levels.append(
+            SRLevel(
+                price=year_open,
+                level_type=LevelType.YEARLY_OPEN,
+                side=side,
+                strength=weight,
+                source="yearly_open",
+                timeframe="Y1",
+                touches=1,
+                last_test_distance_pct=dist,
+            )
+        )
 
         dist = abs(current_price - year_high) / current_price * 100
-        levels.append(SRLevel(
-            price=year_high, level_type=LevelType.YEARLY_HIGH,
-            side=LevelSide.RESISTANCE, strength=weight,
-            source="yearly_high", timeframe="Y1", touches=1,
-            last_test_distance_pct=dist,
-        ))
+        levels.append(
+            SRLevel(
+                price=year_high,
+                level_type=LevelType.YEARLY_HIGH,
+                side=LevelSide.RESISTANCE,
+                strength=weight,
+                source="yearly_high",
+                timeframe="Y1",
+                touches=1,
+                last_test_distance_pct=dist,
+            )
+        )
 
         dist = abs(current_price - year_low) / current_price * 100
-        levels.append(SRLevel(
-            price=year_low, level_type=LevelType.YEARLY_LOW,
-            side=LevelSide.SUPPORT, strength=weight,
-            source="yearly_low", timeframe="Y1", touches=1,
-            last_test_distance_pct=dist,
-        ))
+        levels.append(
+            SRLevel(
+                price=year_low,
+                level_type=LevelType.YEARLY_LOW,
+                side=LevelSide.SUPPORT,
+                strength=weight,
+                source="yearly_low",
+                timeframe="Y1",
+                touches=1,
+                last_test_distance_pct=dist,
+            )
+        )
 
         return levels
 
@@ -660,7 +735,7 @@ class LevelMapper:
             return []
 
         obs: list[OrderBlock] = []
-        bars = ohlcv[-self._ob_lookback:] if len(ohlcv) > self._ob_lookback else ohlcv
+        bars = ohlcv[-self._ob_lookback :] if len(ohlcv) > self._ob_lookback else ohlcv
 
         for i in range(1, len(bars) - 2):
             prev_bar = bars[i - 1]
@@ -671,12 +746,12 @@ class LevelMapper:
             prev_range = prev_bar["high"] - prev_bar["low"]
             curr_body = abs(curr_bar["close"] - curr_bar["open"])
             curr_range = curr_bar["high"] - curr_bar["low"]
-            next_body = abs(next_bar["close"] - next_bar["open"])
+            abs(next_bar["close"] - next_bar["open"])
 
             if prev_range == 0 or curr_range == 0:
                 continue
 
-            prev_body_pct = prev_body / prev_range
+            prev_body / prev_range
             curr_body_pct = curr_body / curr_range
 
             # ── Bullish OB (demand zone) ──
@@ -691,24 +766,23 @@ class LevelMapper:
                 ob_low = prev_bar["low"]
                 ob_mid = (ob_high + ob_low) / 2
 
-                mitigated = any(
-                    bar["low"] <= ob_mid
-                    for bar in bars[i + 2:]
-                )
+                mitigated = any(bar["low"] <= ob_mid for bar in bars[i + 2 :])
 
-                dist = abs(current_price - ob_mid) / current_price * 100
+                abs(current_price - ob_mid) / current_price * 100
                 strength = min(1.0, curr_body_pct + (0.2 if not mitigated else 0.0))
 
-                obs.append(OrderBlock(
-                    high=ob_high,
-                    low=ob_low,
-                    mid=ob_mid,
-                    side=LevelSide.SUPPORT,
-                    strength=strength,
-                    candle_index=i,
-                    timeframe=timeframe,
-                    mitigated=mitigated,
-                ))
+                obs.append(
+                    OrderBlock(
+                        high=ob_high,
+                        low=ob_low,
+                        mid=ob_mid,
+                        side=LevelSide.SUPPORT,
+                        strength=strength,
+                        candle_index=i,
+                        timeframe=timeframe,
+                        mitigated=mitigated,
+                    )
+                )
 
             # ── Bearish OB (supply zone) ──
             is_prev_bullish = prev_bar["close"] > prev_bar["open"]
@@ -719,24 +793,23 @@ class LevelMapper:
                 ob_low = prev_bar["low"]
                 ob_mid = (ob_high + ob_low) / 2
 
-                mitigated = any(
-                    bar["high"] >= ob_mid
-                    for bar in bars[i + 2:]
-                )
+                mitigated = any(bar["high"] >= ob_mid for bar in bars[i + 2 :])
 
-                dist = abs(current_price - ob_mid) / current_price * 100
+                abs(current_price - ob_mid) / current_price * 100
                 strength = min(1.0, curr_body_pct + (0.2 if not mitigated else 0.0))
 
-                obs.append(OrderBlock(
-                    high=ob_high,
-                    low=ob_low,
-                    mid=ob_mid,
-                    side=LevelSide.RESISTANCE,
-                    strength=strength,
-                    candle_index=i,
-                    timeframe=timeframe,
-                    mitigated=mitigated,
-                ))
+                obs.append(
+                    OrderBlock(
+                        high=ob_high,
+                        low=ob_low,
+                        mid=ob_mid,
+                        side=LevelSide.RESISTANCE,
+                        strength=strength,
+                        candle_index=i,
+                        timeframe=timeframe,
+                        mitigated=mitigated,
+                    )
+                )
 
         return obs
 

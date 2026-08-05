@@ -14,7 +14,7 @@ Usage:
 from src.harness.agent_loop import AgentLoop, AgentLoopConfig
 from src.harness.governance import Governance, GovernanceConfig
 from src.harness.memory import HarnessMemory, MemoryConfig
-from src.harness.tool_registry import ToolRegistry, SkillLoader
+from src.harness.tool_registry import SkillLoader, ToolRegistry
 
 __all__ = [
     "AgentLoop",

@@ -6,7 +6,7 @@
 [![Python](https://img.shields.io/badge/python-3.12+-blue?logo=python&logoColor=white)](https://www.python.org/downloads/)
 [![Rust](https://img.shields.io/badge/rust-1.79+-orange?logo=rust&logoColor=white)](https://www.rust-lang.org/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-0.3.0-green)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-1.0.0-green)](CHANGELOG.md)
 [![Status](https://img.shields.io/badge/status-production--ready-brightgreen)](#current-status)
 
 ---
@@ -97,6 +97,7 @@ TRADE → OBSERVE → REFLECT → EXTRACT → ADAPT → BETTER TRADE
 | Agent | Role |
 |-------|------|
 | **SignalScout** | Finds statistical edges across markets |
+| **TSARStrategyRouter** | Regime-aware strategy orchestration |
 | **RiskGuardian** | VETO power — deterministic risk checks before every trade |
 | **ExecutionSniper** | Places, monitors, and manages orders |
 | **TradePhilosopher** | Post-trade reflection and lesson extraction |
@@ -108,6 +109,42 @@ TRADE → OBSERVE → REFLECT → EXTRACT → ADAPT → BETTER TRADE
 | **MacroAgent** | Economic context and event awareness |
 | **InformationAgent** | News aggregation and impact analysis |
 | **NewsGatekeeper** | News signal gating and verification |
+
+### TSAR Strategy — 7-Layer Pipeline
+
+The core trading strategy. A multi-layer institutional pipeline that only executes when all layers confirm:
+
+```
+News Gate → Trend Alignment → S/R Proximity → Retest → RSI Filter → Candlestick → Execute
+ (0.10)       (0.25)           (0.20)         (0.15)    (0.15)        (0.15)
+```
+
+| Layer | Weight | Purpose |
+|-------|--------|---------|
+| **News Gate** | 0.10 | No high-impact news in 30 min window |
+| **Trend Alignment** | 0.25 | D1/H4/H1 50/200 MAs agree on direction |
+| **S/R Proximity** | 0.20 | Price at mapped support/resistance level |
+| **Retest** | 0.15 | Price retests level with rejection candle |
+| **RSI Filter** | 0.15 | RSI confirms direction (not overextended) |
+| **Candlestick** | 0.15 | Engulfing, pin bar, or star pattern |
+
+**Session-aware:** Trades only during London/NY sessions (1.5× overlap multiplier). **Structure-based stops:** Behind S/R levels with ATR buffers. **Partial exits:** 40% at 1:1, 30% at 2:1, 30% at 3:1 R:R.
+
+25+ genome parameters evolved by the StrategyGeneticist. Full docs: **[TSAR Strategy](docs/TSAR_STRATEGY.md)**
+
+### Rust Performance
+
+Critical hot paths accelerated via PyO3 Rust bindings:
+
+| Operation | Python | Rust | Speedup |
+|-----------|--------|------|---------|
+| RSI calculation | numpy | tick-processor | ~10× |
+| ATR calculation | numpy | tick-processor | ~10× |
+| MA computation | pandas | tick-processor | ~8× |
+| Candlestick scan | pure Python | tick-processor | ~15× |
+| Level proximity | pure Python | core | ~5× |
+
+Graceful fallback to pure Python when Rust toolchain unavailable (`TSAR_RUST_BUILD=0`).
 
 ### Risk System
 
@@ -212,6 +249,24 @@ make run-dry
 | 📖 **API Docs** | `http://localhost:8000/docs` |
 
 See **[INSTALL.md](INSTALL.md)** for detailed setup instructions.
+
+### TSAR Strategy Quick Start
+
+```bash
+# 1. Verify strategy loads
+python3 -c "from src.strategy.tsar_strategy.strategy import TSARStrategy; print('TSAR Strategy OK')"
+
+# 2. Run backtest on historical data
+python3 -m src.strategy.backtest_engine --strategy tsar --config config/strategies/tsar.yaml
+
+# 3. Run 27 unit tests
+pytest tests/strategy/test_vmpm.py -v
+
+# 4. View strategy genome
+cat config/strategies/tsar.yaml
+```
+
+The strategy requires multi-timeframe OHLCV data (D1, H4, H1) and operates in `paper` mode by default. Live trading requires the mandate gate (50+ paper trades, 7 days, 75% win rate).
 
 ---
 
@@ -428,6 +483,7 @@ tsar/
 | Document | Description |
 |----------|-------------|
 | [Architecture](docs/ARCHITECTURE.md) | System architecture deep dive |
+| [TSAR Strategy](docs/TSAR_STRATEGY.md) | 7-layer pipeline, genome parameters, backtesting |
 | [Deployment](docs/DEPLOYMENT.md) | Azure, Docker, and local deployment |
 | [Installation](INSTALL.md) | Step-by-step setup guide |
 | [Changelog](CHANGELOG.md) | Version history |
@@ -448,6 +504,7 @@ tsar/
  ✅ v0.2.1 — Scenario prevention, paper trading gate, 14 Rust crates, win rate councils
  ✅ v0.2.2 — News gaps, on-chain rules, backend deployment, OpenHarness
  ✅ v0.3.0 — Azure free tier, TLS, app icon, vector store fallback, quantum optimizer, production hardening
+ ✅ v1.0.0 — TSAR Strategy: 7-layer pipeline, session awareness, 27 tests, Rust acceleration
 ```
 
 ---

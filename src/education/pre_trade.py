@@ -90,7 +90,9 @@ class PreTradeExplainer:
         symbol = signal.get("symbol", "???")
         direction = signal.get("side", "LONG").upper()
         direction_emoji = "🟢" if direction == "LONG" else "🔴"
-        lines.append(f"{Fmt.CHART} {Fmt.bold(f'TRADE SIGNAL: {symbol} {direction_emoji} {direction}')}")
+        lines.append(
+            f"{Fmt.CHART} {Fmt.bold(f'TRADE SIGNAL: {symbol} {direction_emoji} {direction}')}"
+        )
         lines.append(Fmt.separator())
 
         # Reasons
@@ -163,7 +165,9 @@ class PreTradeExplainer:
         vol_change = metadata.get("volume_change_pct")
         if vol_change is not None and vol_change > 50:
             side = "buy" if signal.get("side", "").upper() == "BUY" else "sell"
-            reasons.append(self.SIMPLE_REASONS["volume_spike"].format(pct=f"{vol_change:.0f}", side=side))
+            reasons.append(
+                self.SIMPLE_REASONS["volume_spike"].format(pct=f"{vol_change:.0f}", side=side)
+            )
 
         # MACD
         macd_hist = indicators.get("macd_histogram")
@@ -255,7 +259,9 @@ class PreTradeExplainer:
         position_pct = (position_size / balance * 100) if balance > 0 else 0
         risk_pct = (risk_amount / balance * 100) if balance > 0 else 0
 
-        lines.append(Fmt.bullet(f"Size: ${position_size:.2f} ({position_pct:.1f}% of ${balance:.2f})"))
+        lines.append(
+            Fmt.bullet(f"Size: ${position_size:.2f} ({position_pct:.1f}% of ${balance:.2f})")
+        )
         lines.append(Fmt.bullet(f"Risk: ${risk_amount:.2f} ({risk_pct:.1f}% of balance)"))
         lines.append(Fmt.bullet(f"Max loss if stopped: -${risk_amount:.2f}"))
 

@@ -11,7 +11,6 @@ Capabilities:
 
 from __future__ import annotations
 
-import json
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -108,7 +107,7 @@ class EmbeddingFunction:
 
         # Character 3-grams (captures subword similarity)
         for i in range(len(text_lower) - 2):
-            trigram = text_lower[i:i + 3]
+            trigram = text_lower[i : i + 3]
             h = hash(trigram) % dim
             vec[h] += 1.0
 
@@ -155,8 +154,10 @@ class ChromaVectorStore:
             # Use lightweight numpy-based vector store as fallback
             try:
                 from src.knowledge.lightweight_vector_store import LightweightVectorStore
+
                 self._fallback_store = LightweightVectorStore(
-                    persist_dir=persist_dir, embedding_fn=embedding_fn,
+                    persist_dir=persist_dir,
+                    embedding_fn=embedding_fn,
                 )
                 logger.info(
                     "chromadb_fallback_to_numpy",
@@ -180,9 +181,7 @@ class ChromaVectorStore:
                     settings=ChromaSettings(anonymized_telemetry=False),
                 )
             else:
-                self._client = chromadb.Client(
-                    ChromaSettings(anonymized_telemetry=False)
-                )
+                self._client = chromadb.Client(ChromaSettings(anonymized_telemetry=False))
             logger.info("chromadb_initialized", persist_dir=persist_path)
         except TypeError:
             # Fallback for older ChromaDB versions (<0.4) that lack PersistentClient
@@ -196,9 +195,7 @@ class ChromaVectorStore:
                         )
                     )
                 else:
-                    self._client = chromadb.Client(
-                        ChromaSettings(anonymized_telemetry=False)
-                    )
+                    self._client = chromadb.Client(ChromaSettings(anonymized_telemetry=False))
                 logger.info("chromadb_initialized_legacy", persist_dir=persist_path)
             except Exception as exc:
                 logger.error("chromadb_init_failed", error=str(exc))
@@ -414,9 +411,15 @@ class ChromaVectorStore:
         if not results or not results.get("ids"):
             return parsed
         ids = results["ids"][0] if results["ids"] else []
-        distances = results.get("distances", [[]])[0] if results.get("distances") else [0.0] * len(ids)
-        metadatas = results.get("metadatas", [[]])[0] if results.get("metadatas") else [{}] * len(ids)
-        documents = results.get("documents", [[]])[0] if results.get("documents") else [""] * len(ids)
+        distances = (
+            results.get("distances", [[]])[0] if results.get("distances") else [0.0] * len(ids)
+        )
+        metadatas = (
+            results.get("metadatas", [[]])[0] if results.get("metadatas") else [{}] * len(ids)
+        )
+        documents = (
+            results.get("documents", [[]])[0] if results.get("documents") else [""] * len(ids)
+        )
         for i, doc_id in enumerate(ids):
             parsed.append(
                 VectorSearchResult(

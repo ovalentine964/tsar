@@ -22,7 +22,7 @@ from __future__ import annotations
 
 import logging
 import time
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
@@ -139,7 +139,6 @@ _EVENT_IMPACT_SCORES: dict[str, tuple[float, str]] = {
     "powell": (0.85, "fed"),
     "fomc minutes": (0.80, "fed"),
     "fomc press": (0.85, "fed"),
-
     # Inflation — very high impact
     "cpi": (0.90, "inflation"),
     "consumer price": (0.85, "inflation"),
@@ -147,7 +146,6 @@ _EVENT_IMPACT_SCORES: dict[str, tuple[float, str]] = {
     "pce": (0.80, "inflation"),
     "ppi": (0.70, "inflation"),
     "inflation": (0.75, "inflation"),
-
     # Employment — high impact
     "non-farm": (0.85, "employment"),
     "nonfarm": (0.85, "employment"),
@@ -156,18 +154,15 @@ _EVENT_IMPACT_SCORES: dict[str, tuple[float, str]] = {
     "jobless claims": (0.60, "employment"),
     "jobs report": (0.80, "employment"),
     "payroll": (0.80, "employment"),
-
     # GDP — moderate-high impact
     "gdp": (0.75, "gdp"),
     "gross domestic": (0.70, "gdp"),
-
     # Other macro — moderate impact
     "retail sales": (0.60, "other"),
     "consumer confidence": (0.55, "other"),
     "housing starts": (0.40, "other"),
     "ism manufacturing": (0.55, "other"),
     "durable goods": (0.45, "other"),
-
     # Crypto-specific
     "halving": (0.90, "crypto"),
     "bitcoin halving": (0.95, "crypto"),
@@ -180,10 +175,22 @@ _EVENT_IMPACT_SCORES: dict[str, tuple[float, str]] = {
 
 # FOMC meeting dates for 2024-2026 (hardcoded for reliability)
 _FOMC_DATES = [
-    "2025-01-29", "2025-03-19", "2025-05-07", "2025-06-18",
-    "2025-07-30", "2025-09-17", "2025-10-29", "2025-12-17",
-    "2026-01-28", "2026-03-18", "2026-04-29", "2026-06-17",
-    "2026-07-29", "2026-09-16", "2026-10-28", "2026-12-16",
+    "2025-01-29",
+    "2025-03-19",
+    "2025-05-07",
+    "2025-06-18",
+    "2025-07-30",
+    "2025-09-17",
+    "2025-10-29",
+    "2025-12-17",
+    "2026-01-28",
+    "2026-03-18",
+    "2026-04-29",
+    "2026-06-17",
+    "2026-07-29",
+    "2026-09-16",
+    "2026-10-28",
+    "2026-12-16",
 ]
 
 # Known crypto events (example — would be updated dynamically)
@@ -206,8 +213,7 @@ class EconomicCalendarTools:
     """
 
     description = (
-        "Economic calendar: FOMC, CPI, NFP, GDP, impact scoring, "
-        "risk windows, crypto events"
+        "Economic calendar: FOMC, CPI, NFP, GDP, impact scoring, risk windows, crypto events"
     )
 
     def __init__(self, config: dict[str, Any] | None = None) -> None:
@@ -294,21 +300,23 @@ class EconomicCalendarTools:
             if days_until > days_ahead:
                 continue
 
-            processed.append(EconomicEvent(
-                event=event.event,
-                category=event.category,
-                date=event.date,
-                time=event.time,
-                impact=event.impact,
-                impact_score=event.impact_score,
-                previous=event.previous,
-                forecast=event.forecast,
-                actual=event.actual,
-                currency=event.currency,
-                market_impact=event.market_impact,
-                is_released=bool(event.actual),
-                days_until=max(0, days_until),
-            ))
+            processed.append(
+                EconomicEvent(
+                    event=event.event,
+                    category=event.category,
+                    date=event.date,
+                    time=event.time,
+                    impact=event.impact,
+                    impact_score=event.impact_score,
+                    previous=event.previous,
+                    forecast=event.forecast,
+                    actual=event.actual,
+                    currency=event.currency,
+                    market_impact=event.market_impact,
+                    is_released=bool(event.actual),
+                    days_until=max(0, days_until),
+                )
+            )
 
         # Sort by date
         processed.sort(key=lambda e: (e.date, e.time))
@@ -321,11 +329,8 @@ class EconomicCalendarTools:
         crypto = tuple(e for e in processed if e.category == "crypto")
 
         # Risk window: high-impact event within 48 hours
-        risk_cutoff = now + timedelta(hours=48)
-        risk_events = tuple(
-            e for e in high_impact
-            if e.days_until <= 2
-        )
+        now + timedelta(hours=48)
+        risk_events = tuple(e for e in high_impact if e.days_until <= 2)
 
         # Next Fed meeting
         future_fed = [e for e in fed_events if e.days_until >= 0]
@@ -481,10 +486,7 @@ class EconomicCalendarTools:
         calendar = await self.get_economic_calendar(days_ahead=7)
 
         cutoff_days = hours / 24
-        risk_events = tuple(
-            e for e in calendar.high_impact_events
-            if e.days_until <= cutoff_days
-        )
+        risk_events = tuple(e for e in calendar.high_impact_events if e.days_until <= cutoff_days)
 
         return bool(risk_events), risk_events
 
@@ -517,19 +519,21 @@ class EconomicCalendarTools:
                 # Compute market impact description
                 market_impact = self._describe_market_impact(title, category, impact_str)
 
-                events.append(EconomicEvent(
-                    event=title,
-                    category=category,
-                    date=item.get("date", ""),
-                    time=item.get("time", ""),
-                    impact=impact_str,
-                    impact_score=impact_score,
-                    previous=str(item.get("previous", "")),
-                    forecast=str(item.get("forecast", "")),
-                    actual=str(item.get("actual", "")),
-                    currency=item.get("country", "USD"),
-                    market_impact=market_impact,
-                ))
+                events.append(
+                    EconomicEvent(
+                        event=title,
+                        category=category,
+                        date=item.get("date", ""),
+                        time=item.get("time", ""),
+                        impact=impact_str,
+                        impact_score=impact_score,
+                        previous=str(item.get("previous", "")),
+                        forecast=str(item.get("forecast", "")),
+                        actual=str(item.get("actual", "")),
+                        currency=item.get("country", "USD"),
+                        market_impact=market_impact,
+                    )
+                )
 
         except Exception as exc:
             logger.warning("ForexFactory fetch failed: %s", exc)
@@ -554,36 +558,40 @@ class EconomicCalendarTools:
                 if days_until < -1 or days_until > days_ahead:
                     continue
 
-                events.append(EconomicEvent(
-                    event="FOMC Interest Rate Decision",
-                    category="fed",
-                    date=date_str,
-                    time="14:00",
-                    impact="high",
-                    impact_score=0.95,
-                    currency="USD",
-                    market_impact=(
-                        "Extreme volatility expected. BTC typically moves 3-8% "
-                        "on FOMC decisions. Risk-off if hawkish, risk-on if dovish."
-                    ),
-                    days_until=max(0, days_until),
-                ))
+                events.append(
+                    EconomicEvent(
+                        event="FOMC Interest Rate Decision",
+                        category="fed",
+                        date=date_str,
+                        time="14:00",
+                        impact="high",
+                        impact_score=0.95,
+                        currency="USD",
+                        market_impact=(
+                            "Extreme volatility expected. BTC typically moves 3-8% "
+                            "on FOMC decisions. Risk-off if hawkish, risk-on if dovish."
+                        ),
+                        days_until=max(0, days_until),
+                    )
+                )
 
                 # Add FOMC press conference (same day, 30 min later)
-                events.append(EconomicEvent(
-                    event="FOMC Press Conference",
-                    category="fed",
-                    date=date_str,
-                    time="14:30",
-                    impact="high",
-                    impact_score=0.85,
-                    currency="USD",
-                    market_impact=(
-                        "Powell's tone determines follow-through. "
-                        "Watch for forward guidance clues."
-                    ),
-                    days_until=max(0, days_until),
-                ))
+                events.append(
+                    EconomicEvent(
+                        event="FOMC Press Conference",
+                        category="fed",
+                        date=date_str,
+                        time="14:30",
+                        impact="high",
+                        impact_score=0.85,
+                        currency="USD",
+                        market_impact=(
+                            "Powell's tone determines follow-through. "
+                            "Watch for forward guidance clues."
+                        ),
+                        days_until=max(0, days_until),
+                    )
+                )
 
             except ValueError:
                 continue
@@ -606,19 +614,21 @@ class EconomicCalendarTools:
             halving_dt = datetime.strptime(halving_date, "%Y-%m-%d").replace(tzinfo=UTC)
             days_until = (halving_dt - now).days
             if 0 <= days_until <= days_ahead:
-                events.append(EconomicEvent(
-                    event="Bitcoin Halving",
-                    category="crypto",
-                    date=halving_date,
-                    impact="high",
-                    impact_score=0.90,
-                    currency="CRYPTO",
-                    market_impact=(
-                        "Block reward reduction from 6.25 to 3.125 BTC. "
-                        "Historically preceded major bull runs."
-                    ),
-                    days_until=days_until,
-                ))
+                events.append(
+                    EconomicEvent(
+                        event="Bitcoin Halving",
+                        category="crypto",
+                        date=halving_date,
+                        impact="high",
+                        impact_score=0.90,
+                        currency="CRYPTO",
+                        market_impact=(
+                            "Block reward reduction from 6.25 to 3.125 BTC. "
+                            "Historically preceded major bull runs."
+                        ),
+                        days_until=days_until,
+                    )
+                )
         except ValueError:
             pass
 
@@ -628,16 +638,18 @@ class EconomicCalendarTools:
                 evt_date = datetime.strptime(evt["date"], "%Y-%m-%d").replace(tzinfo=UTC)
                 days_until = (evt_date - now).days
                 if 0 <= days_until <= days_ahead:
-                    events.append(EconomicEvent(
-                        event=evt.get("name", "Crypto Event"),
-                        category="crypto",
-                        date=evt["date"],
-                        impact=evt.get("impact", "medium"),
-                        impact_score=float(evt.get("impact_score", 0.5)),
-                        currency="CRYPTO",
-                        market_impact=evt.get("description", ""),
-                        days_until=days_until,
-                    ))
+                    events.append(
+                        EconomicEvent(
+                            event=evt.get("name", "Crypto Event"),
+                            category="crypto",
+                            date=evt["date"],
+                            impact=evt.get("impact", "medium"),
+                            impact_score=float(evt.get("impact_score", 0.5)),
+                            currency="CRYPTO",
+                            market_impact=evt.get("description", ""),
+                            days_until=days_until,
+                        )
+                    )
             except (ValueError, KeyError):
                 continue
 

@@ -28,10 +28,12 @@ Exit rules:
 from __future__ import annotations
 
 import logging
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from src.strategy.base import BaseStrategy
-from src.strategy.genome import StrategyGenome
+
+if TYPE_CHECKING:
+    from src.strategy.genome import StrategyGenome
 
 logger = logging.getLogger(__name__)
 
@@ -72,7 +74,8 @@ class MomentumStrategy(BaseStrategy):
             self._params = genome.params
             logger.info(
                 "MomentumStrategy initialized from genome '%s' with %d params",
-                genome.name, len(genome.params),
+                genome.name,
+                len(genome.params),
             )
         else:
             self._params = {}
@@ -237,7 +240,6 @@ class MomentumStrategy(BaseStrategy):
         """Check long entry: EMA bullish crossover + MACD cross + ADX trend."""
         adx_threshold = self._adx_threshold
         min_score = self._min_signal_score
-        volume_multiplier = self._volume_multiplier
 
         # EMA filter: fast must be above slow
         if ema_fast <= ema_slow:
@@ -316,7 +318,6 @@ class MomentumStrategy(BaseStrategy):
         """Check short entry: EMA bearish crossover + MACD cross + ADX trend."""
         adx_threshold = self._adx_threshold
         min_score = self._min_signal_score
-        volume_multiplier = self._volume_multiplier
 
         # EMA filter: fast must be below slow
         if ema_fast >= ema_slow:
@@ -438,7 +439,9 @@ class MomentumStrategy(BaseStrategy):
         components["order_flow"] = max(0.0, min(1.0, order_flow))
 
         # Weighted sum from genome
-        score = sum(components[k] * self._weights.get(k, 0.0) for k in components if k in self._weights)
+        score = sum(
+            components[k] * self._weights.get(k, 0.0) for k in components if k in self._weights
+        )
         # Add MACD bonus (not weighted, additive)
         score = min(1.0, score + components.get("macd_bonus", 0.0) * 0.05)
         return round(score, 4), components
@@ -497,7 +500,9 @@ class MomentumStrategy(BaseStrategy):
         components["order_flow"] = max(0.0, min(1.0, 1.0 - order_flow))
 
         # Weighted sum from genome
-        score = sum(components[k] * self._weights.get(k, 0.0) for k in components if k in self._weights)
+        score = sum(
+            components[k] * self._weights.get(k, 0.0) for k in components if k in self._weights
+        )
         score = min(1.0, score + components.get("macd_bonus", 0.0) * 0.05)
         return round(score, 4), components
 
@@ -547,7 +552,12 @@ class MomentumStrategy(BaseStrategy):
 
             # Funding rate flip: was negative, now positive
             if entry_funding_rate < 0 and funding_rate > 0:
-                return {"reason": "funding_rate_flip", "action": "close", "old": entry_funding_rate, "new": funding_rate}
+                return {
+                    "reason": "funding_rate_flip",
+                    "action": "close",
+                    "old": entry_funding_rate,
+                    "new": funding_rate,
+                }
 
         # ── Short exits ──
         if side == "sell":
@@ -569,7 +579,12 @@ class MomentumStrategy(BaseStrategy):
 
             # Funding rate flip: was positive, now negative
             if entry_funding_rate > 0 and funding_rate < 0:
-                return {"reason": "funding_rate_flip", "action": "close", "old": entry_funding_rate, "new": funding_rate}
+                return {
+                    "reason": "funding_rate_flip",
+                    "action": "close",
+                    "old": entry_funding_rate,
+                    "new": funding_rate,
+                }
 
         return None
 

@@ -16,7 +16,6 @@ from __future__ import annotations
 import logging
 import time
 from dataclasses import dataclass, field
-from datetime import UTC, datetime
 from enum import StrEnum
 from typing import Any
 
@@ -34,7 +33,7 @@ class WhaleTxType(StrEnum):
     """Transaction classification."""
 
     TRANSFER = "transfer"
-    EXCHANGE_DEPOSIT = "exchange_deposit"   # → bearish signal
+    EXCHANGE_DEPOSIT = "exchange_deposit"  # → bearish signal
     EXCHANGE_WITHDRAWAL = "exchange_withdrawal"  # → bullish signal
     WHALE_TO_WHALE = "whale_to_whale"
     BURN = "burn"
@@ -106,15 +105,30 @@ _BASE_URL = "https://api.whale-alert.io/v1"
 _DEFAULT_MIN_VALUE_USD = 500_000  # $500K
 
 # Alert thresholds
-_CRITICAL_USD = 50_000_000   # $50M
-_HIGH_USD = 10_000_000       # $10M
+_CRITICAL_USD = 50_000_000  # $50M
+_HIGH_USD = 10_000_000  # $10M
 
 # Known exchange owners in Whale Alert
-_EXCHANGE_LABELS = frozenset({
-    "binance", "coinbase", "kraken", "bitfinex", "okx", "bybit",
-    "huobi", "kucoin", "gate.io", "gemini", "ftx", "crypto.com",
-    "bitstamp", "bittrex", "poloniex", "hotbit",
-})
+_EXCHANGE_LABELS = frozenset(
+    {
+        "binance",
+        "coinbase",
+        "kraken",
+        "bitfinex",
+        "okx",
+        "bybit",
+        "huobi",
+        "kucoin",
+        "gate.io",
+        "gemini",
+        "ftx",
+        "crypto.com",
+        "bitstamp",
+        "bittrex",
+        "poloniex",
+        "hotbit",
+    }
+)
 
 
 # ═══════════════════════════════════════════════════════════════════════
@@ -355,6 +369,7 @@ class WhaleAlertClient:
 
         # Scale by size (log scale to prevent extreme values)
         import math
+
         if amount_usd > 0:
             size_multiplier = min(2.0, math.log10(amount_usd / 1_000_000) + 1.0)
         else:
@@ -371,12 +386,18 @@ class WhaleAlertClient:
         total_volume = sum(tx.amount_usd for tx in transactions)
 
         # Net exchange flow
-        deposits = sum(tx.amount_usd for tx in transactions if tx.tx_type == WhaleTxType.EXCHANGE_DEPOSIT)
-        withdrawals = sum(tx.amount_usd for tx in transactions if tx.tx_type == WhaleTxType.EXCHANGE_WITHDRAWAL)
+        deposits = sum(
+            tx.amount_usd for tx in transactions if tx.tx_type == WhaleTxType.EXCHANGE_DEPOSIT
+        )
+        withdrawals = sum(
+            tx.amount_usd for tx in transactions if tx.tx_type == WhaleTxType.EXCHANGE_WITHDRAWAL
+        )
         net_flow = deposits - withdrawals  # positive = more deposits (bearish)
 
         deposit_count = sum(1 for tx in transactions if tx.tx_type == WhaleTxType.EXCHANGE_DEPOSIT)
-        withdrawal_count = sum(1 for tx in transactions if tx.tx_type == WhaleTxType.EXCHANGE_WITHDRAWAL)
+        withdrawal_count = sum(
+            1 for tx in transactions if tx.tx_type == WhaleTxType.EXCHANGE_WITHDRAWAL
+        )
 
         # Aggregate sentiment
         if transactions:

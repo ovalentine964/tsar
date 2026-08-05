@@ -32,10 +32,12 @@ from __future__ import annotations
 import logging
 import sqlite3
 import threading
-import time
-from contextlib import contextmanager
+from contextlib import contextmanager, suppress
 from pathlib import Path
-from typing import Any, Generator
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from collections.abc import Generator
 
 logger = logging.getLogger(__name__)
 
@@ -180,10 +182,8 @@ class SQLitePool:
                     return conn
                 except Exception:
                     # Dead connection, create a new one
-                    try:
+                    with suppress(Exception):
                         conn.close()
-                    except Exception:
-                        pass
 
             # Create a new connection (overflow)
             try:
@@ -211,10 +211,8 @@ class SQLitePool:
 
             if had_error:
                 # Connection had an exception — close it, don't reuse
-                try:
+                with suppress(Exception):
                     conn.close()
-                except Exception:
-                    pass
                 self._released += 1
                 self._semaphore.release()
                 return
@@ -225,15 +223,11 @@ class SQLitePool:
                     conn.execute("SELECT 1")
                     self._pool.append(conn)
                 except Exception:
-                    try:
+                    with suppress(Exception):
                         conn.close()
-                    except Exception:
-                        pass
             else:
-                try:
+                with suppress(Exception):
                     conn.close()
-                except Exception:
-                    pass
 
             self._released += 1
         self._semaphore.release()
@@ -293,17 +287,13 @@ class SQLitePool:
         """Close all connections in the pool."""
         with self._lock:
             for conn in self._pool:
-                try:
+                with suppress(Exception):
                     conn.close()
-                except Exception:
-                    pass
             self._pool.clear()
 
             for conn in list(self._in_use):
-                try:
+                with suppress(Exception):
                     conn.close()
-                except Exception:
-                    pass
             self._in_use.clear()
 
         logger.info("SQLitePool closed all connections")
@@ -331,10 +321,8 @@ class SQLitePool:
 
     def __del__(self) -> None:
         """Cleanup on garbage collection."""
-        try:
+        with suppress(Exception):
             self.close_all()
-        except Exception:
-            pass
 
 
 # ═══════════════════════════════════════════════════════════════

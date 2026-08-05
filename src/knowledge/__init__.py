@@ -18,7 +18,11 @@ from src.knowledge.trade_memory import TradeMemory
 
 # ChromaDB optional import (with numpy fallback)
 try:
-    from src.knowledge.chromadb_store import ChromaVectorStore, VectorSearchResult, is_chromadb_available
+    from src.knowledge.chromadb_store import (
+        ChromaVectorStore,
+        VectorSearchResult,
+        is_chromadb_available,
+    )
 except ImportError:
     ChromaVectorStore = None  # type: ignore[assignment,misc]
     VectorSearchResult = None  # type: ignore[assignment,misc]

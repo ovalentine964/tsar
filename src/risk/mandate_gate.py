@@ -59,9 +59,7 @@ class MandateGate:
             config_path: Path to mandate YAML (used if mandate is None).
         """
         self._mandate = mandate or Mandate(config_path=config_path)
-        logger.info(
-            f"MandateGate initialized: mandate_status={self._mandate.status.value}"
-        )
+        logger.info(f"MandateGate initialized: mandate_status={self._mandate.status.value}")
 
     @property
     def mandate(self) -> Mandate:
@@ -95,9 +93,7 @@ class MandateGate:
         """
         # Paper mode exemption
         if not is_live:
-            logger.debug(
-                f"MandateGate: paper mode — signal {signal.signal_id} exempt"
-            )
+            logger.debug(f"MandateGate: paper mode — signal {signal.signal_id} exempt")
             return RiskDecision(
                 signal_id=signal.signal_id,
                 approved=True,
@@ -121,8 +117,7 @@ class MandateGate:
 
         if decision.allowed:
             logger.info(
-                f"MandateGate APPROVED: {signal.signal_id} {signal.symbol} "
-                f"{signal.side.value}"
+                f"MandateGate APPROVED: {signal.signal_id} {signal.symbol} {signal.side.value}"
             )
             return RiskDecision(
                 signal_id=signal.signal_id,
@@ -135,9 +130,7 @@ class MandateGate:
             )
 
         # Mandate blocked
-        logger.info(
-            f"MandateGate REJECTED: {signal.signal_id} — {decision.reason}"
-        )
+        logger.info(f"MandateGate REJECTED: {signal.signal_id} — {decision.reason}")
         return RiskDecision(
             signal_id=signal.signal_id,
             approved=False,
@@ -220,7 +213,9 @@ class MandateGate:
         days_in_paper = 0
         if rules.paper_start_date:
             try:
-                from datetime import UTC, datetime as dt
+                from datetime import UTC
+                from datetime import datetime as dt
+
                 start = dt.fromisoformat(rules.paper_start_date)
                 days_in_paper = (dt.now(UTC) - start).days
             except (ValueError, TypeError):

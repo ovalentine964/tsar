@@ -15,6 +15,7 @@ members = [
     "crates/mev-client",
     "crates/rules-enforcer",
     "crates/pyo3-bindings",
+    "crates/strategy-vmpm",
 ]
 
 [workspace.package]
@@ -85,3 +86,4 @@ tsar-solana-client = { path = "crates/solana-client" }
 tsar-oracle-client = { path = "crates/oracle-client" }
 tsar-mev-client = { path = "crates/mev-client" }
 tsar-rules-enforcer = { path = "crates/rules-enforcer" }
+strategy-vmpm = { path = "crates/strategy-vmpm" }

@@ -23,20 +23,21 @@ from __future__ import annotations
 
 import asyncio
 import bisect
+import contextlib
 import json
 import logging
 import time
 from collections import defaultdict, deque
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import UTC, datetime
-from enum import StrEnum
-from typing import TYPE_CHECKING, Any, Callable
+from typing import TYPE_CHECKING, Any
 
 import numpy as np
 
 if TYPE_CHECKING:
+    from collections.abc import Callable
+
     from src.interfaces.exchange_gateway import ExchangeGateway
-    from src.interfaces.types import OrderBook, Trade
 
 logger = logging.getLogger(__name__)
 
@@ -522,10 +523,8 @@ class RealtimePriceFeed:
         self._running = False
         if self._ws_task:
             self._ws_task.cancel()
-            try:
+            with contextlib.suppress(asyncio.CancelledError):
                 await self._ws_task
-            except asyncio.CancelledError:
-                pass
             self._ws_task = None
         logger.info("Price feed stopped")
 
@@ -576,11 +575,9 @@ class RealtimePriceFeed:
             streams.append(f"{binance_sym}@ticker")
 
         url = f"{BINANCE_WS_STREAM}?streams={'/'.join(streams)}"
-        delay = self._reconnect_delay
 
         async with websockets.connect(url, ping_interval=20) as ws:
             logger.info("Connected to Binance WebSocket: %d streams", len(streams))
-            delay = self._reconnect_delay  # Reset on success
 
             async for raw_msg in ws:
                 if not self._running:
@@ -608,10 +605,10 @@ class RealtimePriceFeed:
             now = datetime.now(UTC)
             price = RealtimePrice(
                 symbol=symbol,
-                last=float(data.get("c", 0)),        # close = last price
-                bid=float(data.get("b", 0)),          # best bid
-                ask=float(data.get("a", 0)),          # best ask
-                volume_24h=float(data.get("v", 0)),   # base volume
+                last=float(data.get("c", 0)),  # close = last price
+                bid=float(data.get("b", 0)),  # best bid
+                ask=float(data.get("a", 0)),  # best ask
+                volume_24h=float(data.get("v", 0)),  # base volume
                 quote_volume_24h=float(data.get("q", 0)),  # quote volume
                 price_change_pct=float(data.get("P", 0)),  # price change %
                 timestamp=now,
@@ -736,15 +733,17 @@ class HistoricalOHLCVStore:
 
         candles = []
         for o in ohlcv_list:
-            candles.append(OHLCVCandle(
-                timestamp=o.timestamp,
-                open=o.open,
-                high=o.high,
-                low=o.low,
-                close=o.close,
-                volume=o.volume,
-                is_closed=True,
-            ))
+            candles.append(
+                OHLCVCandle(
+                    timestamp=o.timestamp,
+                    open=o.open,
+                    high=o.high,
+                    low=o.low,
+                    close=o.close,
+                    volume=o.volume,
+                    is_closed=True,
+                )
+            )
 
         key = (symbol, timeframe)
         self._merge_candles(key, candles)
@@ -1060,9 +1059,15 @@ class MarketDataTools:
 
         if not book.bids or not book.asks:
             return OrderBookDepth(
-                symbol=symbol, best_bid=0, best_ask=0, mid_price=0,
-                spread_bps=0, bid_depth_usd=0, ask_depth_usd=0,
-                imbalance=0, levels_analyzed=0,
+                symbol=symbol,
+                best_bid=0,
+                best_ask=0,
+                mid_price=0,
+                spread_bps=0,
+                bid_depth_usd=0,
+                ask_depth_usd=0,
+                imbalance=0,
+                levels_analyzed=0,
             )
 
         best_bid = book.bids[0].price
@@ -1076,10 +1081,7 @@ class MarketDataTools:
         total_depth = bid_depth_usd + ask_depth_usd
 
         # Imbalance: +1 = all bids, -1 = all asks
-        if total_depth > 0:
-            imbalance = (bid_depth_usd - ask_depth_usd) / total_depth
-        else:
-            imbalance = 0.0
+        imbalance = (bid_depth_usd - ask_depth_usd) / total_depth if total_depth > 0 else 0.0
 
         # Detect walls
         bid_wall_price, bid_wall_size = self._detect_wall(book.bids, wall_threshold_usd)
@@ -1087,10 +1089,7 @@ class MarketDataTools:
 
         # Wall imbalance: positive = bid wall dominance (support)
         wall_total = bid_wall_size + ask_wall_size
-        wall_imbalance = (
-            (bid_wall_size - ask_wall_size) / wall_total
-            if wall_total > 0 else 0.0
-        )
+        wall_imbalance = (bid_wall_size - ask_wall_size) / wall_total if wall_total > 0 else 0.0
 
         # Track spread for historical analysis
         now = time.time()
@@ -1212,7 +1211,8 @@ class MarketDataTools:
 
             next_funding = (
                 datetime.fromtimestamp(next_funding_ms / 1000, tz=UTC)
-                if next_funding_ms > 0 else None
+                if next_funding_ms > 0
+                else None
             )
 
             result = FundingRate(
@@ -1251,19 +1251,37 @@ class MarketDataTools:
             return "neutral — funding too low for arb", 0.0
         elif abs_rate < 0.0005:
             if rate > 0:
-                return f"mild opportunity — long spot + short perp (earn {abs_annual:.1f}% APY)", score
+                return (
+                    f"mild opportunity — long spot + short perp (earn {abs_annual:.1f}% APY)",
+                    score,
+                )
             else:
-                return f"mild opportunity — short spot + long perp (earn {abs_annual:.1f}% APY)", score
+                return (
+                    f"mild opportunity — short spot + long perp (earn {abs_annual:.1f}% APY)",
+                    score,
+                )
         elif abs_rate < 0.001:
             if rate > 0:
-                return f"good opportunity — long spot + short perp (earn {abs_annual:.1f}% APY)", score
+                return (
+                    f"good opportunity — long spot + short perp (earn {abs_annual:.1f}% APY)",
+                    score,
+                )
             else:
-                return f"good opportunity — short spot + long perp (earn {abs_annual:.1f}% APY)", score
+                return (
+                    f"good opportunity — short spot + long perp (earn {abs_annual:.1f}% APY)",
+                    score,
+                )
         else:
             if rate > 0:
-                return f"strong opportunity — long spot + short perp (earn {abs_annual:.1f}% APY)", score
+                return (
+                    f"strong opportunity — long spot + short perp (earn {abs_annual:.1f}% APY)",
+                    score,
+                )
             else:
-                return f"strong opportunity — short spot + long perp (earn {abs_annual:.1f}% APY)", score
+                return (
+                    f"strong opportunity — short spot + long perp (earn {abs_annual:.1f}% APY)",
+                    score,
+                )
 
     @staticmethod
     def _default_funding_rate(symbol: str) -> FundingRate:
@@ -1351,8 +1369,7 @@ class MarketDataTools:
             self._oi_history[symbol].append((now, oi_usd))
             # Keep 24 hours
             self._oi_history[symbol] = [
-                (ts, v) for ts, v in self._oi_history[symbol]
-                if now - ts < 86400
+                (ts, v) for ts, v in self._oi_history[symbol] if now - ts < 86400
             ]
 
             # Compute changes from history
@@ -1363,7 +1380,11 @@ class MarketDataTools:
 
             if oi_hist and len(oi_hist) >= 2:
                 latest_oi = float(oi_hist[-1].get("sumOpenInterestValue", 0))
-                hour_ago_oi = float(oi_hist[-2].get("sumOpenInterestValue", 0)) if len(oi_hist) >= 2 else latest_oi
+                hour_ago_oi = (
+                    float(oi_hist[-2].get("sumOpenInterestValue", 0))
+                    if len(oi_hist) >= 2
+                    else latest_oi
+                )
                 day_ago_oi = float(oi_hist[0].get("sumOpenInterestValue", 0))
 
                 change_1h = latest_oi - hour_ago_oi
@@ -1396,7 +1417,9 @@ class MarketDataTools:
         except Exception as exc:
             logger.warning("Failed to fetch open interest for %s: %s", symbol, exc)
             return OpenInterest(
-                symbol=symbol, open_interest=0, open_interest_usd=0,
+                symbol=symbol,
+                open_interest=0,
+                open_interest_usd=0,
                 timestamp=datetime.now(UTC),
             )
 
@@ -1531,8 +1554,11 @@ class MarketDataTools:
         except Exception as exc:
             logger.warning("Failed to fetch liquidations for %s: %s", symbol, exc)
             return LiquidationSummary(
-                symbol=symbol, window_minutes=window_minutes,
-                total_long_liqs=0, total_short_liqs=0, net_liq=0,
+                symbol=symbol,
+                window_minutes=window_minutes,
+                total_long_liqs=0,
+                total_short_liqs=0,
+                net_liq=0,
                 timestamp=datetime.now(UTC),
             )
 
@@ -1575,7 +1601,7 @@ class MarketDataTools:
         # Average interval in densest window
         if max_count >= 2:
             densest_ts = sorted_all[densest_start:densest_end]
-            intervals = [densest_ts[i+1] - densest_ts[i] for i in range(len(densest_ts)-1)]
+            intervals = [densest_ts[i + 1] - densest_ts[i] for i in range(len(densest_ts) - 1)]
             avg_interval = sum(intervals) / len(intervals)
         else:
             avg_interval = 0.0
@@ -1585,13 +1611,9 @@ class MarketDataTools:
         densest_start_ts = densest_window[0]
         densest_end_ts = densest_window[-1]
 
-        long_in_window = sum(
-            1 for t in long_timestamps
-            if densest_start_ts <= t <= densest_end_ts
-        )
+        long_in_window = sum(1 for t in long_timestamps if densest_start_ts <= t <= densest_end_ts)
         short_in_window = sum(
-            1 for t in short_timestamps
-            if densest_start_ts <= t <= densest_end_ts
+            1 for t in short_timestamps if densest_start_ts <= t <= densest_end_ts
         )
 
         if long_in_window > short_in_window * 1.5:
@@ -1638,14 +1660,19 @@ class MarketDataTools:
 
         if not ohlcv:
             return VolumeProfile(
-                symbol=symbol, timeframe=timeframe,
-                levels=(), poc_price=0, poc_volume=0,
-                value_area_high=0, value_area_low=0, total_volume=0,
+                symbol=symbol,
+                timeframe=timeframe,
+                levels=(),
+                poc_price=0,
+                poc_volume=0,
+                value_area_high=0,
+                value_area_low=0,
+                total_volume=0,
                 timestamp=datetime.now(UTC),
             )
 
         # Build price-volume distribution
-        prices = np.array([c.close for c in ohlcv])
+        np.array([c.close for c in ohlcv])
         highs = np.array([c.high for c in ohlcv])
         lows = np.array([c.low for c in ohlcv])
         volumes = np.array([c.volume for c in ohlcv])
@@ -1656,9 +1683,14 @@ class MarketDataTools:
 
         if price_max <= price_min or total_volume <= 0:
             return VolumeProfile(
-                symbol=symbol, timeframe=timeframe,
-                levels=(), poc_price=0, poc_volume=0,
-                value_area_high=0, value_area_low=0, total_volume=0,
+                symbol=symbol,
+                timeframe=timeframe,
+                levels=(),
+                poc_price=0,
+                poc_volume=0,
+                value_area_high=0,
+                value_area_low=0,
+                total_volume=0,
                 timestamp=datetime.now(UTC),
             )
 
@@ -1711,13 +1743,15 @@ class MarketDataTools:
             vol = float(bin_volumes[j])
             if vol <= 0:
                 continue
-            levels.append(VolumeProfileLevel(
-                price=round(float(bin_centers[j]), 8),
-                volume=round(vol, 8),
-                volume_pct=round(vol / total_volume * 100, 2) if total_volume > 0 else 0,
-                is_poc=(j == poc_idx),
-                is_value_area=(j in va_indices),
-            ))
+            levels.append(
+                VolumeProfileLevel(
+                    price=round(float(bin_centers[j]), 8),
+                    volume=round(vol, 8),
+                    volume_pct=round(vol / total_volume * 100, 2) if total_volume > 0 else 0,
+                    is_poc=(j == poc_idx),
+                    is_value_area=(j in va_indices),
+                )
+            )
 
         return VolumeProfile(
             symbol=symbol,
@@ -1759,10 +1793,14 @@ class MarketDataTools:
 
         if not trades:
             return TradeFlowAnalysis(
-                symbol=symbol, window_minutes=0,
-                buy_volume=0, sell_volume=0,
-                buy_volume_usd=0, sell_volume_usd=0,
-                net_flow=0, net_flow_usd=0,
+                symbol=symbol,
+                window_minutes=0,
+                buy_volume=0,
+                sell_volume=0,
+                buy_volume_usd=0,
+                sell_volume_usd=0,
+                net_flow=0,
+                net_flow_usd=0,
                 timestamp=datetime.now(UTC),
             )
 
@@ -1793,13 +1831,15 @@ class MarketDataTools:
                 else:
                     large_sell_usd += cost
 
-                whale_details.append({
-                    "side": trade.side.value,
-                    "price": trade.price,
-                    "quantity": trade.quantity,
-                    "cost_usd": round(cost, 2),
-                    "timestamp": trade.timestamp.isoformat() if trade.timestamp else None,
-                })
+                whale_details.append(
+                    {
+                        "side": trade.side.value,
+                        "price": trade.price,
+                        "quantity": trade.quantity,
+                        "cost_usd": round(cost, 2),
+                        "timestamp": trade.timestamp.isoformat() if trade.timestamp else None,
+                    }
+                )
 
             total_cost += cost
             total_qty += trade.quantity
@@ -1815,10 +1855,7 @@ class MarketDataTools:
 
         # Large trade bias
         large_total = large_buy_usd + large_sell_usd
-        if large_total > 0:
-            large_bias = (large_buy_usd - large_sell_usd) / large_total
-        else:
-            large_bias = 0.0
+        large_bias = (large_buy_usd - large_sell_usd) / large_total if large_total > 0 else 0.0
 
         return TradeFlowAnalysis(
             symbol=symbol,
@@ -1857,7 +1894,7 @@ class MarketDataTools:
         depth = await self.get_orderbook_depth(symbol, levels=20)
 
         current_spread = depth.spread_bps
-        now = time.time()
+        time.time()
 
         # Ensure spread history exists (get_orderbook_depth adds to it)
         if symbol not in self._spread_history:

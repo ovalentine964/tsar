@@ -32,9 +32,8 @@ import logging
 import time
 import uuid
 from dataclasses import dataclass, field
-from datetime import UTC, datetime
 from enum import Enum
-from typing import Any, Optional
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -42,6 +41,7 @@ logger = logging.getLogger(__name__)
 # ═══════════════════════════════════════════════════════════════════════
 # CONSTANTS & ENUMS
 # ═══════════════════════════════════════════════════════════════════════
+
 
 class Chain(Enum):
     ETHEREUM = "ethereum"
@@ -100,9 +100,11 @@ MULTISIG_THRESHOLD_USD = 100_000.0
 # DATA CLASSES
 # ═══════════════════════════════════════════════════════════════════════
 
+
 @dataclass
 class SettlementConfig:
     """Configuration for the settlement engine."""
+
     chain: Chain = Chain.ARBITRUM
     escrow_address: str = ""
     rpc_url: str = ""
@@ -119,6 +121,7 @@ class SettlementConfig:
 @dataclass
 class EscrowTrade:
     """Represents a trade to be settled via escrow."""
+
     trade_id: str
     pair: str
     amount: float
@@ -137,13 +140,14 @@ class EscrowTrade:
     error_message: str = ""
     approval_count: int = 0
     required_approvals: int = 1
-    dispute_reason: Optional[DisputeReason] = None
+    dispute_reason: DisputeReason | None = None
     metadata: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass
 class TransactionRequest:
     """A built transaction ready for signing."""
+
     to: str
     value: int  # wei
     data: bytes
@@ -157,6 +161,7 @@ class TransactionRequest:
 @dataclass
 class SettlementResult:
     """Result of a settlement operation."""
+
     success: bool
     trade_id: str
     tx_hash: str = ""
@@ -185,6 +190,7 @@ CHAIN_IDS: dict[Chain, int] = {
 # ═══════════════════════════════════════════════════════════════════════
 # SETTLEMENT ENGINE
 # ═══════════════════════════════════════════════════════════════════════
+
 
 class SettlementEngine:
     """
@@ -276,9 +282,7 @@ class SettlementEngine:
 
             # Step 4: Wait for confirmations (non-blocking in production)
             confirmations = MIN_CONFIRMATIONS.get(chain, 12)
-            confirmed = await self._wait_confirmations(
-                tx_hash, confirmations, chain, timeout_s
-            )
+            confirmed = await self._wait_confirmations(tx_hash, confirmations, chain, timeout_s)
 
             if confirmed:
                 trade.status = SettlementStatus.CONFIRMED
@@ -349,9 +353,7 @@ class SettlementEngine:
                 trade.status = SettlementStatus.CONFIRMED
 
                 # Verify escrow state
-                escrow_valid = await self._verify_escrow_state(
-                    trade.escrow_id, chain
-                )
+                escrow_valid = await self._verify_escrow_state(trade.escrow_id, chain)
 
                 return SettlementResult(
                     success=True,
@@ -414,9 +416,7 @@ class SettlementEngine:
             return True
         return False
 
-    async def raise_dispute(
-        self, trade_id: str, reason: DisputeReason, details: str = ""
-    ) -> bool:
+    async def raise_dispute(self, trade_id: str, reason: DisputeReason, details: str = "") -> bool:
         """
         Raise a dispute for a settlement.
 
@@ -465,9 +465,7 @@ class SettlementEngine:
             SettlementStatus.CONFIRMING,
             SettlementStatus.CONFIRMED,
         ):
-            raise ValueError(
-                f"Cannot cancel trade in status {trade.status.value}"
-            )
+            raise ValueError(f"Cannot cancel trade in status {trade.status.value}")
 
         trade.status = SettlementStatus.CANCELLED
         trade.updated_at = time.time()
@@ -478,13 +476,9 @@ class SettlementEngine:
     # Transaction Lifecycle (Internal)
     # ───────────────────────────────────────────────────────────────────
 
-    async def _build_transaction(
-        self, trade: EscrowTrade, chain: Chain
-    ) -> TransactionRequest:
+    async def _build_transaction(self, trade: EscrowTrade, chain: Chain) -> TransactionRequest:
         """Build an escrow contract transaction."""
-        escrow_addr = self.config.escrow_address or DEFAULT_ESCROW_ADDRESSES.get(
-            chain, ""
-        )
+        escrow_addr = self.config.escrow_address or DEFAULT_ESCROW_ADDRESSES.get(chain, "")
         if not escrow_addr:
             raise ValueError(f"No escrow address configured for {chain.value}")
 
@@ -543,9 +537,7 @@ class SettlementEngine:
         )
         return hashlib.sha256(raw).digest()
 
-    async def _submit_transaction(
-        self, signed_tx: bytes, chain: Chain
-    ) -> str:
+    async def _submit_transaction(self, signed_tx: bytes, chain: Chain) -> str:
         """Submit a signed transaction to the chain."""
         # In production: call eth_sendRawTransaction via RPC
         # Generate deterministic mock tx hash for development
@@ -573,9 +565,7 @@ class SettlementEngine:
             await asyncio.sleep(min(2.0, timeout_s / 10))
         return False
 
-    async def _get_confirmation_count(
-        self, tx_hash: str, chain: Chain
-    ) -> int:
+    async def _get_confirmation_count(self, tx_hash: str, chain: Chain) -> int:
         """Get the current confirmation count for a transaction."""
         # In production: query chain for tx receipt and current block
         # Return minimum required for dev/testing
@@ -592,9 +582,7 @@ class SettlementEngine:
             error="Transaction not found in active trades",
         )
 
-    async def _verify_escrow_state(
-        self, escrow_id: str, chain: Chain
-    ) -> bool:
+    async def _verify_escrow_state(self, escrow_id: str, chain: Chain) -> bool:
         """Verify the on-chain escrow state matches expectations."""
         # In production: call escrow contract's view functions
         return True
@@ -627,10 +615,10 @@ class SettlementEngine:
         # In production: call eth_gasPrice or feeHistory
         base_prices = {
             Chain.ETHEREUM: 30_000_000_000,  # 30 gwei
-            Chain.POLYGON: 50_000_000_000,    # 50 gwei
-            Chain.ARBITRUM: 100_000_000,      # 0.1 gwei
-            Chain.OPTIMISM: 100_000_000,      # 0.1 gwei
-            Chain.BASE: 100_000_000,          # 0.1 gwei
+            Chain.POLYGON: 50_000_000_000,  # 50 gwei
+            Chain.ARBITRUM: 100_000_000,  # 0.1 gwei
+            Chain.OPTIMISM: 100_000_000,  # 0.1 gwei
+            Chain.BASE: 100_000_000,  # 0.1 gwei
         }
         return base_prices.get(chain, 30_000_000_000)
 
@@ -686,9 +674,7 @@ class SettlementEngine:
         selector = b"\x12\x34\x56\x78"  # placeholder
 
         # Encode params (simplified)
-        counterparty_bytes = bytes.fromhex(
-            trade.counterparty.replace("0x", "").zfill(40)
-        )
+        counterparty_bytes = bytes.fromhex(trade.counterparty.replace("0x", "").zfill(40))
         amount_bytes = int(trade.amount * 1e18).to_bytes(32, "big")
         timeout_bytes = timeout.to_bytes(32, "big")
 
@@ -723,6 +709,7 @@ class SettlementEngine:
 # ═══════════════════════════════════════════════════════════════════════
 # CONVENIENCE FACTORY
 # ═══════════════════════════════════════════════════════════════════════
+
 
 def create_settlement_engine(
     chain: str = "arbitrum",

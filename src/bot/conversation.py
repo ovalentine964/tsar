@@ -21,6 +21,7 @@ logger = logging.getLogger(__name__)
 
 class ConversationState(Enum):
     """Possible conversation states."""
+
     IDLE = "idle"
     # Setup wizard steps
     SETUP_API_KEY = "setup_api_key"
@@ -36,6 +37,7 @@ class ConversationState(Enum):
 @dataclass
 class UserSession:
     """Per-user conversation state."""
+
     user_id: str
     chat_id: str
     state: ConversationState = ConversationState.IDLE
@@ -78,6 +80,7 @@ class ConversationManager:
         """Get or create a user session."""
         if user_id not in self._sessions:
             import time
+
             self._sessions[user_id] = UserSession(
                 user_id=user_id,
                 chat_id=chat_id,
@@ -181,10 +184,7 @@ SETUP_COMPLETE_MSG = (
 )
 
 SETUP_CANCELLED_MSG = (
-    "❌ Setup cancelled.\n"
-    "\n"
-    "Your credentials were NOT saved.\n"
-    "Type /setup anytime to restart."
+    "❌ Setup cancelled.\n\nYour credentials were NOT saved.\nType /setup anytime to restart."
 )
 
 SETUP_ALREADY_CONFIGURED = (

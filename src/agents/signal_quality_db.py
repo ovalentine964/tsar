@@ -16,7 +16,6 @@ import json
 import logging
 import os
 import sqlite3
-import time
 from datetime import UTC, datetime
 from typing import Any
 
@@ -113,35 +112,45 @@ class SignalQualityDB:
         if not self._conn:
             await self.initialize()
 
-        self._conn.execute("""
+        self._conn.execute(
+            """
             INSERT OR REPLACE INTO signal_assessments
                 (signal_id, symbol, side, composite_score, factors_json,
                  factors_confirmed, tier, position_size_factor, approved,
                  rejection_reasons_json, false_signal_flags_json, regime,
                  adaptive_state_json, created_at)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        """, (
-            assessment.signal_id,
-            assessment.symbol,
-            assessment.side,
-            assessment.composite_score,
-            json.dumps([{
-                "name": f.name,
-                "score": f.score,
-                "weighted": f.weighted,
-                "reason": f.reason,
-                "confirmed": f.confirmed,
-            } for f in assessment.factors]),
-            assessment.factors_confirmed,
-            assessment.tier.value if hasattr(assessment.tier, 'value') else str(assessment.tier),
-            assessment.position_size_factor,
-            assessment.approved,
-            json.dumps(list(assessment.rejection_reasons)),
-            json.dumps(list(assessment.false_signal_flags)),
-            assessment.regime,
-            json.dumps(assessment.adaptive_state),
-            assessment.timestamp or datetime.now(UTC).isoformat(),
-        ))
+        """,
+            (
+                assessment.signal_id,
+                assessment.symbol,
+                assessment.side,
+                assessment.composite_score,
+                json.dumps(
+                    [
+                        {
+                            "name": f.name,
+                            "score": f.score,
+                            "weighted": f.weighted,
+                            "reason": f.reason,
+                            "confirmed": f.confirmed,
+                        }
+                        for f in assessment.factors
+                    ]
+                ),
+                assessment.factors_confirmed,
+                assessment.tier.value
+                if hasattr(assessment.tier, "value")
+                else str(assessment.tier),
+                assessment.position_size_factor,
+                assessment.approved,
+                json.dumps(list(assessment.rejection_reasons)),
+                json.dumps(list(assessment.false_signal_flags)),
+                assessment.regime,
+                json.dumps(assessment.adaptive_state),
+                assessment.timestamp or datetime.now(UTC).isoformat(),
+            ),
+        )
         self._conn.commit()
 
     async def record_outcome(
@@ -166,27 +175,30 @@ class SignalQualityDB:
             return
 
         now = datetime.now(UTC)
-        self._conn.execute("""
+        self._conn.execute(
+            """
             INSERT OR REPLACE INTO trade_outcomes
                 (signal_id, symbol, side, composite_score, regime,
                  signal_type, hour_utc, factors_confirmed, entry_price,
                  exit_price, pnl_pct, win, closed_at)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        """, (
-            signal_id,
-            row["symbol"],
-            row["side"],
-            row["composite_score"],
-            row["regime"],
-            self._extract_signal_type(row),
-            now.hour,
-            row["factors_confirmed"],
-            0,  # entry_price from assessment if needed
-            exit_price,
-            pnl_pct,
-            win,
-            now.isoformat(),
-        ))
+        """,
+            (
+                signal_id,
+                row["symbol"],
+                row["side"],
+                row["composite_score"],
+                row["regime"],
+                self._extract_signal_type(row),
+                now.hour,
+                row["factors_confirmed"],
+                0,  # entry_price from assessment if needed
+                exit_price,
+                pnl_pct,
+                win,
+                now.isoformat(),
+            ),
+        )
         self._conn.commit()
 
     async def get_trade_count(self) -> int:
@@ -266,7 +278,9 @@ class SignalQualityDB:
 
         return streak, "win" if first_win else "loss"
 
-    async def get_win_rate_by_dimension(self, window: int = 50) -> dict[str, dict[str, tuple[float, int]]]:
+    async def get_win_rate_by_dimension(
+        self, window: int = 50
+    ) -> dict[str, dict[str, tuple[float, int]]]:
         """Get win rates across all tracked dimensions.
 
         Returns:
@@ -328,7 +342,8 @@ class SignalQualityDB:
         if not self._conn:
             await self.initialize()
 
-        self._conn.execute("""
+        self._conn.execute(
+            """
             UPDATE adaptive_state SET
                 min_score = ?,
                 min_factors = ?,
@@ -336,7 +351,9 @@ class SignalQualityDB:
                 adaptation_reason = ?,
                 trades_since_adaptation = 0
             WHERE id = 1
-        """, (min_score, min_factors, datetime.now(UTC).isoformat(), reason))
+        """,
+            (min_score, min_factors, datetime.now(UTC).isoformat(), reason),
+        )
         self._conn.commit()
 
     async def increment_trades_since_adaptation(self) -> None:

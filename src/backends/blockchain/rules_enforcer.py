@@ -40,13 +40,13 @@ Usage:
 from __future__ import annotations
 
 import hashlib
-import json
 import logging
-import os
 import time
 from dataclasses import dataclass, field
-from pathlib import Path
-from typing import Any, Callable, Optional
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
 
 logger = logging.getLogger(__name__)
 
@@ -203,16 +203,17 @@ class RulesEnforcer:
             from web3.middleware import geth_poa_middleware
         except ImportError:
             raise RuntimeError(
-                "Neither Rust bridge nor web3.py available. "
-                "Install with: pip install web3"
+                "Neither Rust bridge nor web3.py available. Install with: pip install web3"
             ) from None
 
         rpc_url = self.config.get("rpc_url", "")
         if rpc_url.startswith("wss://"):
             from web3 import WebsocketProvider
+
             self._web3 = Web3(WebsocketProvider(rpc_url))
         else:
             from web3 import HTTPProvider
+
             self._web3 = Web3(HTTPProvider(rpc_url.replace("wss://", "https://")))
 
         # Inject PoA middleware for Polygon
@@ -256,7 +257,9 @@ class RulesEnforcer:
             try:
                 return self._rust_client.is_trading_allowed()
             except Exception as exc:
-                logger.error("is_trading_allowed: Rust call failed — FAIL-SAFE: blocking trading: %s", exc)
+                logger.error(
+                    "is_trading_allowed: Rust call failed — FAIL-SAFE: blocking trading: %s", exc
+                )
                 return False
 
         # Pure Python: call contract view function
@@ -265,7 +268,8 @@ class RulesEnforcer:
         except (NotImplementedError, Exception) as exc:
             # FAIL-SAFE: If we can't verify kill switch status, assume trading is BLOCKED
             logger.error(
-                "is_trading_allowed: web3 call failed — FAIL-SAFE: blocking trading: %s", exc,
+                "is_trading_allowed: web3 call failed — FAIL-SAFE: blocking trading: %s",
+                exc,
             )
             return False
 
@@ -477,9 +481,7 @@ class RulesEnforcer:
 
         rule_hash = self._hash_symbol(rule_id)
         symbol_hash = self._hash_symbol(symbol)
-        self._web3_transact(
-            "audit_trail", "logRuleCheck", rule_hash, symbol_hash, passed, reason
-        )
+        self._web3_transact("audit_trail", "logRuleCheck", rule_hash, symbol_hash, passed, reason)
 
     def log_enforcement_action(
         self,
@@ -502,9 +504,7 @@ class RulesEnforcer:
             return
 
         rule_hash = self._hash_symbol(rule_id)
-        self._web3_transact(
-            "audit_trail", "logEnforcementAction", action_type, rule_hash, details
-        )
+        self._web3_transact("audit_trail", "logEnforcementAction", action_type, rule_hash, details)
 
     # ═══════════════════════════════════════════════════════════
     # EQUITY & P&L UPDATES
@@ -681,6 +681,7 @@ class RulesEnforcer:
         """Hash a symbol string to bytes32 (keccak256)."""
         try:
             from web3 import Web3
+
             return Web3.keccak(text=symbol)
         except ImportError:
             # Fallback: use sha256 (not keccak256, but functional for testing)

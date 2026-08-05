@@ -26,7 +26,6 @@ Memory Hierarchy:
 
 from __future__ import annotations
 
-import json
 import logging
 import time
 from dataclasses import dataclass, field
@@ -54,8 +53,8 @@ class MemoryConfig:
     model: str = "deepseek-chat"
 
     # Memory retention
-    max_daily_files: int = 30       # Keep last N daily files
-    max_memory_entries: int = 200   # Max entries in MEMORY.md
+    max_daily_files: int = 30  # Keep last N daily files
+    max_memory_entries: int = 200  # Max entries in MEMORY.md
     compress_after_hours: float = 4.0  # Compress context after this long
 
     # Trade memory integration
@@ -67,6 +66,7 @@ class MemoryConfig:
 @dataclass
 class MemoryEntry:
     """A single memory entry."""
+
     timestamp: str
     category: str  # trade, lesson, observation, decision, strategy
     content: str
@@ -142,7 +142,8 @@ class HarnessMemory:
 
         logger.info(
             "Memory initialized: %d long-term entries, %d session context items",
-            len(self._long_term), len(self._session_context),
+            len(self._long_term),
+            len(self._session_context),
         )
 
     async def on_session_end(self) -> None:
@@ -185,7 +186,9 @@ class HarnessMemory:
 
         # 1. Long-term memory (most important entries)
         important = sorted(
-            self._long_term, key=lambda e: e.importance, reverse=True,
+            self._long_term,
+            key=lambda e: e.importance,
+            reverse=True,
         )[:20]
         if important:
             parts.append("## Long-Term Memory")
@@ -225,7 +228,11 @@ class HarnessMemory:
         if tokens > self._config.max_context_tokens:
             # Truncate from the start (keep most recent)
             lines = context.split("\n")
-            while count_tokens("\n".join(lines), model=self._config.model) > self._config.max_context_tokens and len(lines) > 5:
+            while (
+                count_tokens("\n".join(lines), model=self._config.model)
+                > self._config.max_context_tokens
+                and len(lines) > 5
+            ):
                 lines.pop(0)
             context = "\n".join(lines)
 
@@ -271,7 +278,7 @@ class HarnessMemory:
         if len(self._long_term) > self._config.max_memory_entries:
             # Keep most important entries
             self._long_term.sort(key=lambda e: e.importance, reverse=True)
-            self._long_term = self._long_term[:self._config.max_memory_entries]
+            self._long_term = self._long_term[: self._config.max_memory_entries]
 
         logger.debug("Remembered: [%s] %s", category, content[:80])
         return entry
@@ -353,8 +360,7 @@ class HarnessMemory:
             return None
 
         total_tokens = sum(
-            count_tokens(m.get("content", ""), model=self._config.model)
-            for m in messages
+            count_tokens(m.get("content", ""), model=self._config.model) for m in messages
         )
 
         if total_tokens <= self._config.compression_target_tokens:
@@ -373,18 +379,20 @@ class HarnessMemory:
 
         # Build compression prompt
         compress_text = "\n".join(
-            f"[{m.get('role', '?')}] {m.get('content', '')[:200]}"
-            for m in to_compress
+            f"[{m.get('role', '?')}] {m.get('content', '')[:200]}" for m in to_compress
         )
 
         try:
             summary_response = await self._llm.chat(
                 messages=[
-                    {"role": "system", "content": (
-                        "Summarize this trading conversation history concisely. "
-                        "Focus on: decisions made, signals analyzed, trades executed, "
-                        "lessons learned. Keep key data points. Max 500 words."
-                    )},
+                    {
+                        "role": "system",
+                        "content": (
+                            "Summarize this trading conversation history concisely. "
+                            "Focus on: decisions made, signals analyzed, trades executed, "
+                            "lessons learned. Keep key data points. Max 500 words."
+                        ),
+                    },
                     {"role": "user", "content": compress_text},
                 ],
                 model=self._config.model,
@@ -399,13 +407,18 @@ class HarnessMemory:
             self._last_compression = time.time()
 
             # Rebuild messages
-            compressed = system_msgs + [
-                {"role": "system", "content": f"[Previous context summary]\n{summary}"},
-            ] + recent
+            compressed = (
+                system_msgs
+                + [
+                    {"role": "system", "content": f"[Previous context summary]\n{summary}"},
+                ]
+                + recent
+            )
 
             logger.info(
                 "Compressed %d messages → summary + %d recent",
-                len(to_compress), len(recent),
+                len(to_compress),
+                len(recent),
             )
             return compressed
 
@@ -420,6 +433,7 @@ class HarnessMemory:
         try:
             if self._trade_memory is None:
                 from src.knowledge.trade_memory import TradeMemory
+
                 db_path = self._config.trade_db_path
                 self._trade_memory = TradeMemory(db_path)
 
@@ -442,6 +456,7 @@ class HarnessMemory:
         """Get current market regime from RegimeState store."""
         try:
             from src.knowledge.regime_state import RegimeState
+
             regime = RegimeState()
             state = regime.get_current()
             if state:
@@ -457,6 +472,7 @@ class HarnessMemory:
         """Get recent lessons from LessonArchive."""
         try:
             from src.knowledge.lesson_archive import LessonArchive
+
             archive = LessonArchive()
             lessons = archive.get_recent(limit=5)
             return [l.get("content", str(l)) for l in lessons]
@@ -487,6 +503,7 @@ class HarnessMemory:
     async def _load_recent_daily(self) -> None:
         """Load today's and yesterday's daily files."""
         from datetime import timedelta
+
         now = datetime.now(UTC)
         for delta in [0, 1]:
             day = (now - timedelta(days=delta)).strftime("%Y-%m-%d")
@@ -494,9 +511,11 @@ class HarnessMemory:
             if daily_path.exists():
                 try:
                     content = daily_path.read_text(encoding="utf-8")
-                    self._session_context.append({
-                        "content": f"[{day} notes]\n{content[:2000]}",
-                    })
+                    self._session_context.append(
+                        {
+                            "content": f"[{day} notes]\n{content[:2000]}",
+                        }
+                    )
                 except Exception:
                     pass
 
@@ -527,7 +546,10 @@ class HarnessMemory:
     def _parse_memory_line(self, line: str) -> MemoryEntry | None:
         """Parse a MEMORY.md line into a MemoryEntry."""
         import re
-        pattern = r"^- \*\*\[(\w+)\]\*\*\s+(\S+)(?:\s+\[([^\]]*)\])?(?:\s+\(trade:(\w+)\))?:\s+(.+)$"
+
+        pattern = (
+            r"^- \*\*\[(\w+)\]\*\*\s+(\S+)(?:\s+\[([^\]]*)\])?(?:\s+\(trade:(\w+)\))?:\s+(.+)$"
+        )
         match = re.match(pattern, line)
         if not match:
             return None

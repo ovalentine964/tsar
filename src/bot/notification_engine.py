@@ -21,7 +21,8 @@ import logging
 import time
 from collections import defaultdict
 from dataclasses import dataclass, field
-from datetime import UTC, datetime, time as dt_time
+from datetime import UTC, datetime
+from datetime import time as dt_time
 from enum import IntEnum
 from typing import Any
 
@@ -37,9 +38,9 @@ class Priority(IntEnum):
     """Notification priority levels. Lower number = higher priority."""
 
     CRITICAL = 0  # Always delivered, bypasses quiet hours and rate limits
-    HIGH = 1      # Delivered immediately during active hours
-    MEDIUM = 2    # Batched, delivered every 15 min
-    LOW = 3       # Batched, delivered in daily digest
+    HIGH = 1  # Delivered immediately during active hours
+    MEDIUM = 2  # Batched, delivered every 15 min
+    LOW = 3  # Batched, delivered in daily digest
 
 
 # ═══════════════════════════════════════════════════════════════════════
@@ -155,16 +156,16 @@ class DedupTracker:
     """
 
     DEFAULT_COOLDOWNS: dict[str, int] = {
-        "trade_executed": 0,       # Never dedup trade alerts
+        "trade_executed": 0,  # Never dedup trade alerts
         "trade_opened": 0,
         "trade_closed": 0,
-        "risk_warning": 300,       # 5 min cooldown
+        "risk_warning": 300,  # 5 min cooldown
         "risk_alert": 300,
-        "connection_error": 600,   # 10 min cooldown
+        "connection_error": 600,  # 10 min cooldown
         "connection_lost": 600,
-        "market_event": 1800,      # 30 min cooldown
+        "market_event": 1800,  # 30 min cooldown
         "market_volatility": 1800,
-        "system_health": 3600,     # 1 hour cooldown
+        "system_health": 3600,  # 1 hour cooldown
         "system_error": 300,
     }
 
@@ -385,7 +386,6 @@ EVENT_NOTIFICATION_MAP: dict[str, dict[str, Any]] = {
         "template": "trade_executing",
         "dedup_enabled": False,
     },
-
     # Risk events — level-based priority
     "tsar.risk.alert.v1": {
         "priority": Priority.HIGH,
@@ -406,7 +406,6 @@ EVENT_NOTIFICATION_MAP: dict[str, dict[str, Any]] = {
         "dedup_key_field": "level",
         "cooldown": 300,
     },
-
     # System events
     "tsar.system.connection.v1": {
         "priority": Priority.HIGH,
@@ -429,7 +428,6 @@ EVENT_NOTIFICATION_MAP: dict[str, dict[str, Any]] = {
         "dedup_key_field": "error_type",
         "cooldown": 300,
     },
-
     # Knowledge events
     "tsar.flywheel.cycle.v1": {
         "priority": Priority.LOW,
@@ -449,7 +447,6 @@ EVENT_NOTIFICATION_MAP: dict[str, dict[str, Any]] = {
         "template": "milestone",
         "dedup_enabled": False,
     },
-
     # Market events
     "tsar.market.volatility.v1": {
         "priority": Priority.MEDIUM,
@@ -500,7 +497,9 @@ class MessageFormatter:
 
         is_win = pnl >= 0
         emoji = "✅" if is_win else "❌"
-        result = f"+${pnl:.2f} (+{pnl_pct:.1f}%)" if is_win else f"-${abs(pnl):.2f} ({pnl_pct:.1f}%)"
+        result = (
+            f"+${pnl:.2f} (+{pnl_pct:.1f}%)" if is_win else f"-${abs(pnl):.2f} ({pnl_pct:.1f}%)"
+        )
         side_label = "LONG" if side.upper() == "BUY" else "SHORT"
 
         return (
@@ -602,9 +601,7 @@ class MessageFormatter:
         }
         emoji = emoji_map.get(regime, "🔄")
         return (
-            f"{emoji} <b>Regime Change</b>\n\n"
-            f"New regime: {regime}\n"
-            f"Confidence: {confidence:.0%}\n"
+            f"{emoji} <b>Regime Change</b>\n\nNew regime: {regime}\nConfidence: {confidence:.0%}\n"
         )
 
     @staticmethod
@@ -661,7 +658,7 @@ class MessageFormatter:
             return ""
 
         lines = [
-            f"📋 <b>Morning Digest</b>",
+            "📋 <b>Morning Digest</b>",
             f"<i>{len(notifications)} notifications during quiet hours</i>",
             "",
         ]
@@ -704,7 +701,9 @@ class MessageFormatter:
         flywheel = data.get("flywheel", {})
 
         pnl_emoji = "🟢" if pnl >= 0 else "🔴"
-        pnl_str = f"+${pnl:.2f} (+{pnl_pct:.1f}%)" if pnl >= 0 else f"-${abs(pnl):.2f} ({pnl_pct:.1f}%)"
+        pnl_str = (
+            f"+${pnl:.2f} (+{pnl_pct:.1f}%)" if pnl >= 0 else f"-${abs(pnl):.2f} ({pnl_pct:.1f}%)"
+        )
 
         lines = [
             f"📊 <b>Daily Summary — {date}</b>",
@@ -724,9 +723,13 @@ class MessageFormatter:
         lines.append(f"🌊 Regime: {regime}")
 
         if best_trade:
-            lines.append(f"\n🏆 Best: {best_trade.get('symbol', '?')} {best_trade.get('side', '?')} +${best_trade.get('pnl', 0):.2f}")
+            lines.append(
+                f"\n🏆 Best: {best_trade.get('symbol', '?')} {best_trade.get('side', '?')} +${best_trade.get('pnl', 0):.2f}"
+            )
         if worst_trade:
-            lines.append(f"💀 Worst: {worst_trade.get('symbol', '?')} {worst_trade.get('side', '?')} -${abs(worst_trade.get('pnl', 0)):.2f}")
+            lines.append(
+                f"💀 Worst: {worst_trade.get('symbol', '?')} {worst_trade.get('side', '?')} -${abs(worst_trade.get('pnl', 0)):.2f}"
+            )
 
         if lessons:
             lines.append("\n📝 Lessons:")
@@ -734,7 +737,9 @@ class MessageFormatter:
                 lines.append(f"• {lesson[:100]}")
 
         if flywheel:
-            lines.append(f"\n🔄 Flywheel: {flywheel.get('rules_extracted', 0)} rules, {flywheel.get('mutations_applied', 0)} mutations")
+            lines.append(
+                f"\n🔄 Flywheel: {flywheel.get('rules_extracted', 0)} rules, {flywheel.get('mutations_applied', 0)} mutations"
+            )
 
         return "\n".join(lines)
 
@@ -814,8 +819,10 @@ class NotificationEngine:
 
     def _make_event_handler(self, event_type: str, config: dict[str, Any]) -> Any:
         """Create an async handler for an event type."""
+
         async def handler(data: dict[str, Any]) -> None:
             await self._process_event(event_type, config, data)
+
         return handler
 
     async def _process_event(
@@ -840,10 +847,7 @@ class NotificationEngine:
 
         # Format message
         formatter = getattr(self._formatter, f"format_{template}", None)
-        if formatter:
-            message = formatter(data)
-        else:
-            message = f"<b>{event_type}</b>\n{data}"
+        message = formatter(data) if formatter else f"<b>{event_type}</b>\n{data}"
 
         # Create notification
         notification = Notification(
@@ -954,11 +958,13 @@ class NotificationEngine:
                     queued = self._quiet.flush_queue()
                     if queued:
                         digest = self._formatter.format_morning_digest(queued)
-                        await self._send(Notification(
-                            event_type="morning_digest",
-                            priority=Priority.HIGH,
-                            message=digest,
-                        ))
+                        await self._send(
+                            Notification(
+                                event_type="morning_digest",
+                                priority=Priority.HIGH,
+                                message=digest,
+                            )
+                        )
 
                 # Cleanup dedup tracker
                 self._dedup.cleanup()
@@ -1009,6 +1015,7 @@ class ReportScheduler:
                 tomorrow = now.replace(hour=0, minute=0, second=0, microsecond=0)
                 if now >= tomorrow:
                     from datetime import timedelta
+
                     tomorrow += timedelta(days=1)
                 wait_seconds = (tomorrow - now).total_seconds()
                 await asyncio.sleep(wait_seconds)
@@ -1028,8 +1035,8 @@ class ReportScheduler:
         """Generate and send the daily summary report."""
         try:
             from src.knowledge.trade_memory import TradeMemory
-            from src.tools.knowledge import KnowledgeTools
             from src.metrics.flywheel import FlywheelHealth
+            from src.tools.knowledge import KnowledgeTools
 
             db_path = os.environ.get("TSAR_DB_PATH", "./data/tsar.db")
             trade_mem = TradeMemory(db_path)
@@ -1099,7 +1106,10 @@ class ReportScheduler:
                 if days_until_sunday == 0 and now.hour >= 0:
                     days_until_sunday = 7
                 from datetime import timedelta
-                next_sunday = now.replace(hour=0, minute=0, second=0, microsecond=0) + timedelta(days=days_until_sunday)
+
+                next_sunday = now.replace(hour=0, minute=0, second=0, microsecond=0) + timedelta(
+                    days=days_until_sunday
+                )
                 wait_seconds = (next_sunday - now).total_seconds()
                 await asyncio.sleep(wait_seconds)
 

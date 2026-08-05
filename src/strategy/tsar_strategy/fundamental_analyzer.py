@@ -1,5 +1,5 @@
 """
-VMPM Fundamental Analyzer — Economic calendar integration and bias scoring.
+TSAR Fundamental Analyzer — Economic calendar integration and bias scoring.
 
 Integrates with TSAR's existing MarketCalendar and FundamentalScorer tools
 to produce a directional bias score for each trading pair.
@@ -79,7 +79,7 @@ FundamentalBias.NEUTRAL = FundamentalBias(
 
 
 class FundamentalAnalyzer:
-    """Economic calendar integration for VMPM.
+    """Economic calendar integration for TSAR strategy.
 
     Uses TSAR's MarketCalendar and NewsGatekeeper to assess
     fundamental conditions before trade entry.
@@ -112,7 +112,9 @@ class FundamentalAnalyzer:
         "CHF": ["SNB Rate Decision", "CPI"],
     }
 
-    def __init__(self, config: dict[str, Any] | None = None, *, genome: dict[str, Any] | None = None) -> None:
+    def __init__(
+        self, config: dict[str, Any] | None = None, *, genome: dict[str, Any] | None = None
+    ) -> None:
         self._config = config or genome or {}
         self._market_calendar = None
         self._news_gatekeeper = None
@@ -224,8 +226,10 @@ class FundamentalAnalyzer:
         news_clear = not blackout_active
 
         reasoning_parts = [
-            f"pair={pair}", f"direction={direction.value}",
-            f"confidence={confidence:.2f}", f"news_clear={news_clear}",
+            f"pair={pair}",
+            f"direction={direction.value}",
+            f"confidence={confidence:.2f}",
+            f"news_clear={news_clear}",
             f"event_risk={event_risk:.2f}",
         ]
         if blackout_active:
@@ -301,9 +305,7 @@ class FundamentalAnalyzer:
         events.sort(key=lambda e: e.scheduled_time or now + timedelta(days=999))
         return events
 
-    def _event_affects_currency(
-        self, event: UpcomingEvent, base: str, quote: str
-    ) -> bool:
+    def _event_affects_currency(self, event: UpcomingEvent, base: str, quote: str) -> bool:
         """Check if an event affects the given currency pair."""
         event_name = event.event.upper()
         for currency in (base, quote):
@@ -313,9 +315,7 @@ class FundamentalAnalyzer:
                     return True
         return False
 
-    def _generate_known_events(
-        self, base: str, quote: str, now: datetime
-    ) -> list[UpcomingEvent]:
+    def _generate_known_events(self, base: str, quote: str, now: datetime) -> list[UpcomingEvent]:
         """Generate known recurring events when calendar tool is unavailable.
 
         This is a fallback that creates placeholder events for major
@@ -354,9 +354,7 @@ class FundamentalAnalyzer:
 
         return False, None
 
-    def _calculate_event_risk(
-        self, events: list[UpcomingEvent], now: datetime
-    ) -> float:
+    def _calculate_event_risk(self, events: list[UpcomingEvent], now: datetime) -> float:
         """Calculate a 0-1 event risk score based on upcoming events."""
         if not events:
             return 0.0

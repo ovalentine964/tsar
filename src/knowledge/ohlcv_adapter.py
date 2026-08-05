@@ -36,7 +36,9 @@ _TIMEFRAME_MAP: dict[str, Timeframe] = {
 def _convert_candle(ohlcv: OHLCV) -> OHLCVCandle:
     """Convert an interface-layer OHLCV to a knowledge-layer OHLCVCandle."""
     return OHLCVCandle(
-        timestamp=ohlcv.timestamp.isoformat() if hasattr(ohlcv.timestamp, "isoformat") else str(ohlcv.timestamp),
+        timestamp=ohlcv.timestamp.isoformat()
+        if hasattr(ohlcv.timestamp, "isoformat")
+        else str(ohlcv.timestamp),
         open=ohlcv.open,
         high=ohlcv.high,
         low=ohlcv.low,

@@ -140,7 +140,9 @@ class FactorBenchmarker:
             if len(combined) < min_observations:
                 logger.info(
                     "Factor %s: only %d observations (need %d), skipping",
-                    meta.name, len(combined), min_observations,
+                    meta.name,
+                    len(combined),
+                    min_observations,
                 )
                 continue
 
@@ -295,10 +297,12 @@ class FactorBenchmarker:
             fr = factor_rank.iloc[start:end]
             rr = ret_rank.iloc[start:end]
             ic = float(fr.corr(rr))
-            rows.append(DecayRow(
-                factor_name="",
-                window_start=start,
-                window_end=end,
-                ic_mean=round(ic, 6),
-            ))
+            rows.append(
+                DecayRow(
+                    factor_name="",
+                    window_start=start,
+                    window_end=end,
+                    ic_mean=round(ic, 6),
+                )
+            )
         return rows

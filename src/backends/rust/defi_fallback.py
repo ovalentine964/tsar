@@ -18,8 +18,6 @@ from __future__ import annotations
 import asyncio
 import logging
 import time
-from dataclasses import dataclass, field
-from typing import Any
 
 import httpx
 
@@ -37,7 +35,8 @@ else:
     # Try to import the Rust extension module
     try:
         import trading_rs
-        RUST_DEFI_AVAILABLE = hasattr(trading_rs, 'MEVScanner')
+
+        RUST_DEFI_AVAILABLE = hasattr(trading_rs, "MEVScanner")
     except ImportError:
         RUST_DEFI_AVAILABLE = False
         trading_rs = None
@@ -117,10 +116,13 @@ class MEVScanner:
         risk_score = min(base_risk + sandwich_risk, 1.0)
 
         risk_level = (
-            "critical" if risk_score >= 0.8 else
-            "high" if risk_score >= 0.5 else
-            "medium" if risk_score >= 0.2 else
-            "low"
+            "critical"
+            if risk_score >= 0.8
+            else "high"
+            if risk_score >= 0.5
+            else "medium"
+            if risk_score >= 0.2
+            else "low"
         )
 
         return {
@@ -170,9 +172,7 @@ class GasOptimizer:
             return self._rust.get_recommendation(strategy)
 
         # Python fallback: fetch from RPC
-        return asyncio.get_event_loop().run_until_complete(
-            self._fetch_recommendation(strategy)
-        )
+        return asyncio.get_event_loop().run_until_complete(self._fetch_recommendation(strategy))
 
     async def _fetch_recommendation(self, strategy: str) -> dict:
         """Fetch gas recommendation via HTTP RPC."""
@@ -182,10 +182,10 @@ class GasOptimizer:
         async with httpx.AsyncClient() as client:
             try:
                 # Get gas price
-                resp = await client.post(self._eth_rpc_url, json={
-                    "jsonrpc": "2.0", "id": 1,
-                    "method": "eth_gasPrice", "params": []
-                })
+                resp = await client.post(
+                    self._eth_rpc_url,
+                    json={"jsonrpc": "2.0", "id": 1, "method": "eth_gasPrice", "params": []},
+                )
                 gas_price_hex = resp.json().get("result", "0x0")
                 gas_price_wei = int(gas_price_hex, 16)
                 gas_price_gwei = gas_price_wei / 1e9
@@ -323,9 +323,7 @@ class DexAggregator:
             self._fetch_quotes(token_in, token_out, amount_in)
         )
 
-    async def _fetch_quotes(
-        self, token_in: str, token_out: str, amount_in: float
-    ) -> dict:
+    async def _fetch_quotes(self, token_in: str, token_out: str, amount_in: float) -> dict:
         """Fetch quotes from multiple DEX APIs in parallel."""
         start = time.monotonic()
         quotes = []
@@ -386,9 +384,11 @@ class DexAggregator:
             headers["Authorization"] = f"Bearer {self._oneinch_api_key}"
 
         try:
-            resp = await client.get(url, params={
-                "src": token_in, "dst": token_out, "amount": str(int(amount_in * 1e18))
-            }, headers=headers)
+            resp = await client.get(
+                url,
+                params={"src": token_in, "dst": token_out, "amount": str(int(amount_in * 1e18))},
+                headers=headers,
+            )
             data = resp.json()
             amount_out = float(data.get("dstAmount", 0)) / 1e18
             return {
@@ -409,9 +409,10 @@ class DexAggregator:
         amount_int = int(amount_in * 1e9)
         url = "https://quote-api.jup.ag/v6/quote"
         try:
-            resp = await client.get(url, params={
-                "inputMint": token_in, "outputMint": token_out, "amount": str(amount_int)
-            })
+            resp = await client.get(
+                url,
+                params={"inputMint": token_in, "outputMint": token_out, "amount": str(amount_int)},
+            )
             data = resp.json()
             amount_out = float(data.get("outAmount", 0)) / 1e9
             price_impact = float(data.get("priceImpactPct", 0))
@@ -461,9 +462,7 @@ class PriceFeed:
         if self._rust:
             return self._rust.get_price(symbol)
 
-        return asyncio.get_event_loop().run_until_complete(
-            self._fetch_and_aggregate(symbol)
-        )
+        return asyncio.get_event_loop().run_until_complete(self._fetch_and_aggregate(symbol))
 
     async def _fetch_and_aggregate(self, symbol: str) -> dict:
         """Fetch prices from multiple sources and aggregate."""
@@ -499,7 +498,7 @@ class PriceFeed:
             "mean_price_usd": mean,
             "min_price_usd": min(prices),
             "max_price_usd": max(prices),
-            "std_dev_usd": variance ** 0.5,
+            "std_dev_usd": variance**0.5,
             "source_count": len(observations),
             "confidence": min(1.0, len(observations) / 3),
             "sources": observations,
@@ -508,17 +507,26 @@ class PriceFeed:
     async def _fetch_coingecko(self, client: httpx.AsyncClient, symbol: str) -> dict | None:
         """Fetch price from CoinGecko."""
         coin_map = {
-            "BTC": "bitcoin", "ETH": "ethereum", "SOL": "solana",
-            "BNB": "binancecoin", "MATIC": "matic-network",
-            "USDC": "usd-coin", "USDT": "tether",
+            "BTC": "bitcoin",
+            "ETH": "ethereum",
+            "SOL": "solana",
+            "BNB": "binancecoin",
+            "MATIC": "matic-network",
+            "USDC": "usd-coin",
+            "USDT": "tether",
         }
         coin_id = coin_map.get(symbol.upper(), symbol.lower())
         url = "https://api.coingecko.com/api/v3/simple/price"
         try:
-            resp = await client.get(url, params={
-                "ids": coin_id, "vs_currencies": "usd",
-                "include_24hr_vol": "true", "include_24hr_change": "true"
-            })
+            resp = await client.get(
+                url,
+                params={
+                    "ids": coin_id,
+                    "vs_currencies": "usd",
+                    "include_24hr_vol": "true",
+                    "include_24hr_change": "true",
+                },
+            )
             data = resp.json()
             price = data[coin_id]["usd"]
             return {
@@ -534,7 +542,7 @@ class PriceFeed:
     async def _fetch_binance(self, client: httpx.AsyncClient, symbol: str) -> dict | None:
         """Fetch price from Binance."""
         binance_symbol = f"{symbol.upper()}USDT"
-        url = f"https://api.binance.com/api/v3/ticker/24hr"
+        url = "https://api.binance.com/api/v3/ticker/24hr"
         try:
             resp = await client.get(url, params={"symbol": binance_symbol})
             data = resp.json()
@@ -565,13 +573,15 @@ class PriceFeed:
             if median > 0:
                 dev_bps = abs(o["price_usd"] - median) / median * 10_000
                 if dev_bps > 500:  # 5% threshold
-                    deviations.append({
-                        "symbol": symbol,
-                        "source": o["source"],
-                        "deviating_price_usd": o["price_usd"],
-                        "median_price_usd": median,
-                        "deviation_bps": dev_bps,
-                    })
+                    deviations.append(
+                        {
+                            "symbol": symbol,
+                            "source": o["source"],
+                            "deviating_price_usd": o["price_usd"],
+                            "median_price_usd": median,
+                            "deviation_bps": dev_bps,
+                        }
+                    )
 
         return deviations
 

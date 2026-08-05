@@ -197,6 +197,7 @@ class OllamaProvider(LLMProvider):
         for accurate counting with cl100k_base as approximation.
         """
         from src.llm.token_counter import count_tokens
+
         return count_tokens(text, model=self._default_model)
 
     def get_capabilities(self) -> ModelCapabilities:

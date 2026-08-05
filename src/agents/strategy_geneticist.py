@@ -33,10 +33,10 @@ from src.strategy.factor_bench import FactorBenchmarker
 from src.strategy.factor_library import FactorLibrary
 from src.strategy.monte_carlo import MonteCarloConfig, MonteCarloResult, MonteCarloSimulator
 from src.strategy.walk_forward import WalkForwardConfig, WalkForwardResult, WalkForwardValidator
+from src.tools.backtesting import BacktestingTools
 
 # ── Domain Tools (Tools-to-Agents Wiring) ──────────────────────────
 from src.tools.knowledge import KnowledgeTools
-from src.tools.backtesting import BacktestingTools
 
 logger = logging.getLogger(__name__)
 
@@ -166,9 +166,7 @@ class StrategyGeneticist(BaseAgent):
 
         # Benchmark scheduling (G9)
         factor_cfg = config.get("factor_library", {})
-        self._benchmark_interval_s: float = factor_cfg.get(
-            "benchmark_interval_hours", 168
-        ) * 3600
+        self._benchmark_interval_s: float = factor_cfg.get("benchmark_interval_hours", 168) * 3600
         self._last_benchmark_time: float = 0.0
 
         # Genome store reference (lazy)
@@ -201,9 +199,7 @@ class StrategyGeneticist(BaseAgent):
         # Factor library (G9)
         if self._factor_library is None:
             factor_cfg = self._config.get("factor_library", {})
-            self._factor_library = FactorLibrary(
-                db_path=factor_cfg.get("db_path", ":memory:")
-            )
+            self._factor_library = FactorLibrary(db_path=factor_cfg.get("db_path", ":memory:"))
         if self._factor_benchmarker is None:
             self._factor_benchmarker = FactorBenchmarker(self._factor_library)
 
@@ -310,8 +306,12 @@ class StrategyGeneticist(BaseAgent):
             m = bt_result.metrics
             logger.info(
                 "[%s] Backtest: sharpe=%.2f win_rate=%.2f max_dd=%.2f trades=%d pf=%.2f",
-                strategy_name, m.sharpe_ratio, m.win_rate,
-                m.max_drawdown, m.total_trades, m.profit_factor,
+                strategy_name,
+                m.sharpe_ratio,
+                m.win_rate,
+                m.max_drawdown,
+                m.total_trades,
+                m.profit_factor,
             )
 
             # Gate: minimum quality thresholds
@@ -343,8 +343,10 @@ class StrategyGeneticist(BaseAgent):
 
             logger.info(
                 "[%s] Walk-forward: overfit_score=%.2f is_overfit=%s consistency=%.2f",
-                strategy_name, wf_result.overfitting_score,
-                wf_result.is_overfit, wf_result.consistency_score,
+                strategy_name,
+                wf_result.overfitting_score,
+                wf_result.is_overfit,
+                wf_result.consistency_score,
             )
 
             if wf_result.is_overfit:
@@ -375,14 +377,13 @@ class StrategyGeneticist(BaseAgent):
 
             logger.info(
                 "[%s] Monte Carlo: P(profit)=%.2f P(ruin)=%.2f",
-                strategy_name, mc_result.probability_of_profit,
+                strategy_name,
+                mc_result.probability_of_profit,
                 mc_result.probability_of_ruin,
             )
 
             if mc_result.probability_of_ruin > 0.10:
-                reasons.append(
-                    f"High ruin probability: {mc_result.probability_of_ruin:.1%} > 10%"
-                )
+                reasons.append(f"High ruin probability: {mc_result.probability_of_ruin:.1%} > 10%")
             if mc_result.probability_of_profit < 0.50:
                 reasons.append(
                     f"Low profit probability: {mc_result.probability_of_profit:.1%} < 50%"
@@ -417,7 +418,9 @@ class StrategyGeneticist(BaseAgent):
 
         logger.info(
             "Evaluating mutation proposal: %s (genome=%s, confidence=%.2f)",
-            proposal_id, genome_id, confidence,
+            proposal_id,
+            genome_id,
+            confidence,
         )
 
         # Quick confidence gate
@@ -437,7 +440,8 @@ class StrategyGeneticist(BaseAgent):
                     if not eval_result.accepted:
                         logger.info(
                             "Proposal %s rejected by evaluation: %s",
-                            proposal_id, eval_result.rejection_reasons,
+                            proposal_id,
+                            eval_result.rejection_reasons,
                         )
                         return
             except Exception:
@@ -493,7 +497,8 @@ class StrategyGeneticist(BaseAgent):
         if rolling_sharpe is not None and rolling_sharpe < 0.5:
             logger.warning(
                 "⚠️ Strategy %s: rolling Sharpe %.2f < 0.5 — consider retirement",
-                name, rolling_sharpe,
+                name,
+                rolling_sharpe,
             )
 
         # Drawdown gate
@@ -502,7 +507,8 @@ class StrategyGeneticist(BaseAgent):
             if max_dd > 0.20:
                 logger.warning(
                     "🚨 Strategy %s: max drawdown %.1f%% > 20%% → RETIRE",
-                    name, max_dd * 100,
+                    name,
+                    max_dd * 100,
                 )
                 if self._genomes:
                     try:
@@ -512,7 +518,8 @@ class StrategyGeneticist(BaseAgent):
             elif max_dd > 0.15:
                 logger.warning(
                     "⚠️ Strategy %s: max drawdown %.1f%% > 15%% → PAUSE",
-                    name, max_dd * 100,
+                    name,
+                    max_dd * 100,
                 )
                 if self._genomes:
                     try:
@@ -542,11 +549,18 @@ class StrategyGeneticist(BaseAgent):
 
             import pandas as pd
 
-            ohlcv_df = pd.DataFrame([
-                {"open": b.open, "high": b.high, "low": b.low,
-                 "close": b.close, "volume": b.volume}
-                for b in ohlcv_data
-            ])
+            ohlcv_df = pd.DataFrame(
+                [
+                    {
+                        "open": b.open,
+                        "high": b.high,
+                        "low": b.low,
+                        "close": b.close,
+                        "volume": b.volume,
+                    }
+                    for b in ohlcv_data
+                ]
+            )
 
             result = self._factor_benchmarker.run(
                 ohlcv_df,

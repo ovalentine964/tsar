@@ -8,7 +8,6 @@ Progressive learning system with 4 levels.
 
 from __future__ import annotations
 
-import json
 import logging
 import sqlite3
 from datetime import UTC, datetime
@@ -37,7 +36,15 @@ LEARNING_LEVELS: dict[int, dict[str, Any]] = {
         "name": "Intermediate",
         "month_range": (3, 6),
         "description": "Adding regime analysis and on-chain signals",
-        "topics": ["regime", "correlation", "whale", "funding_rate", "kill_switch", "macd", "bollinger"],
+        "topics": [
+            "regime",
+            "correlation",
+            "whale",
+            "funding_rate",
+            "kill_switch",
+            "macd",
+            "bollinger",
+        ],
         "explanation_depth": "intermediate",
         "auto_trade": False,
         "show_regime": True,
@@ -167,9 +174,7 @@ class LearningTracker:
         # Level 1 → 2: 3 months OR mastered 3+ basic topics
         if row["current_level"] == 1:
             basic_topics = LEARNING_LEVELS[1]["topics"]
-            basic_mastered = sum(
-                1 for t in basic_topics if mastery.get(t, {}).get("mastered")
-            )
+            basic_mastered = sum(1 for t in basic_topics if mastery.get(t, {}).get("mastered"))
             if months_elapsed >= 3 or basic_mastered >= 3:
                 self._set_level(2)
                 return 2
@@ -178,9 +183,7 @@ class LearningTracker:
         # Level 2 → 3: 6 months OR mastered 4+ intermediate topics
         if row["current_level"] == 2:
             inter_topics = LEARNING_LEVELS[2]["topics"]
-            inter_mastered = sum(
-                1 for t in inter_topics if mastery.get(t, {}).get("mastered")
-            )
+            inter_mastered = sum(1 for t in inter_topics if mastery.get(t, {}).get("mastered"))
             if months_elapsed >= 6 or inter_mastered >= 4:
                 self._set_level(3)
                 return 3
@@ -358,8 +361,16 @@ class LearningTracker:
                 quiz_by_topic[t] = []
             quiz_by_topic[t].append(r["score"] / r["total"])
 
-        best_topic = max(quiz_by_topic, key=lambda t: sum(quiz_by_topic[t]) / len(quiz_by_topic[t])) if quiz_by_topic else None
-        worst_topic = min(quiz_by_topic, key=lambda t: sum(quiz_by_topic[t]) / len(quiz_by_topic[t])) if quiz_by_topic else None
+        best_topic = (
+            max(quiz_by_topic, key=lambda t: sum(quiz_by_topic[t]) / len(quiz_by_topic[t]))
+            if quiz_by_topic
+            else None
+        )
+        worst_topic = (
+            min(quiz_by_topic, key=lambda t: sum(quiz_by_topic[t]) / len(quiz_by_topic[t]))
+            if quiz_by_topic
+            else None
+        )
 
         return {
             "level": level,

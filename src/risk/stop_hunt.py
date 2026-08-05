@@ -19,7 +19,6 @@ import time
 from collections import deque
 from dataclasses import dataclass, field
 from enum import StrEnum
-from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -28,9 +27,9 @@ class HuntSeverity(StrEnum):
     """Severity of a detected stop hunt."""
 
     NONE = "NONE"
-    SUSPECTED = "SUSPECTED"   # Pattern matches but not confirmed
-    CONFIRMED = "CONFIRMED"   # Price hit stop then reversed within N candles
-    SEVERE = "SEVERE"         # Multiple hunts in short period
+    SUSPECTED = "SUSPECTED"  # Pattern matches but not confirmed
+    CONFIRMED = "CONFIRMED"  # Price hit stop then reversed within N candles
+    SEVERE = "SEVERE"  # Multiple hunts in short period
 
 
 @dataclass(frozen=True)
@@ -38,18 +37,18 @@ class StopHuntConfig:
     """Immutable configuration for stop hunt detection."""
 
     # Detection parameters
-    recovery_candles: int = 5           # If price recovers within 5 candles → hunt
-    hunt_spike_pct: float = 0.005      # 0.5% spike beyond stop level to qualify
+    recovery_candles: int = 5  # If price recovers within 5 candles → hunt
+    hunt_spike_pct: float = 0.005  # 0.5% spike beyond stop level to qualify
     min_price_recovery_pct: float = 0.003  # Must recover at least 0.3% to count
 
     # Frequency tracking
-    hunt_window_hours: float = 24.0    # Track hunts over 24h window
+    hunt_window_hours: float = 24.0  # Track hunts over 24h window
     high_frequency_threshold: int = 3  # 3+ hunts in window = high frequency
     severe_frequency_threshold: int = 5  # 5+ hunts = severe
 
     # Stop placement adjustment
-    stop_buffer_pct: float = 0.002     # Add 0.2% buffer below obvious hunt levels
-    hunt_level_lookback: int = 50      # Look back N candles for hunt levels
+    stop_buffer_pct: float = 0.002  # Add 0.2% buffer below obvious hunt levels
+    hunt_level_lookback: int = 50  # Look back N candles for hunt levels
 
     # Cooldown
     symbol_cooldown_seconds: float = 600  # 10 min cooldown after confirmed hunt
@@ -211,9 +210,7 @@ class StopHuntDetector:
 
         # Increment candle counter on candle close
         if is_candle_close:
-            self._candles_since_hit[symbol] = (
-                self._candles_since_hit.get(symbol, 0) + 1
-            )
+            self._candles_since_hit[symbol] = self._candles_since_hit.get(symbol, 0) + 1
 
         candles = self._candles_since_hit.get(symbol, 0)
         hit_price = self._price_at_hit.get(symbol, pending.hit_price)
@@ -224,10 +221,7 @@ class StopHuntDetector:
 
         # If too many candles passed without reversal, it wasn't a hunt
         if candles >= self._config.recovery_candles * 2:
-            logger.debug(
-                f"Stop hit on {symbol} after {candles} candles — "
-                f"not a hunt (no reversal)"
-            )
+            logger.debug(f"Stop hit on {symbol} after {candles} candles — not a hunt (no reversal)")
             self._pending_hits.pop(symbol, None)
             self._candles_since_hit.pop(symbol, None)
             self._price_at_hit.pop(symbol, None)
@@ -379,12 +373,12 @@ class StopHuntDetector:
         if hit.direction == "long":
             # Long stopped out — price went below stop
             # Hunt if price then recovered above stop
-            spike_below = (hit.stop_price - hit_price) / hit.stop_price
+            (hit.stop_price - hit_price) / hit.stop_price
             recovery = (current_price - hit_price) / hit_price
         else:
             # Short stopped out — price went above stop
             # Hunt if price then dropped back below stop
-            spike_above = (hit_price - hit.stop_price) / hit.stop_price
+            (hit_price - hit.stop_price) / hit.stop_price
             recovery = (hit_price - current_price) / hit_price
 
         # Check recovery magnitude
@@ -402,9 +396,7 @@ class StopHuntDetector:
         # Determine severity based on frequency
         existing_events = self._hunt_events.get(symbol, deque())
         window_start = now - self._config.hunt_window_hours * 3600
-        recent_count = sum(
-            1 for e in existing_events if e.detected_at >= window_start
-        )
+        recent_count = sum(1 for e in existing_events if e.detected_at >= window_start)
 
         if recent_count + 1 >= self._config.severe_frequency_threshold:
             severity = HuntSeverity.SEVERE
@@ -438,7 +430,7 @@ class StopHuntDetector:
             # Keep only recent zones
             if len(self._hunt_zones[symbol]) > self._config.hunt_level_lookback:
                 self._hunt_zones[symbol] = self._hunt_zones[symbol][
-                    -self._config.hunt_level_lookback:
+                    -self._config.hunt_level_lookback :
                 ]
 
         # Set cooldown

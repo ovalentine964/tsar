@@ -25,15 +25,15 @@ Usage::
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import json
 import logging
-import time
 import uuid
 from collections import defaultdict
 from datetime import UTC, datetime
 from typing import Any
 
-from src.comms.events import CloudEvent, create_event, from_redis_fields, to_redis_fields
+from src.comms.events import create_event, from_redis_fields, to_redis_fields
 
 logger = logging.getLogger(__name__)
 
@@ -276,7 +276,7 @@ class EventBus:
             )
         else:
             # Retry with exponential backoff
-            backoff = min(2 ** retry_count, 30)
+            backoff = min(2**retry_count, 30)
             logger.info("Retrying event %s in %ds", event_type, backoff)
             await asyncio.sleep(backoff)
             await self._dispatch(event_type, data, event_id)
@@ -321,15 +321,14 @@ class EventBus:
         # Try Redis first
         if self._redis is not None:
             try:
-                messages = await self._redis.xrevrange(
-                    _DLQ_STREAM, count=limit
-                )
+                messages = await self._redis.xrevrange(_DLQ_STREAM, count=limit)
                 if messages:
                     entries = []
                     for _msg_id, fields in messages:
                         d = {
-                            k.decode() if isinstance(k, bytes) else k:
-                            v.decode() if isinstance(v, bytes) else v
+                            k.decode() if isinstance(k, bytes) else k: v.decode()
+                            if isinstance(v, bytes)
+                            else v
                             for k, v in fields.items()
                         }
                         d["data"] = json.loads(d.get("data", "{}"))
@@ -394,16 +393,16 @@ class EventBus:
             # Fallback: just subscribe in-process
             self.subscribe(event_type, handler)
             logger.info("In-memory consumer subscribed to %s", event_type)
+
             # Return a no-op task
             async def _noop() -> None:
                 while True:
                     await asyncio.sleep(3600)
+
             return asyncio.create_task(_noop())
 
         task = asyncio.create_task(
-            self._consume_redis_stream(
-                event_type, group, consumer, handler, count, block_ms
-            ),
+            self._consume_redis_stream(event_type, group, consumer, handler, count, block_ms),
             name=f"consumer-{event_type}-{consumer}",
         )
         self._consumer_tasks.append(task)
@@ -450,17 +449,15 @@ class EventBus:
                         ce = from_redis_fields(fields)
                         try:
                             if asyncio.iscoroutinefunction(handler):
-                                await handler(ce.data if hasattr(ce, 'data') else fields)
+                                await handler(ce.data if hasattr(ce, "data") else fields)
                             else:
-                                handler(ce.data if hasattr(ce, 'data') else fields)
+                                handler(ce.data if hasattr(ce, "data") else fields)
                             await self._redis.xack(stream_key, group, msg_id)
                         except Exception as exc:
-                            logger.warning(
-                                "Consumer handler error [%s]: %s", event_type, exc
-                            )
+                            logger.warning("Consumer handler error [%s]: %s", event_type, exc)
                             await self._handle_failure(
                                 event_type,
-                                ce.data if hasattr(ce, 'data') else {},
+                                ce.data if hasattr(ce, "data") else {},
                                 exc,
                                 str(msg_id),
                             )
@@ -479,10 +476,8 @@ class EventBus:
         self.stop()
         for task in self._consumer_tasks:
             task.cancel()
-            try:
+            with contextlib.suppress(asyncio.CancelledError):
                 await task
-            except asyncio.CancelledError:
-                pass
         self._consumer_tasks.clear()
 
 

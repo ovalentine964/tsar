@@ -52,6 +52,7 @@ def _get_registry() -> "BackendRegistry":
     global _backend_registry
     if _backend_registry is None:
         from src.interfaces.backend_registry import BackendRegistry
+
         _backend_registry = BackendRegistry()
         _backend_registry._register_defaults()
     return _backend_registry
@@ -60,6 +61,7 @@ def _get_registry() -> "BackendRegistry":
 # ═══════════════════════════════════════════════════════════════════════
 # CONVENIENCE GETTERS
 # ═══════════════════════════════════════════════════════════════════════
+
 
 def get_backend_registry() -> "BackendRegistry":
     """Get the global BackendRegistry instance.

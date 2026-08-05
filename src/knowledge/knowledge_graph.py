@@ -307,7 +307,8 @@ class KnowledgeGraph:
 
         # Build parameterized query — no f-string interpolation of user input
         # to prevent SQL injection.
-        parts: list[str] = [f"""
+        parts: list[str] = [
+            f"""
             WITH RECURSIVE
             {edges_cte},
             -- Recursive walk
@@ -356,7 +357,8 @@ class KnowledgeGraph:
             SELECT node_type, node_id, path_nodes, path_edges, depth
             FROM traversal
             WHERE depth > 0
-        """]
+        """
+        ]
 
         params: list[Any] = [start_type, start_id, start_type, start_id, max_depth]
 
@@ -457,13 +459,18 @@ class KnowledgeGraph:
         try:
             import json
 
-            nodes_raw = json.loads(row["path_nodes"]) if isinstance(row["path_nodes"], str) else row["path_nodes"]
-            edges_raw = json.loads(row["path_edges"]) if isinstance(row["path_edges"], str) else row["path_edges"]
+            nodes_raw = (
+                json.loads(row["path_nodes"])
+                if isinstance(row["path_nodes"], str)
+                else row["path_nodes"]
+            )
+            edges_raw = (
+                json.loads(row["path_edges"])
+                if isinstance(row["path_edges"], str)
+                else row["path_edges"]
+            )
 
-            nodes = [
-                GraphNode(node_type=n["type"], node_id=n["id"])
-                for n in nodes_raw
-            ]
+            nodes = [GraphNode(node_type=n["type"], node_id=n["id"]) for n in nodes_raw]
 
             edges = [
                 GraphEdge(
@@ -526,20 +533,24 @@ class KnowledgeGraph:
                 logger.error("neighbor_query_error", error=str(exc))
                 return []
 
-        return [
-            GraphNode(node_type=r["target_type"], node_id=r["target_id"])
-            for r in rows
-        ]
+        return [GraphNode(node_type=r["target_type"], node_id=r["target_id"]) for r in rows]
 
     # ── Aggregate graph stats ────────────────────────────────
 
     def get_graph_stats(self) -> dict[str, Any]:
         """Return counts of nodes and edges in the knowledge graph."""
         # Whitelist of known table names — prevents any accidental injection
-        _ALLOWED_TABLES = frozenset({
-            "trade_records", "strategy_genomes", "patterns", "lessons",
-            "trade_patterns", "trade_lessons", "pattern_relationships",
-        })
+        _ALLOWED_TABLES = frozenset(
+            {
+                "trade_records",
+                "strategy_genomes",
+                "patterns",
+                "lessons",
+                "trade_patterns",
+                "trade_lessons",
+                "pattern_relationships",
+            }
+        )
         stats: dict[str, Any] = {}
         with self._conn() as conn:
             for table, label in [

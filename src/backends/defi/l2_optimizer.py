@@ -25,13 +25,11 @@ Usage:
 
 from __future__ import annotations
 
-import asyncio
 import logging
 import time
 from dataclasses import dataclass, field
-from datetime import UTC, datetime
 from enum import Enum
-from typing import Any, Optional
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -39,6 +37,7 @@ logger = logging.getLogger(__name__)
 # ═══════════════════════════════════════════════════════════════════════
 # CONSTANTS
 # ═══════════════════════════════════════════════════════════════════════
+
 
 class Chain(Enum):
     ETHEREUM = "ethereum"
@@ -49,9 +48,9 @@ class Chain(Enum):
 
 
 class Urgency(Enum):
-    LOW = "low"         # willing to wait, minimize cost
-    MEDIUM = "medium"   # balanced cost/speed
-    HIGH = "high"       # speed matters, pay more
+    LOW = "low"  # willing to wait, minimize cost
+    MEDIUM = "medium"  # balanced cost/speed
+    HIGH = "high"  # speed matters, pay more
     CRITICAL = "critical"  # fastest possible
 
 
@@ -84,7 +83,7 @@ BRIDGE_COSTS_USD: dict[Chain, float] = {
 
 # Typical finality times in seconds
 FINALITY_SECONDS: dict[Chain, float] = {
-    Chain.ETHEREUM: 768.0,   # 12 min
+    Chain.ETHEREUM: 768.0,  # 12 min
     Chain.POLYGON: 2.0,
     Chain.ARBITRUM: 1.0,
     Chain.OPTIMISM: 2.0,
@@ -108,9 +107,11 @@ EIP1559_CHAINS = {Chain.ETHEREUM, Chain.POLYGON, Chain.ARBITRUM, Chain.OPTIMISM,
 # DATA CLASSES
 # ═══════════════════════════════════════════════════════════════════════
 
+
 @dataclass
 class L2Config:
     """Configuration for the L2 optimizer."""
+
     rpc_urls: dict[str, str] = field(default_factory=dict)
     eth_price_usd: float = 3000.0  # updated via oracle in production
     gas_limit_default: int = 200_000
@@ -125,6 +126,7 @@ class L2Config:
 @dataclass
 class GasPrice:
     """Gas price information for a chain."""
+
     chain: Chain
     base_fee: int = 0  # wei, EIP-1559 base fee
     priority_fee: int = 0  # wei, suggested priority fee
@@ -139,6 +141,7 @@ class GasPrice:
 @dataclass
 class ChainRecommendation:
     """Recommendation for chain selection."""
+
     chain: Chain
     score: float  # 0-100, higher is better
     estimated_cost_usd: float
@@ -152,6 +155,7 @@ class ChainRecommendation:
 @dataclass
 class BatchTransaction:
     """A batched set of transactions."""
+
     batch_id: str
     transactions: list[dict[str, Any]]
     chain: Chain
@@ -163,6 +167,7 @@ class BatchTransaction:
 @dataclass
 class GasHistory:
     """Historical gas price data for a chain."""
+
     chain: Chain
     samples: list[tuple[float, int]] = field(default_factory=list)  # (timestamp, gas_price_wei)
     window_s: int = 3600  # 1 hour window
@@ -192,6 +197,7 @@ class GasHistory:
 # ═══════════════════════════════════════════════════════════════════════
 # L2 OPTIMIZER
 # ═══════════════════════════════════════════════════════════════════════
+
 
 class L2Optimizer:
     """
@@ -244,9 +250,7 @@ class L2Optimizer:
                 )
         return prices
 
-    async def get_gas_history(
-        self, chain: Chain, window_s: int = 3600
-    ) -> GasHistory:
+    async def get_gas_history(self, chain: Chain, window_s: int = 3600) -> GasHistory:
         """Get gas price history for a chain."""
         return self._gas_history.get(chain, GasHistory(chain=chain))
 
@@ -274,9 +278,7 @@ class L2Optimizer:
             ChainRecommendation with the best chain and reasoning
         """
         urgency_enum = Urgency(urgency.lower())
-        recommendations = await self.compare_chains(
-            trade_size, urgency_enum, include_bridge_cost
-        )
+        recommendations = await self.compare_chains(trade_size, urgency_enum, include_bridge_cost)
 
         if not recommendations:
             # Fallback to Ethereum
@@ -349,9 +351,7 @@ class L2Optimizer:
             reliability_score = min(100, tps / 50)  # 50 TPS = score 100 for L2s
 
             total_score = (
-                w_cost * cost_score
-                + w_speed * speed_score
-                + w_reliability * reliability_score
+                w_cost * cost_score + w_speed * speed_score + w_reliability * reliability_score
             )
 
             total_cost = gas.estimated_cost_usd + bridge_cost
@@ -360,16 +360,18 @@ class L2Optimizer:
                 chain, gas, bridge_cost, finality, total_score, urgency
             )
 
-            recommendations.append(ChainRecommendation(
-                chain=chain,
-                score=round(total_score, 1),
-                estimated_cost_usd=gas.estimated_cost_usd,
-                estimated_time_s=finality,
-                bridge_cost_usd=bridge_cost,
-                total_cost_usd=round(total_cost, 4),
-                reason=reason,
-                gas_price=gas,
-            ))
+            recommendations.append(
+                ChainRecommendation(
+                    chain=chain,
+                    score=round(total_score, 1),
+                    estimated_cost_usd=gas.estimated_cost_usd,
+                    estimated_time_s=finality,
+                    bridge_cost_usd=bridge_cost,
+                    total_cost_usd=round(total_cost, 4),
+                    reason=reason,
+                    gas_price=gas,
+                )
+            )
 
         # Sort by score descending
         recommendations.sort(key=lambda r: r.score, reverse=True)
@@ -411,9 +413,9 @@ class L2Optimizer:
             "total_fee_eth": round(total_fee_eth, 8),
             "total_fee_usd": round(total_fee_usd, 4),
             "trade_size_usd": trade_size_usd,
-            "cost_as_pct": round(
-                total_fee_usd / trade_size_usd * 100, 4
-            ) if trade_size_usd > 0 else None,
+            "cost_as_pct": round(total_fee_usd / trade_size_usd * 100, 4)
+            if trade_size_usd > 0
+            else None,
         }
 
     async def estimate_bridge_cost(
@@ -454,18 +456,14 @@ class L2Optimizer:
             "destination_gas_usd": round(dest_cost_usd, 4),
             "total_cost_usd": round(total_usd, 4),
             "amount_usd": amount_usd,
-            "cost_as_pct": round(
-                total_usd / amount_usd * 100, 4
-            ) if amount_usd > 0 else None,
+            "cost_as_pct": round(total_usd / amount_usd * 100, 4) if amount_usd > 0 else None,
         }
 
     # ───────────────────────────────────────────────────────────────────
     # Public API: EIP-1559 Base Fee Tracking
     # ───────────────────────────────────────────────────────────────────
 
-    async def get_base_fee_trend(
-        self, chain: Chain | str, samples: int = 10
-    ) -> dict[str, Any]:
+    async def get_base_fee_trend(self, chain: Chain | str, samples: int = 10) -> dict[str, Any]:
         """
         Get EIP-1559 base fee trend for a chain.
 
@@ -606,25 +604,20 @@ class L2Optimizer:
 
         # Estimate individual gas costs
         individual_gas = sum(
-            tx.get("gas_limit", self.config.gas_limit_default)
-            for tx in transactions
+            tx.get("gas_limit", self.config.gas_limit_default) for tx in transactions
         )
 
         # Batched gas: base overhead + reduced per-tx cost
         # Multicall3 or custom batch contract saves ~30-40% gas
         batch_overhead = 50_000  # contract dispatch overhead
-        per_tx_gas = int(
-            self.config.gas_limit_default * 0.65
-        )  # 35% savings per tx in batch
+        per_tx_gas = int(self.config.gas_limit_default * 0.65)  # 35% savings per tx in batch
         batched_gas = batch_overhead + per_tx_gas * len(transactions)
 
         # Cap at max batch gas
         batched_gas = min(batched_gas, self.config.batch_max_gas)
 
         savings_pct = (
-            (individual_gas - batched_gas) / individual_gas * 100
-            if individual_gas > 0
-            else 0
+            (individual_gas - batched_gas) / individual_gas * 100 if individual_gas > 0 else 0
         )
 
         gas = await self.get_gas_price(chain)
@@ -754,6 +747,7 @@ class L2Optimizer:
 # ═══════════════════════════════════════════════════════════════════════
 # CONVENIENCE FACTORY
 # ═══════════════════════════════════════════════════════════════════════
+
 
 def create_l2_optimizer(
     rpc_urls: dict[str, str] | None = None,

@@ -1,15 +1,14 @@
 """
-VMPM Strategy — Main strategy class extending TSAR's BaseStrategy.
+TSAR Strategy — Main strategy class extending TSAR's BaseStrategy.
 
-The Valentine Money Printing Machine is a multi-layer institutional
-strategy that combines:
+The TSAR strategy is a multi-layer institutional strategy that combines:
   1. Session awareness (Sydney, Tokyo, London, New York overlaps)
   2. Fundamental bias (economic calendar, central bank decisions)
   3. Multi-timeframe trend (D1, H4, H1) using 50/200 MA
   4. Support/Resistance mapping (Asian H/L, Daily/Weekly/Monthly/Yearly, OBs)
   5. Entry pipeline: News → Trend → S/R → Retest → RSI → Candlestick → Execute
 
-This module wires all VMPM components together and implements the
+This module wires all TSAR strategy components together and implements the
 BaseStrategy interface for registration in TSAR's StrategyRegistry.
 """
 
@@ -20,31 +19,35 @@ from typing import Any
 
 from src.strategy.base import BaseStrategy
 from src.strategy.genome import StrategyGenome
-from src.strategy.vmpm.session_manager import SessionManager
-from src.strategy.vmpm.fundamental_analyzer import FundamentalAnalyzer, FundamentalBias, BiasDirection
-from src.strategy.vmpm.trend_detector import TrendDetector, TrendDirection, TrendState
-from src.strategy.vmpm.level_mapper import LevelMapper, MappedLevels
-from src.strategy.vmpm.entry_pipeline import EntryPipeline, PipelineResult
+from src.strategy.tsar_strategy.session_manager import SessionManager
+from src.strategy.tsar_strategy.fundamental_analyzer import (
+    FundamentalAnalyzer,
+    FundamentalBias,
+    BiasDirection,
+)
+from src.strategy.tsar_strategy.trend_detector import TrendDetector, TrendDirection
+from src.strategy.tsar_strategy.level_mapper import LevelMapper
+from src.strategy.tsar_strategy.entry_pipeline import EntryPipeline
 
 logger = logging.getLogger(__name__)
 
 
-class VMPMStrategy(BaseStrategy):
-    """Valentine Money Printing Machine — Multi-layer institutional strategy.
+class TSARStrategy(BaseStrategy):
+    """TSAR Strategy — Multi-layer institutional strategy.
 
-    Implements the full VMPM pipeline:
+    Implements the full TSAR pipeline:
       News → Trend → S/R → Retest → RSI → Candlestick → Execute
 
-    Registered in StrategyRegistry as 'vmpm'.
+    Registered in StrategyRegistry as 'tsar'.
     Scored by SignalScout. Validated by RiskGuardian.
     Evolved by StrategyGeneticist via genome.
     """
 
-    NAME = "vmpm"
-    VERSION = "1.0.0"
+    NAME = "tsar"
+    VERSION = "2.0.0"
 
     def __init__(self, genome: StrategyGenome | None = None) -> None:
-        """Initialize VMPM with optional genome for parameter-driven behavior.
+        """Initialize TSAR strategy with optional genome for parameter-driven behavior.
 
         Args:
             genome: StrategyGenome from YAML. If None, uses defaults.
@@ -54,16 +57,14 @@ class VMPMStrategy(BaseStrategy):
             self._params = genome.params
             self._config = {
                 **genome.metadata,
-                "mutable_parameters": {
-                    k: {"current": v} for k, v in genome.params.items()
-                },
+                "mutable_parameters": {k: {"current": v} for k, v in genome.params.items()},
             }
         else:
             self._genome = None
             self._params = {}
             self._config = {}
 
-        # Initialize VMPM components
+        # Initialize TSAR strategy components
         self._session_mgr = SessionManager(self._config)
         self._fundamental = FundamentalAnalyzer(self._config)
         self._trend_detector = TrendDetector(self._config)
@@ -71,7 +72,7 @@ class VMPMStrategy(BaseStrategy):
         self._entry_pipeline = EntryPipeline(self._config)
 
         logger.info(
-            "VMPMStrategy initialized: %d params, %s",
+            "TSARStrategy initialized: %d params, %s",
             len(self._params),
             f"genome={genome.name}" if genome else "default config",
         )
@@ -79,7 +80,7 @@ class VMPMStrategy(BaseStrategy):
     # -- BaseStrategy interface --
 
     def check_entry(self, data: dict[str, Any]) -> dict[str, Any] | None:
-        """Check VMPM entry conditions.
+        """Check TSAR entry conditions.
 
         Args:
             data: Market data dict expected to contain:
@@ -111,7 +112,7 @@ class VMPMStrategy(BaseStrategy):
             session_info = self._session_mgr.get_session_info()
 
             if session_info.liquidity.value == "low" and not session_info.is_overlap:
-                logger.debug("VMPM %s: Skipping — low liquidity session", symbol)
+                logger.debug("TSAR %s: Skipping — low liquidity session", symbol)
                 return None
 
             # 2. Fundamental Bias
@@ -123,13 +124,13 @@ class VMPMStrategy(BaseStrategy):
             h1_closes = data.get("h1_closes", [])
 
             if not d1_closes or not h4_closes or not h1_closes:
-                logger.debug("VMPM %s: Insufficient multi-TF data", symbol)
+                logger.debug("TSAR %s: Insufficient multi-TF data", symbol)
                 return None
 
             trend_state = self._trend_detector.detect(d1_closes, h4_closes, h1_closes)
 
             if trend_state.direction == TrendDirection.NEUTRAL:
-                logger.debug("VMPM %s: Trend neutral — no signal", symbol)
+                logger.debug("TSAR %s: Trend neutral — no signal", symbol)
                 return None
 
             # 4. Level Mapping
@@ -163,8 +164,10 @@ class VMPMStrategy(BaseStrategy):
 
             if not pipeline_result.passed:
                 logger.info(
-                    "VMPM %s: Pipeline REJECTED (score=%.3f) — %s",
-                    symbol, pipeline_result.total_score, pipeline_result.reasoning,
+                    "TSAR %s: Pipeline REJECTED (score=%.3f) — %s",
+                    symbol,
+                    pipeline_result.total_score,
+                    pipeline_result.reasoning,
                 )
                 return None
 
@@ -181,7 +184,9 @@ class VMPMStrategy(BaseStrategy):
                 "reasoning": pipeline_result.reasoning,
                 "components": {
                     "session_score": session_score,
-                    "session": session_info.primary_session.value if session_info.primary_session else "none",
+                    "session": session_info.primary_session.value
+                    if session_info.primary_session
+                    else "none",
                     "is_overlap": session_info.is_overlap,
                     "trend_direction": trend_state.direction.value,
                     "trend_aligned": trend_state.aligned,
@@ -189,8 +194,12 @@ class VMPMStrategy(BaseStrategy):
                     "trend_confluence": round(trend_state.confluence_score, 3),
                     "fundamental_bias": fundamental_bias.direction.value,
                     "fundamental_confidence": round(fundamental_bias.confidence, 3),
-                    "nearest_level_type": pipeline_result.nearest_level.level_type.value if pipeline_result.nearest_level else "none",
-                    "nearest_level_price": pipeline_result.nearest_level.price if pipeline_result.nearest_level else 0,
+                    "nearest_level_type": pipeline_result.nearest_level.level_type.value
+                    if pipeline_result.nearest_level
+                    else "none",
+                    "nearest_level_price": pipeline_result.nearest_level.price
+                    if pipeline_result.nearest_level
+                    else 0,
                     "candle_pattern": pipeline_result.candle_pattern.value,
                     "pipeline_stages": [
                         {"stage": s.stage.value, "passed": s.passed, "score": round(s.score, 4)}
@@ -200,16 +209,20 @@ class VMPMStrategy(BaseStrategy):
             }
 
             logger.info(
-                "VMPM SIGNAL: %s %s score=%.3f entry=%.5f sl=%.5f tp=%.5f | %s",
-                symbol, side, pipeline_result.total_score,
-                pipeline_result.entry_price, pipeline_result.stop_loss,
-                pipeline_result.take_profit, pipeline_result.reasoning,
+                "TSAR SIGNAL: %s %s score=%.3f entry=%.5f sl=%.5f tp=%.5f | %s",
+                symbol,
+                side,
+                pipeline_result.total_score,
+                pipeline_result.entry_price,
+                pipeline_result.stop_loss,
+                pipeline_result.take_profit,
+                pipeline_result.reasoning,
             )
 
             return signal
 
         except Exception:
-            logger.exception("VMPM check_entry failed for %s", symbol)
+            logger.exception("TSAR check_entry failed for %s", symbol)
             return None
 
     def check_exit(
@@ -217,7 +230,7 @@ class VMPMStrategy(BaseStrategy):
         position: dict[str, Any],
         data: dict[str, Any],
     ) -> dict[str, Any] | None:
-        """Check VMPM exit conditions.
+        """Check TSAR exit conditions.
 
         Exit rules:
           - Hard stop loss
@@ -399,7 +412,13 @@ class VMPMStrategy(BaseStrategy):
 
             def ohlcv_to_dicts(bars):
                 return [
-                    {"open": b.open, "high": b.high, "low": b.low, "close": b.close, "volume": b.volume}
+                    {
+                        "open": b.open,
+                        "high": b.high,
+                        "low": b.low,
+                        "close": b.close,
+                        "volume": b.volume,
+                    }
                     for b in bars
                 ]
 
@@ -447,5 +466,17 @@ class VMPMStrategy(BaseStrategy):
             }
 
         except Exception:
-            logger.exception("VMPM analyze_async failed for %s", symbol)
+            logger.exception("TSAR analyze_async failed for %s", symbol)
             return None
+
+
+# Backward compatibility alias
+class VMPMStrategy(TSARStrategy):
+    """Backward compatibility alias for TSARStrategy.
+
+    .. deprecated:: 2.0.0
+        Use :class:`TSARStrategy` instead. This alias exists so that
+        legacy code importing ``VMPMStrategy`` continues to work.
+    """
+
+    pass

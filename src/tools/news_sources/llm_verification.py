@@ -23,8 +23,7 @@ import hashlib
 import json
 import logging
 import time
-from dataclasses import dataclass, field
-from datetime import UTC, datetime
+from dataclasses import dataclass
 from enum import StrEnum
 from typing import Any
 
@@ -39,11 +38,11 @@ logger = logging.getLogger(__name__)
 class VerificationStatus(StrEnum):
     """Result of LLM verification."""
 
-    VERIFIED = "verified"         # LLM confirms the news is credible
-    UNVERIFIED = "unverified"     # LLM cannot confirm or deny
-    DISPUTED = "disputed"         # LLM found contradicting information
+    VERIFIED = "verified"  # LLM confirms the news is credible
+    UNVERIFIED = "unverified"  # LLM cannot confirm or deny
+    DISPUTED = "disputed"  # LLM found contradicting information
     FALSE_POSITIVE = "false_positive"  # LLM believes this is false/FUD
-    FAILED = "failed"             # LLM verification itself failed (error)
+    FAILED = "failed"  # LLM verification itself failed (error)
 
 
 @dataclass(frozen=True)
@@ -280,7 +279,7 @@ class LLMNewsVerifier:
 
             # Parse LLM response
             result = self._parse_verification_response(
-                response.content if hasattr(response, 'content') else str(response),
+                response.content if hasattr(response, "content") else str(response),
                 elapsed_ms,
             )
 
@@ -322,9 +321,7 @@ class LLMNewsVerifier:
         """
         import asyncio
 
-        tasks = [
-            self.verify(**item) for item in items
-        ]
+        tasks = [self.verify(**item) for item in items]
 
         return await asyncio.gather(*tasks, return_exceptions=False)
 
@@ -346,10 +343,7 @@ class LLMNewsVerifier:
 
         # Skip verification for highly trusted sources
         trusted_sources = {"SEC", "CFTC", "Reuters", "Bloomberg"}
-        if source in trusted_sources:
-            return False
-
-        return True
+        return source not in trusted_sources
 
     # ── Response Parsing ─────────────────────────────────────────────
 
@@ -406,7 +400,8 @@ class LLMNewsVerifier:
 
         # Find JSON block in markdown or surrounding text
         import re
-        json_match = re.search(r'\{[^{}]*\}', text, re.DOTALL)
+
+        json_match = re.search(r"\{[^{}]*\}", text, re.DOTALL)
         if json_match:
             return json_match.group(0)
 

@@ -15,12 +15,9 @@ All data sourced from DeFiLlama (free) with optional premium enrichment.
 
 from __future__ import annotations
 
-import asyncio
 import logging
 import math
-import time
 from dataclasses import dataclass, field
-from datetime import UTC, datetime
 from typing import Any
 
 import httpx
@@ -28,7 +25,6 @@ import httpx
 from .analytics_providers import (
     DeFiLlamaClient,
     FallbackChain,
-    ProtocolTVL,
     YieldPool,
 )
 
@@ -173,95 +169,160 @@ class LiquidStakingOption:
 _PROTOCOL_RISK_PROFILES: dict[str, dict[str, Any]] = {
     # ── Lending ──────────────────────────────────────────────────────
     "aave-v3": {
-        "protocol_risk": 0.08, "audit_score": 0.05,
-        "audits": 12, "years_live": 4, "incidents": 0,
-        "risk_factors": [], "category": "lending",
+        "protocol_risk": 0.08,
+        "audit_score": 0.05,
+        "audits": 12,
+        "years_live": 4,
+        "incidents": 0,
+        "risk_factors": [],
+        "category": "lending",
     },
     "aave-v2": {
-        "protocol_risk": 0.10, "audit_score": 0.05,
-        "audits": 10, "years_live": 5, "incidents": 0,
-        "risk_factors": ["legacy_version"], "category": "lending",
+        "protocol_risk": 0.10,
+        "audit_score": 0.05,
+        "audits": 10,
+        "years_live": 5,
+        "incidents": 0,
+        "risk_factors": ["legacy_version"],
+        "category": "lending",
     },
     "compound-v3": {
-        "protocol_risk": 0.10, "audit_score": 0.08,
-        "audits": 8, "years_live": 2, "incidents": 0,
-        "risk_factors": [], "category": "lending",
+        "protocol_risk": 0.10,
+        "audit_score": 0.08,
+        "audits": 8,
+        "years_live": 2,
+        "incidents": 0,
+        "risk_factors": [],
+        "category": "lending",
     },
     "compound-v2": {
-        "protocol_risk": 0.12, "audit_score": 0.08,
-        "audits": 6, "years_live": 5, "incidents": 1,
-        "risk_factors": ["legacy_version"], "category": "lending",
+        "protocol_risk": 0.12,
+        "audit_score": 0.08,
+        "audits": 6,
+        "years_live": 5,
+        "incidents": 1,
+        "risk_factors": ["legacy_version"],
+        "category": "lending",
     },
     "morpho": {
-        "protocol_risk": 0.15, "audit_score": 0.12,
-        "audits": 5, "years_live": 2, "incidents": 0,
-        "risk_factors": ["newer_protocol"], "category": "lending",
+        "protocol_risk": 0.15,
+        "audit_score": 0.12,
+        "audits": 5,
+        "years_live": 2,
+        "incidents": 0,
+        "risk_factors": ["newer_protocol"],
+        "category": "lending",
     },
     "spark": {
-        "protocol_risk": 0.12, "audit_score": 0.10,
-        "audits": 6, "years_live": 2, "incidents": 0,
-        "risk_factors": ["maker_ecosystem_dependency"], "category": "lending",
+        "protocol_risk": 0.12,
+        "audit_score": 0.10,
+        "audits": 6,
+        "years_live": 2,
+        "incidents": 0,
+        "risk_factors": ["maker_ecosystem_dependency"],
+        "category": "lending",
     },
-
     # ── Liquid Staking ──────────────────────────────────────────────
     "lido": {
-        "protocol_risk": 0.05, "audit_score": 0.03,
-        "audits": 15, "years_live": 4, "incidents": 0,
-        "risk_factors": ["validator_centrality"], "category": "staking",
+        "protocol_risk": 0.05,
+        "audit_score": 0.03,
+        "audits": 15,
+        "years_live": 4,
+        "incidents": 0,
+        "risk_factors": ["validator_centrality"],
+        "category": "staking",
     },
     "rocket-pool": {
-        "protocol_risk": 0.08, "audit_score": 0.05,
-        "audits": 8, "years_live": 3, "incidents": 0,
-        "risk_factors": [], "category": "staking",
+        "protocol_risk": 0.08,
+        "audit_score": 0.05,
+        "audits": 8,
+        "years_live": 3,
+        "incidents": 0,
+        "risk_factors": [],
+        "category": "staking",
     },
     "frax-ether": {
-        "protocol_risk": 0.15, "audit_score": 0.12,
-        "audits": 4, "years_live": 2, "incidents": 0,
-        "risk_factors": ["newer_protocol", "algo_stablecoin_risk"], "category": "staking",
+        "protocol_risk": 0.15,
+        "audit_score": 0.12,
+        "audits": 4,
+        "years_live": 2,
+        "incidents": 0,
+        "risk_factors": ["newer_protocol", "algo_stablecoin_risk"],
+        "category": "staking",
     },
     "coinbase-wrapped-staked-eth": {
-        "protocol_risk": 0.10, "audit_score": 0.08,
-        "audits": 5, "years_live": 2, "incidents": 0,
-        "risk_factors": ["centralized_custody"], "category": "staking",
+        "protocol_risk": 0.10,
+        "audit_score": 0.08,
+        "audits": 5,
+        "years_live": 2,
+        "incidents": 0,
+        "risk_factors": ["centralized_custody"],
+        "category": "staking",
     },
-
     # ── DEX / LP ────────────────────────────────────────────────────
     "uniswap-v3": {
-        "protocol_risk": 0.08, "audit_score": 0.05,
-        "audits": 10, "years_live": 4, "incidents": 0,
-        "risk_factors": ["concentrated_liq_il"], "category": "dex",
+        "protocol_risk": 0.08,
+        "audit_score": 0.05,
+        "audits": 10,
+        "years_live": 4,
+        "incidents": 0,
+        "risk_factors": ["concentrated_liq_il"],
+        "category": "dex",
     },
     "uniswap-v2": {
-        "protocol_risk": 0.06, "audit_score": 0.05,
-        "audits": 8, "years_live": 5, "incidents": 0,
-        "risk_factors": ["legacy_version"], "category": "dex",
+        "protocol_risk": 0.06,
+        "audit_score": 0.05,
+        "audits": 8,
+        "years_live": 5,
+        "incidents": 0,
+        "risk_factors": ["legacy_version"],
+        "category": "dex",
     },
     "curve-dex": {
-        "protocol_risk": 0.10, "audit_score": 0.08,
-        "audits": 7, "years_live": 5, "incidents": 1,
-        "risk_factors": ["complex_math"], "category": "dex",
+        "protocol_risk": 0.10,
+        "audit_score": 0.08,
+        "audits": 7,
+        "years_live": 5,
+        "incidents": 1,
+        "risk_factors": ["complex_math"],
+        "category": "dex",
     },
     "balancer-v2": {
-        "protocol_risk": 0.12, "audit_score": 0.10,
-        "audits": 6, "years_live": 3, "incidents": 0,
-        "risk_factors": ["complex_pools"], "category": "dex",
+        "protocol_risk": 0.12,
+        "audit_score": 0.10,
+        "audits": 6,
+        "years_live": 3,
+        "incidents": 0,
+        "risk_factors": ["complex_pools"],
+        "category": "dex",
     },
-
     # ── Yield Aggregators ───────────────────────────────────────────
     "yearn-finance": {
-        "protocol_risk": 0.15, "audit_score": 0.10,
-        "audits": 8, "years_live": 4, "incidents": 1,
-        "risk_factors": ["strategy_complexity"], "category": "vault",
+        "protocol_risk": 0.15,
+        "audit_score": 0.10,
+        "audits": 8,
+        "years_live": 4,
+        "incidents": 1,
+        "risk_factors": ["strategy_complexity"],
+        "category": "vault",
     },
     "convex-finance": {
-        "protocol_risk": 0.12, "audit_score": 0.10,
-        "audits": 5, "years_live": 3, "incidents": 0,
-        "risk_factors": ["curve_dependency"], "category": "vault",
+        "protocol_risk": 0.12,
+        "audit_score": 0.10,
+        "audits": 5,
+        "years_live": 3,
+        "incidents": 0,
+        "risk_factors": ["curve_dependency"],
+        "category": "vault",
     },
     "beefy": {
-        "protocol_risk": 0.18, "audit_score": 0.15,
-        "audits": 4, "years_live": 3, "incidents": 0,
-        "risk_factors": ["multi_chain_complexity"], "category": "vault",
+        "protocol_risk": 0.18,
+        "audit_score": 0.15,
+        "audits": 4,
+        "years_live": 3,
+        "incidents": 0,
+        "risk_factors": ["multi_chain_complexity"],
+        "category": "vault",
     },
 }
 
@@ -373,8 +434,10 @@ class YieldOptimizer:
         """
         dl = await self._get_defillama()
         pools = await dl.get_yield_pools(
-            chain=chain, min_tvl=min_tvl,
-            min_apy=min_apy, max_apy=max_apy,
+            chain=chain,
+            min_tvl=min_tvl,
+            min_apy=min_apy,
+            max_apy=max_apy,
             stable_only=stable_only,
         )
 
@@ -396,23 +459,25 @@ class YieldOptimizer:
             # Generate recommendation
             rec, reasoning = self._generate_recommendation(pool, risk, risk_adj)
 
-            opportunities.append(YieldOpportunity(
-                protocol=pool.protocol,
-                chain=pool.chain,
-                pool_id=pool.pool_id,
-                symbol=pool.symbol,
-                apy=pool.apy,
-                apy_base=pool.apy_base,
-                apy_reward=pool.apy_reward,
-                tvl_usd=pool.tvl_usd,
-                risk_score=risk,
-                risk_adjusted_apy=round(risk_adj, 2),
-                il_risk=pool.il_risk,
-                stable_pool=pool.stable_pool,
-                strategy_type=strategy,
-                recommendation=rec,
-                reasoning=reasoning,
-            ))
+            opportunities.append(
+                YieldOpportunity(
+                    protocol=pool.protocol,
+                    chain=pool.chain,
+                    pool_id=pool.pool_id,
+                    symbol=pool.symbol,
+                    apy=pool.apy,
+                    apy_base=pool.apy_base,
+                    apy_reward=pool.apy_reward,
+                    tvl_usd=pool.tvl_usd,
+                    risk_score=risk,
+                    risk_adjusted_apy=round(risk_adj, 2),
+                    il_risk=pool.il_risk,
+                    stable_pool=pool.stable_pool,
+                    strategy_type=strategy,
+                    recommendation=rec,
+                    reasoning=reasoning,
+                )
+            )
 
         # Sort by risk-adjusted APY
         opportunities.sort(key=lambda x: x.risk_adjusted_apy, reverse=True)
@@ -569,7 +634,7 @@ class YieldOptimizer:
         il_pct = abs(il_pct) * 100  # Convert to percentage
 
         # Also calculate worst-case IL (±2x expected move)
-        r_worst = expected_price_ratio ** 2
+        r_worst = expected_price_ratio**2
         il_worst_pct = abs((2 * math.sqrt(r_worst) / (1 + r_worst)) - 1.0) * 100
 
         il_usd = amount_usd * (il_pct / 100)
@@ -603,7 +668,7 @@ class YieldOptimizer:
             "break_even_apy": round(break_even_apy, 2),
             "il_risk": il_risk,
             "note": (
-                f"With {volatility*100:.0f}% annualized volatility over {duration_days} days, "
+                f"With {volatility * 100:.0f}% annualized volatility over {duration_days} days, "
                 f"expected IL is ~{il_pct:.2f}% (${il_usd:,.0f}). "
                 f"Need >{break_even_apy:.1f}% APY to break even."
             ),
@@ -646,7 +711,11 @@ class YieldOptimizer:
         for protocol, meta in ls_protocols.items():
             # Get yield pool data
             pools = await dl.get_yield_pools(chain=chain, min_tvl=1_000_000)
-            matching = [p for p in pools if protocol in p.protocol.lower() or meta["token"].lower() in p.symbol.lower()]
+            matching = [
+                p
+                for p in pools
+                if protocol in p.protocol.lower() or meta["token"].lower() in p.symbol.lower()
+            ]
 
             if not matching:
                 continue
@@ -672,8 +741,12 @@ class YieldOptimizer:
 
             # Peg stability (hardcoded knowledge — production would track on-chain)
             peg_scores = {
-                "stETH": 0.90, "rETH": 0.95, "sfrxETH": 0.80,
-                "cbETH": 0.85, "eETH": 0.75, "mETH": 0.70,
+                "stETH": 0.90,
+                "rETH": 0.95,
+                "sfrxETH": 0.80,
+                "cbETH": 0.85,
+                "eETH": 0.75,
+                "mETH": 0.70,
             }
             peg = peg_scores.get(meta["token"], 0.70)
 
@@ -696,19 +769,21 @@ class YieldOptimizer:
             else:
                 rec = "avoid"
 
-            options.append(LiquidStakingOption(
-                protocol=protocol,
-                token=meta["token"],
-                chain=chain,
-                apy=pool.apy,
-                tvl_usd=tvl,
-                fee_pct=meta["fee"],
-                liquidity_score=round(liquidity, 2),
-                peg_stability=round(peg, 2),
-                risk_score=risk,
-                composite_score=round(composite, 4),
-                recommendation=rec,
-            ))
+            options.append(
+                LiquidStakingOption(
+                    protocol=protocol,
+                    token=meta["token"],
+                    chain=chain,
+                    apy=pool.apy,
+                    tvl_usd=tvl,
+                    fee_pct=meta["fee"],
+                    liquidity_score=round(liquidity, 2),
+                    peg_stability=round(peg, 2),
+                    risk_score=risk,
+                    composite_score=round(composite, 4),
+                    recommendation=rec,
+                )
+            )
 
         options.sort(key=lambda x: x.composite_score, reverse=True)
         return options
@@ -800,20 +875,22 @@ class YieldOptimizer:
             alloc_pct = min(max_single, remaining / capital_usd)
             alloc_usd = capital_usd * alloc_pct
 
-            allocations.append({
-                "protocol": opp.protocol,
-                "chain": opp.chain,
-                "symbol": opp.symbol,
-                "pool_id": opp.pool_id,
-                "strategy_type": opp.strategy_type,
-                "allocation_pct": round(alloc_pct * 100, 1),
-                "allocation_usd": round(alloc_usd, 2),
-                "apy": opp.apy,
-                "risk_adjusted_apy": opp.risk_adjusted_apy,
-                "risk_grade": opp.risk_score.risk_grade,
-                "il_risk": opp.il_risk,
-                "recommendation": opp.recommendation,
-            })
+            allocations.append(
+                {
+                    "protocol": opp.protocol,
+                    "chain": opp.chain,
+                    "symbol": opp.symbol,
+                    "pool_id": opp.pool_id,
+                    "strategy_type": opp.strategy_type,
+                    "allocation_pct": round(alloc_pct * 100, 1),
+                    "allocation_usd": round(alloc_usd, 2),
+                    "apy": opp.apy,
+                    "risk_adjusted_apy": opp.risk_adjusted_apy,
+                    "risk_grade": opp.risk_score.risk_grade,
+                    "il_risk": opp.il_risk,
+                    "recommendation": opp.recommendation,
+                }
+            )
 
             remaining -= alloc_usd
             used_protocols.add(opp.protocol)
@@ -824,10 +901,15 @@ class YieldOptimizer:
 
         # Risk summary
         risk_grades = [a["risk_grade"] for a in allocations]
-        avg_risk = sum(
-            {"A+": 1, "A": 2, "B+": 3, "B": 4, "C+": 5, "C": 6, "D": 7, "F": 8}.get(g, 5)
-            for g in risk_grades
-        ) / len(risk_grades) if risk_grades else 5
+        avg_risk = (
+            sum(
+                {"A+": 1, "A": 2, "B+": 3, "B": 4, "C+": 5, "C": 6, "D": 7, "F": 8}.get(g, 5)
+                for g in risk_grades
+            )
+            / len(risk_grades)
+            if risk_grades
+            else 5
+        )
 
         return {
             "capital_usd": capital_usd,
@@ -872,18 +954,20 @@ class YieldOptimizer:
             current_apy = pos.get("current_apy", 0)
             chain = pos.get("chain", "Ethereum")
             symbol = pos.get("symbol", "")
-            amount = pos.get("amount_usd", 0)
+            pos.get("amount_usd", 0)
 
             # Find better opportunities for same chain
             better = await self.scan_yields(
-                chain=chain, min_tvl=5_000_000,
+                chain=chain,
+                min_tvl=5_000_000,
                 min_apy=current_apy * 0.8,  # Look for at least 80% of current
                 limit=10,
             )
 
             # Filter to strictly better options
             better = [
-                o for o in better
+                o
+                for o in better
                 if o.protocol != protocol
                 and o.risk_adjusted_apy > current_apy * 1.1  # At least 10% better
             ]
@@ -917,19 +1001,21 @@ class YieldOptimizer:
             else:
                 continue  # Not worth the gas cost
 
-            recommendations.append(RebalanceRecommendation(
-                action=action,
-                protocol_from=protocol,
-                protocol_to=best.protocol,
-                pool_from=pos.get("pool_id", ""),
-                pool_to=best.pool_id,
-                symbol=symbol,
-                amount_pct=100.0 if action == "rotate" else 50.0,
-                current_apy=current_apy,
-                target_apy=best.apy,
-                risk_change=round(best.risk_score.composite - 0.3, 4),  # Estimate
-                reasoning=reasoning,
-            ))
+            recommendations.append(
+                RebalanceRecommendation(
+                    action=action,
+                    protocol_from=protocol,
+                    protocol_to=best.protocol,
+                    pool_from=pos.get("pool_id", ""),
+                    pool_to=best.pool_id,
+                    symbol=symbol,
+                    amount_pct=100.0 if action == "rotate" else 50.0,
+                    current_apy=current_apy,
+                    target_apy=best.apy,
+                    risk_change=round(best.risk_score.composite - 0.3, 4),  # Estimate
+                    reasoning=reasoning,
+                )
+            )
 
         # Sort by yield improvement
         recommendations.sort(key=lambda r: r.target_apy - r.current_apy, reverse=True)
@@ -946,7 +1032,10 @@ class YieldOptimizer:
         symbol_lower = pool.symbol.lower()
 
         # Liquid staking
-        if any(kw in protocol_lower for kw in ["lido", "rocket-pool", "frax-ether", "ether-fi", "mantle-staked"]):
+        if any(
+            kw in protocol_lower
+            for kw in ["lido", "rocket-pool", "frax-ether", "ether-fi", "mantle-staked"]
+        ):
             return "staking"
         if any(kw in symbol_lower for kw in ["steth", "reth", "sfrxeth", "cbeth", "eeth"]):
             return "staking"
@@ -1057,13 +1146,22 @@ class YieldOptimizer:
             return "avoid", f"High risk ({risk.risk_grade}) — protocol risk too high for yield"
 
         if pool.apy > 50 and risk.composite > 0.30:
-            return "caution", f"High APY ({pool.apy:.1f}%) with moderate risk — possible unsustainability"
+            return (
+                "caution",
+                f"High APY ({pool.apy:.1f}%) with moderate risk — possible unsustainability",
+            )
 
         if risk_adj_apy > 10 and risk.composite < 0.20:
-            return "strong_buy", f"Excellent risk-adjusted yield ({risk_adj_apy:.1f}%) with low risk ({risk.risk_grade})"
+            return (
+                "strong_buy",
+                f"Excellent risk-adjusted yield ({risk_adj_apy:.1f}%) with low risk ({risk.risk_grade})",
+            )
 
         if risk_adj_apy > 5 and risk.composite < 0.30:
-            return "buy", f"Good risk-adjusted yield ({risk_adj_apy:.1f}%) with acceptable risk ({risk.risk_grade})"
+            return (
+                "buy",
+                f"Good risk-adjusted yield ({risk_adj_apy:.1f}%) with acceptable risk ({risk.risk_grade})",
+            )
 
         if risk_adj_apy > 3:
             return "hold", f"Moderate yield ({risk_adj_apy:.1f}%) — acceptable for diversification"

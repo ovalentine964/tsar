@@ -47,6 +47,7 @@ class SentimentSnapshot:
         composite_score: Weighted composite sentiment (-1 to +1).
         timestamp: When this snapshot was taken.
     """
+
     fear_greed_index: int = 50
     fear_greed_label: str = "neutral"
     news_sentiment: float = 0.0
@@ -123,8 +124,13 @@ class SentimentAgent(BaseAgent):
         **kwargs: Any,
     ) -> None:
         super().__init__(config, trading_mode, **kwargs)
-        self._cycle_interval = config.get("agents", {}).get("sentiment_agent", {}).get(
-            "cycle_interval_s", 900  # 15 minutes
+        self._cycle_interval = (
+            config.get("agents", {})
+            .get("sentiment_agent", {})
+            .get(
+                "cycle_interval_s",
+                900,  # 15 minutes
+            )
         )
         self._last_scan = 0.0
 
@@ -176,7 +182,9 @@ class SentimentAgent(BaseAgent):
         # Derive funding sentiment: positive rate = longs pay shorts = bullish crowding
         # Extreme positive funding = contrarian bearish signal
         # Range: -0.01 to +0.01 typical, map to -1 to +1
-        funding_sentiment = max(-1.0, min(1.0, -funding_rate * 100))  # Inverted: high funding = bearish
+        funding_sentiment = max(
+            -1.0, min(1.0, -funding_rate * 100)
+        )  # Inverted: high funding = bearish
 
         # Composite score
         fg_normalized = (fg_index - 50) / 50.0  # -1 to +1
@@ -201,7 +209,12 @@ class SentimentAgent(BaseAgent):
 
         logger.info(
             "Sentiment: fg=%d(%s) news=%.2f(%d) funding=%.4f composite=%.3f",
-            fg_index, fg_label, news_sent, news_count, funding_rate, composite,
+            fg_index,
+            fg_label,
+            news_sent,
+            news_count,
+            funding_rate,
+            composite,
         )
         return snapshot
 
@@ -218,9 +231,7 @@ class SentimentAgent(BaseAgent):
 
         assert self._client is not None
         try:
-            resp = await self._client.get(
-                "https://api.alternative.me/fng/?limit=1&format=json"
-            )
+            resp = await self._client.get("https://api.alternative.me/fng/?limit=1&format=json")
             resp.raise_for_status()
             data = resp.json()
             entry = data["data"][0]
@@ -273,10 +284,7 @@ class SentimentAgent(BaseAgent):
                 total_negative += votes.get("negative", 0)
 
             total_votes = total_positive + total_negative
-            if total_votes > 0:
-                sentiment = (total_positive - total_negative) / total_votes
-            else:
-                sentiment = 0.0
+            sentiment = (total_positive - total_negative) / total_votes if total_votes > 0 else 0.0
 
             sentiment = max(-1.0, min(1.0, sentiment))
             self._cache.set("news_sentiment", (sentiment, len(results)))

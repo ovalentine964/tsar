@@ -41,6 +41,7 @@ else:
     # Try to import the Rust extension module
     try:
         import trading_rs
+
         RUST_AVAILABLE = True
         logger.info("trading_rs v%s loaded — Rust backends available", trading_rs.version())
     except ImportError:
@@ -71,6 +72,7 @@ class RustCorrelationAnalyzer:
     def _get_fallback(self):
         if self._fallback is None:
             from src.tools.correlation import CorrelationAnalyzer
+
             self._fallback = CorrelationAnalyzer(self._config)
         return self._fallback
 
@@ -90,20 +92,21 @@ class RustCorrelationAnalyzer:
         n = len(symbols)
         if n < 2:
             from src.tools.correlation import CorrelationMatrix
+
             return CorrelationMatrix(
-                assets=tuple(symbols), matrix=np.array([]),
-                avg_correlation=0.0, max_correlation=0.0,
-                min_correlation=0.0, regime="insufficient_data",
+                assets=tuple(symbols),
+                matrix=np.array([]),
+                avg_correlation=0.0,
+                max_correlation=0.0,
+                min_correlation=0.0,
+                regime="insufficient_data",
             )
 
         # Compute log returns in Python, then pass to Rust for matrix computation
         returns_list = []
         for sym in symbols:
             p = np.array(price_dict[sym], dtype=float)
-            if use_log_returns:
-                ret = np.diff(np.log(p))
-            else:
-                ret = np.diff(p) / p[:-1]
+            ret = np.diff(np.log(p)) if use_log_returns else np.diff(p) / p[:-1]
             returns_list.append(ret.tolist())
 
         # Rust-accelerated correlation matrix
@@ -121,6 +124,7 @@ class RustCorrelationAnalyzer:
         regime = self._classify_regime(avg_corr, max_corr, min_corr)
 
         from src.tools.correlation import CorrelationMatrix
+
         return CorrelationMatrix(
             assets=tuple(symbols),
             matrix=matrix,
@@ -143,11 +147,10 @@ class RustCorrelationAnalyzer:
                 prices_a, prices_b, window, use_log_returns
             )
 
-        result = trading_rs.rolling_correlation_py(
-            prices_a, prices_b, window, use_log_returns
-        )
+        result = trading_rs.rolling_correlation_py(prices_a, prices_b, window, use_log_returns)
 
         from src.tools.correlation import CorrelationResult
+
         return CorrelationResult(
             asset_a="",
             asset_b="",
@@ -173,11 +176,15 @@ class RustCorrelationAnalyzer:
     @staticmethod
     def _interpret(corr: float, p_value: float) -> str:
         strength = (
-            "very strong" if abs(corr) > 0.8 else
-            "strong" if abs(corr) > 0.6 else
-            "moderate" if abs(corr) > 0.4 else
-            "weak" if abs(corr) > 0.2 else
-            "negligible"
+            "very strong"
+            if abs(corr) > 0.8
+            else "strong"
+            if abs(corr) > 0.6
+            else "moderate"
+            if abs(corr) > 0.4
+            else "weak"
+            if abs(corr) > 0.2
+            else "negligible"
         )
         direction = "positive" if corr > 0 else "negative"
         sig = "statistically significant" if p_value < 0.05 else "not statistically significant"
@@ -203,6 +210,7 @@ class RustMonteCarloSimulator:
     def _get_fallback(self):
         if self._fallback is None:
             from src.strategy.monte_carlo import MonteCarloSimulator
+
             self._fallback = MonteCarloSimulator(self._config)
         return self._fallback
 
@@ -212,6 +220,7 @@ class RustMonteCarloSimulator:
             return self._get_fallback().run(backtest_result)
 
         import numpy as np
+
         from src.strategy.monte_carlo import (
             MonteCarloConfig,
             MonteCarloResult,
@@ -240,8 +249,9 @@ class RustMonteCarloSimulator:
         confidence_intervals = {}
 
         for metric_name, pct_data in result["percentile_distributions"].items():
-            percentiles = {float(k): v for k, v in pct_data.items()
-                          if k not in ("mean", "std", "min", "max")}
+            percentiles = {
+                float(k): v for k, v in pct_data.items() if k not in ("mean", "std", "min", "max")
+            }
             dist = PercentileDistribution(
                 metric_name=metric_name,
                 percentiles=percentiles,
@@ -255,8 +265,7 @@ class RustMonteCarloSimulator:
             confidence_intervals[metric_name] = percentiles
 
         logger.info(
-            "Rust Monte Carlo complete: %d simulations, "
-            "P(profit)=%.2f%%, P(ruin)=%.2f%%",
+            "Rust Monte Carlo complete: %d simulations, P(profit)=%.2f%%, P(ruin)=%.2f%%",
             result["n_simulations"],
             result["probability_of_profit"] * 100,
             result["probability_of_ruin"] * 100,
@@ -295,6 +304,7 @@ class RustVolatilityAnalyzer:
     def _get_fallback(self):
         if self._fallback is None:
             from src.tools.volatility import VolatilityAnalyzer
+
             self._fallback = VolatilityAnalyzer(self._config)
         return self._fallback
 
@@ -317,15 +327,14 @@ class RustVolatilityAnalyzer:
         closes = [c.close for c in recent]
 
         daily_vol = trading_rs.garman_klass_vol_py(opens, highs, lows, closes)
-        annualized = daily_vol * (self._annualization ** 0.5)
+        annualized = daily_vol * (self._annualization**0.5)
 
         # Percentile (requires full history)
         from src.tools.volatility import VolatilityResult
+
         if len(ohlcv) > period * 3:
             all_closes = [c.close for c in ohlcv]
-            percentile = self._get_fallback()._volatility_percentile(
-                all_closes, period, daily_vol
-            )
+            percentile = self._get_fallback()._volatility_percentile(all_closes, period, daily_vol)
         else:
             percentile = 50.0
 
@@ -346,6 +355,7 @@ class RustVolatilityAnalyzer:
         result = trading_rs.garch_forecast_py(closes, self._annualization)
 
         from src.tools.volatility import GARCHForecast
+
         return GARCHForecast(
             current_variance=result["current_variance"],
             forecast_1d=result["forecast_1d"],
@@ -385,7 +395,11 @@ class RustFactorComputer:
             return self._fallback_compute(opens, highs, lows, closes, volumes)
 
         return trading_rs.batch_factors_py(
-            opens, highs, lows, closes, volumes,
+            opens,
+            highs,
+            lows,
+            closes,
+            volumes,
             rsi_period=kwargs.get("rsi_period", 14),
             macd_fast=kwargs.get("macd_fast", 12),
             macd_slow=kwargs.get("macd_slow", 26),
@@ -406,12 +420,18 @@ class RustFactorComputer:
     ) -> dict[str, list[float]]:
         """Fallback to pandas-based computation."""
         import pandas as pd
+
         from src.strategy import factors
 
-        df = pd.DataFrame({
-            "open": opens, "high": highs, "low": lows,
-            "close": closes, "volume": volumes,
-        })
+        df = pd.DataFrame(
+            {
+                "open": opens,
+                "high": highs,
+                "low": lows,
+                "close": closes,
+                "volume": volumes,
+            }
+        )
 
         result = {}
         for name, entry in factors.FACTOR_REGISTRY.items():
@@ -436,9 +456,14 @@ class RustSlippageTracker:
         """Compute slippage statistics from a history of slippage values."""
         if not RUST_AVAILABLE:
             import numpy as np
+
             if not slippage_bps:
-                return {"total_trades": 0, "avg_slippage_bps": 0.0,
-                        "median_slippage_bps": 0.0, "max_slippage_bps": 0.0}
+                return {
+                    "total_trades": 0,
+                    "avg_slippage_bps": 0.0,
+                    "median_slippage_bps": 0.0,
+                    "max_slippage_bps": 0.0,
+                }
             abs_s = [abs(s) for s in slippage_bps]
             return {
                 "total_trades": len(abs_s),

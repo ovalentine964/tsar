@@ -9,7 +9,6 @@ Integrates with TradePhilosopher's reflection data.
 from __future__ import annotations
 
 import json
-from datetime import UTC, datetime
 from typing import Any
 
 from src.education.message_formatter import TelegramFormatter as Fmt
@@ -55,8 +54,8 @@ class PostTradeExplainer:
             Telegram HTML formatted message.
         """
         outcome = reflection.get("outcome", "unknown")
-        pnl = trade.get("pnl", 0)
-        pnl_pct = trade.get("pnl_pct", 0)
+        trade.get("pnl", 0)
+        trade.get("pnl_pct", 0)
 
         if outcome == "win":
             return self._build_win_message(trade, reflection, old_win_rate, new_win_rate)
@@ -159,7 +158,9 @@ class PostTradeExplainer:
         if what_wrong:
             lines.append(Fmt.bullet(what_wrong))
         error_cat = reflection.get("error_category", "none")
-        lines.append(Fmt.bullet(self.ERROR_EXPLANATIONS.get(error_cat, self.ERROR_EXPLANATIONS["none"])))
+        lines.append(
+            Fmt.bullet(self.ERROR_EXPLANATIONS.get(error_cat, self.ERROR_EXPLANATIONS["none"]))
+        )
 
         # Lesson
         lines.append(Fmt.section_header(Fmt.BOOK, "LESSON LEARNED"))
@@ -183,9 +184,7 @@ class PostTradeExplainer:
 
     # ── Breakeven Message ─────────────────────────────────────────────
 
-    def _build_breakeven_message(
-        self, trade: dict[str, Any], reflection: dict[str, Any]
-    ) -> str:
+    def _build_breakeven_message(self, trade: dict[str, Any], reflection: dict[str, Any]) -> str:
         lines: list[str] = []
         symbol = trade.get("symbol", "???")
         direction = trade.get("side", "LONG").upper()
@@ -233,9 +232,13 @@ class PostTradeExplainer:
         rsi = metadata.get("rsi")
         if rsi is not None:
             if rsi < 30:
-                reasons.append(f"RSI at {rsi:.0f} was indeed oversold — bounce happened as expected")
+                reasons.append(
+                    f"RSI at {rsi:.0f} was indeed oversold — bounce happened as expected"
+                )
             elif rsi > 70:
-                reasons.append(f"RSI at {rsi:.0f} was indeed overbought — pullback happened as expected")
+                reasons.append(
+                    f"RSI at {rsi:.0f} was indeed overbought — pullback happened as expected"
+                )
 
         # Support held
         if metadata.get("support_held"):
@@ -270,7 +273,9 @@ class PostTradeExplainer:
 
         # Specific loss scenarios
         if metadata.get("news_event"):
-            reasons.append(f"News event: {metadata['news_event']} — markets moved on unexpected news")
+            reasons.append(
+                f"News event: {metadata['news_event']} — markets moved on unexpected news"
+            )
 
         if metadata.get("support_broke"):
             level = Fmt.format_price(metadata.get("support_level", 0))

@@ -70,8 +70,7 @@ class CircuitBreaker:
             self.state = self.OPEN
             self._opened_at = now
             logger.warning(
-                f"Circuit breaker tripped: {len(self._failures)} failures "
-                f"in {self.window_seconds}s"
+                f"Circuit breaker tripped: {len(self._failures)} failures in {self.window_seconds}s"
             )
 
     def record_success(self) -> None:
@@ -250,14 +249,15 @@ class ResourceEnforcer:
         max_memory = limits.get("max_memory_mb", DEFAULT_LIMITS["max_memory_mb"])
         if memory_mb > max_memory:
             logger.warning(
-                f"Memory violation: {full_name} used {memory_mb:.0f}MB "
-                f"(max {max_memory:.0f}MB)"
+                f"Memory violation: {full_name} used {memory_mb:.0f}MB (max {max_memory:.0f}MB)"
             )
             self._record_violation(full_name, "memory_exceeded", memory_mb=memory_mb)
 
     # ── Manual Violation Recording ───────────────────────────
 
-    def record_violation(self, tool_category: str, tool_name: str = "", reason: str = "unknown") -> None:
+    def record_violation(
+        self, tool_category: str, tool_name: str = "", reason: str = "unknown"
+    ) -> None:
         """Manually record a violation (e.g. from catch blocks).
 
         Args:
@@ -348,9 +348,7 @@ class ResourceEnforcer:
 
     def get_status(self) -> dict[str, Any]:
         """Get full enforcer status."""
-        breaker_states = {
-            name: breaker.state for name, breaker in self._breakers.items()
-        }
+        breaker_states = {name: breaker.state for name, breaker in self._breakers.items()}
         return {
             "active_invocations": self._active,
             "max_concurrent": self._max_concurrent,

@@ -29,10 +29,10 @@ class DrawdownConfig:
     """Immutable drawdown configuration from risk.yaml."""
 
     # Drawdown thresholds (negative percentages as fractions)
-    daily_loss_flatten: float = -0.02   # -2%  → ORANGE
-    daily_loss_kill: float = -0.03      # -3%  → RED
-    max_drawdown_halt: float = -0.05    # -5%  → ORANGE
-    max_drawdown_flatten: float = -0.15 # -15% → RED
+    daily_loss_flatten: float = -0.02  # -2%  → ORANGE
+    daily_loss_kill: float = -0.03  # -3%  → RED
+    max_drawdown_halt: float = -0.05  # -5%  → ORANGE
+    max_drawdown_flatten: float = -0.15  # -15% → RED
 
 
 class DrawdownMonitor:
@@ -102,9 +102,7 @@ class DrawdownMonitor:
     # Internal helpers
     # ------------------------------------------------------------------
 
-    def _determine_level(
-        self, drawdown_pct: float, daily_pnl_pct: float
-    ) -> DrawdownLevel:
+    def _determine_level(self, drawdown_pct: float, daily_pnl_pct: float) -> DrawdownLevel:
         """Determine circuit breaker level from drawdown and daily P&L.
 
         Returns the WORSE (most restrictive) of the two metrics.
@@ -137,7 +135,7 @@ class DrawdownMonitor:
         if level == DrawdownLevel.GREEN:
             return True, 1.0
         elif level == DrawdownLevel.YELLOW:
-            return True, 0.5   # Reduce sizes 50%
+            return True, 0.5  # Reduce sizes 50%
         elif level == DrawdownLevel.ORANGE:
             return False, 0.0  # No new entries
         else:  # RED

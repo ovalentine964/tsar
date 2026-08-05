@@ -80,9 +80,12 @@ class PositionRecovery:
         # Build set of symbols with active stop-losses
         stop_symbols = set()
         for order in orders:
-            if hasattr(order, 'type') and order.type == "stop_market":
-                stop_symbols.add(order.symbol)
-            elif hasattr(order, 'order_type') and str(order.order_type) == "stop_market":
+            if (
+                hasattr(order, "type")
+                and order.type == "stop_market"
+                or hasattr(order, "order_type")
+                and str(order.order_type) == "stop_market"
+            ):
                 stop_symbols.add(order.symbol)
 
         for pos in positions:
@@ -107,7 +110,7 @@ class PositionRecovery:
                     symbol=symbol,
                     side=close_side,
                     type="stop_market",
-                    amount=pos.amount if hasattr(pos, 'amount') else pos.quantity,
+                    amount=pos.amount if hasattr(pos, "amount") else pos.quantity,
                     price=sl_price,
                 )
                 result["stop_losses_placed"] += 1

@@ -54,10 +54,11 @@ logger = logging.getLogger(__name__)
 
 class ToolPriority(Enum):
     """Tool execution priority for parallel scheduling."""
-    CRITICAL = 0    # Risk checks, kill switch — run first, block others
-    HIGH = 1        # Market data, order execution — time-sensitive
-    NORMAL = 2      # Analysis, sentiment — can wait
-    LOW = 3         # Logging, metrics — background
+
+    CRITICAL = 0  # Risk checks, kill switch — run first, block others
+    HIGH = 1  # Market data, order execution — time-sensitive
+    NORMAL = 2  # Analysis, sentiment — can wait
+    LOW = 3  # Logging, metrics — background
 
 
 @dataclass(frozen=True)
@@ -85,8 +86,8 @@ class AgentLoopConfig:
     parallel_enabled: bool = True
 
     # Token/cost tracking
-    input_cost_per_1k: float = 0.0002   # $/1K tokens (DeepSeek)
-    output_cost_per_1k: float = 0.001   # $/1K tokens (DeepSeek)
+    input_cost_per_1k: float = 0.0002  # $/1K tokens (DeepSeek)
+    output_cost_per_1k: float = 0.001  # $/1K tokens (DeepSeek)
     max_context_tokens: int = 128000
     compression_threshold: int = 100000  # Compress when context exceeds this
 
@@ -99,6 +100,7 @@ class AgentLoopConfig:
 @dataclass
 class ToolCall:
     """Represents a single tool invocation."""
+
     id: str
     name: str
     arguments: dict[str, Any]
@@ -112,6 +114,7 @@ class ToolCall:
 @dataclass
 class TurnMetrics:
     """Metrics for a single agent loop turn."""
+
     turn_number: int = 0
     input_tokens: int = 0
     output_tokens: int = 0
@@ -126,6 +129,7 @@ class TurnMetrics:
 @dataclass
 class LoopMetrics:
     """Aggregate metrics for an entire agent loop session."""
+
     turns: list[TurnMetrics] = field(default_factory=list)
     total_input_tokens: int = 0
     total_output_tokens: int = 0
@@ -151,9 +155,7 @@ class LoopMetrics:
             "total_cost_usd": round(self.total_cost_usd, 6),
             "total_tool_calls": self.total_tool_calls,
             "total_duration_ms": round(self.total_duration_ms, 2),
-            "avg_turn_duration_ms": (
-                round(self.total_duration_ms / max(len(self.turns), 1), 2)
-            ),
+            "avg_turn_duration_ms": (round(self.total_duration_ms / max(len(self.turns), 1), 2)),
             "errors": len(self.errors),
         }
 
@@ -229,10 +231,13 @@ class AgentLoop:
         if self._memory:
             context = await self._memory.get_context()
             if context:
-                self._messages.insert(1, {
-                    "role": "system",
-                    "content": f"[Memory Context]\n{context}",
-                })
+                self._messages.insert(
+                    1,
+                    {
+                        "role": "system",
+                        "content": f"[Memory Context]\n{context}",
+                    },
+                )
 
         # Check context size and compress if needed
         await self._maybe_compress_context()
@@ -285,12 +290,14 @@ class AgentLoop:
             turn.tool_duration_ms = tool_duration
 
             # Step 5: Append tool results to messages
-            for tc, result in zip(tool_calls, tool_results):
-                self._messages.append({
-                    "role": "tool",
-                    "tool_call_id": tc.id,
-                    "content": self._serialize_tool_result(result),
-                })
+            for tc, result in zip(tool_calls, tool_results, strict=False):
+                self._messages.append(
+                    {
+                        "role": "tool",
+                        "tool_call_id": tc.id,
+                        "content": self._serialize_tool_result(result),
+                    }
+                )
 
             turn.total_duration_ms = (time.monotonic() - turn_start) * 1000
             self._metrics.add_turn(turn)
@@ -333,18 +340,22 @@ class AgentLoop:
                 if attempt < self._config.max_retries:
                     delay = min(
                         self._config.base_delay_seconds
-                        * (self._config.backoff_multiplier ** attempt),
+                        * (self._config.backoff_multiplier**attempt),
                         self._config.max_delay_seconds,
                     )
                     logger.warning(
                         "LLM call failed (attempt %d/%d): %s — retrying in %.1fs",
-                        attempt + 1, self._config.max_retries + 1, e, delay,
+                        attempt + 1,
+                        self._config.max_retries + 1,
+                        e,
+                        delay,
                     )
                     await asyncio.sleep(delay)
 
         logger.error(
             "LLM call failed after %d attempts: %s",
-            self._config.max_retries + 1, last_error,
+            self._config.max_retries + 1,
+            last_error,
         )
         return None, self._config.max_retries + 1
 
@@ -401,8 +412,7 @@ class AgentLoop:
                 approved = await self._governance.pre_trade_check(trade_calls)
                 if not approved:
                     return [
-                        {"error": "Trade blocked by governance/risk hooks"}
-                        for _ in parsed_calls
+                        {"error": "Trade blocked by governance/risk hooks"} for _ in parsed_calls
                     ], (time.monotonic() - start) * 1000
 
         if not self._config.parallel_enabled or len(parsed_calls) <= 1:
@@ -474,7 +484,9 @@ class AgentLoop:
             tc.duration_ms = (time.monotonic() - start) * 1000
 
             logger.debug(
-                "Tool %s executed in %.1fms", tc.name, tc.duration_ms,
+                "Tool %s executed in %.1fms",
+                tc.name,
+                tc.duration_ms,
             )
             return result
 
@@ -517,7 +529,8 @@ class AgentLoop:
 
         logger.info(
             "Context compression triggered: %d tokens > %d threshold",
-            total_tokens, self._config.compression_threshold,
+            total_tokens,
+            self._config.compression_threshold,
         )
 
         # Compress via memory system
@@ -527,7 +540,8 @@ class AgentLoop:
             new_tokens = self._count_message_tokens()
             logger.info(
                 "Context compressed: %d → %d tokens (%.0f%% reduction)",
-                total_tokens, new_tokens,
+                total_tokens,
+                new_tokens,
                 (1 - new_tokens / max(total_tokens, 1)) * 100,
             )
 
@@ -541,18 +555,21 @@ class AgentLoop:
             args = tc.get("function", {}).get("arguments", tc.get("arguments", {}))
             if isinstance(args, str):
                 import json
+
                 try:
                     args = json.loads(args)
                 except (json.JSONDecodeError, TypeError):
                     args = {}
 
             priority = self._get_tool_priority(name)
-            parsed.append(ToolCall(
-                id=tc.get("id", f"tc_{id(tc)}"),
-                name=name,
-                arguments=args,
-                priority=priority,
-            ))
+            parsed.append(
+                ToolCall(
+                    id=tc.get("id", f"tc_{id(tc)}"),
+                    name=name,
+                    arguments=args,
+                    priority=priority,
+                )
+            )
         return parsed
 
     def _get_tool_priority(self, tool_name: str) -> ToolPriority:
@@ -565,16 +582,25 @@ class AgentLoop:
           LOW: Logging, metrics, backtesting
         """
         critical_tools = {
-            "risk_check", "kill_switch", "mandate_gate",
-            "risk_management", "drawdown_check",
+            "risk_check",
+            "kill_switch",
+            "mandate_gate",
+            "risk_management",
+            "drawdown_check",
         }
         high_tools = {
-            "market_data", "order_router", "execution",
-            "order_flow", "position_sizer",
+            "market_data",
+            "order_router",
+            "execution",
+            "order_flow",
+            "position_sizer",
         }
         low_tools = {
-            "monitoring", "metrics", "backtesting",
-            "pnl_tracker", "flywheel_health",
+            "monitoring",
+            "metrics",
+            "backtesting",
+            "pnl_tracker",
+            "flywheel_health",
         }
 
         if tool_name in critical_tools:
@@ -588,8 +614,12 @@ class AgentLoop:
     def _is_trade_tool(self, tool_name: str) -> bool:
         """Check if a tool is a trade execution tool."""
         return tool_name in {
-            "execution", "order_router", "defi_execution",
-            "dex_executor", "intent_executor", "cross_chain",
+            "execution",
+            "order_router",
+            "defi_execution",
+            "dex_executor",
+            "intent_executor",
+            "cross_chain",
         }
 
     def _serialize_tool_result(self, result: Any) -> str:
@@ -600,6 +630,7 @@ class AgentLoop:
             return result
         if isinstance(result, dict):
             import json
+
             return json.dumps(result, indent=2, default=str)
         return str(result)
 

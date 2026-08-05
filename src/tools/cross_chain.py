@@ -23,24 +23,17 @@ Usage:
 
 from __future__ import annotations
 
-import asyncio
 import logging
-import time
-from dataclasses import dataclass, field
-from datetime import UTC, datetime
+from dataclasses import dataclass
 from typing import Any
 
 from src.backends.defi.bridge_client import (
     BridgeClient,
     BridgeQuote,
-    BridgeStatus,
-    BridgeTx,
     BridgeTxStatus,
-    Chain,
     RoutePreference,
 )
 from src.backends.defi.intent_executor import (
-    ExecutionComparison,
     IntentExecutor,
     IntentQuote,
     IntentResult,
@@ -73,6 +66,7 @@ class BridgeTokensResult:
         explorer_url: Block explorer link.
         error: Error message if failed.
     """
+
     success: bool
     tx_hash: str
     protocol: str
@@ -101,6 +95,7 @@ class BridgeQuotesResult:
         savings_vs_worst_bps: Savings of best vs worst in bps.
         recommendation: Human-readable recommendation.
     """
+
     from_chain: str
     to_chain: str
     token: str
@@ -125,6 +120,7 @@ class BridgeStatusResult:
         dest_tx_hash: Destination tx hash (if complete).
         error_message: Error details if failed.
     """
+
     tx_hash: str
     status: str
     source_confirmed: bool
@@ -154,6 +150,7 @@ class IntentSwapResult:
         mev_protected: Whether MEV protection was active.
         error: Error message if failed.
     """
+
     success: bool
     order_id: str
     protocol: str
@@ -185,6 +182,7 @@ class ExecutionComparisonResult:
         mev_protection_winner: Which approach has MEV protection.
         recommendation: Human-readable recommendation.
     """
+
     pair: str
     amount: float
     chain: str
@@ -388,7 +386,9 @@ class CrossChainTools:
             worst_output = quotes[-1].estimated_amount_out if quotes else 0
             savings_bps = 0.0
             if best_quote and worst_output > 0:
-                savings_bps = (best_quote.estimated_amount_out - worst_output) / worst_output * 10_000
+                savings_bps = (
+                    (best_quote.estimated_amount_out - worst_output) / worst_output * 10_000
+                )
 
             # Generate recommendation
             recommendation = ""
@@ -507,9 +507,7 @@ class CrossChainTools:
         """
         try:
             # Get best quote first
-            quotes = await self._intent_executor.get_intent_quotes(
-                pair, amount, chain, side
-            )
+            quotes = await self._intent_executor.get_intent_quotes(pair, amount, chain, side)
             if not quotes:
                 return IntentSwapResult(
                     success=False,

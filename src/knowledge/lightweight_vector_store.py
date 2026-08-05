@@ -10,7 +10,6 @@ Drop-in replacement for ChromaVectorStore with identical public API.
 from __future__ import annotations
 
 import json
-import os
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -25,6 +24,7 @@ logger = get_logger(__name__)
 @dataclass
 class VectorDocument:
     """A stored document with its embedding vector."""
+
     id: str
     document: str
     embedding: np.ndarray
@@ -60,7 +60,9 @@ class LightweightVectorStore:
         self._persist_dir = Path(persist_dir) if persist_dir else None
         self._embedding_fn = embedding_fn or self._default_embed
         # collection_name -> list of VectorDocument
-        self._collections: dict[str, list[VectorDocument]] = {name: [] for name in self.ALL_COLLECTIONS}
+        self._collections: dict[str, list[VectorDocument]] = {
+            name: [] for name in self.ALL_COLLECTIONS
+        }
 
         if self._persist_dir:
             self._persist_dir.mkdir(parents=True, exist_ok=True)
@@ -93,7 +95,7 @@ class LightweightVectorStore:
             text_lower = text.lower().strip()
             # Character 3-grams
             for i in range(len(text_lower) - 2):
-                trigram = text_lower[i:i+3]
+                trigram = text_lower[i : i + 3]
                 h = hash(trigram) % dim
                 vec[h] += 1.0
             # Word-level features
@@ -110,7 +112,7 @@ class LightweightVectorStore:
 
     def _embed(self, texts: list[str]) -> list[np.ndarray]:
         """Compute embeddings for a list of texts."""
-        if hasattr(self._embedding_fn, '__call__'):
+        if callable(self._embedding_fn):
             result = self._embedding_fn(texts)
             # Ensure numpy arrays
             return [np.asarray(r, dtype=np.float32) for r in result]
@@ -223,15 +225,23 @@ class LightweightVectorStore:
         for i, doc in enumerate(collection):
             if doc.id == doc_id:
                 collection[i] = VectorDocument(
-                    id=doc_id, document=document, embedding=embedding, metadata=meta,
+                    id=doc_id,
+                    document=document,
+                    embedding=embedding,
+                    metadata=meta,
                 )
                 self._save_to_disk()
                 return True
 
         # Insert new
-        collection.append(VectorDocument(
-            id=doc_id, document=document, embedding=embedding, metadata=meta,
-        ))
+        collection.append(
+            VectorDocument(
+                id=doc_id,
+                document=document,
+                embedding=embedding,
+                metadata=meta,
+            )
+        )
         self._save_to_disk()
         return True
 
@@ -272,12 +282,14 @@ class LightweightVectorStore:
 
         results = []
         for score, doc in scores[:limit]:
-            results.append({
-                "id": doc.id,
-                "score": score,  # similarity (higher = more similar)
-                "metadata": doc.metadata,
-                "document": doc.document,
-            })
+            results.append(
+                {
+                    "id": doc.id,
+                    "score": score,  # similarity (higher = more similar)
+                    "metadata": doc.metadata,
+                    "document": doc.document,
+                }
+            )
 
         return results
 
@@ -295,9 +307,9 @@ class LightweightVectorStore:
         collection = self._get_collection(collection_name)
 
         count = 0
-        for i, (doc_id, doc_text) in enumerate(zip(ids, documents)):
+        for i, (doc_id, doc_text) in enumerate(zip(ids, documents, strict=False)):
             embedding = embeddings[i]
-            meta = (metadatas[i] if metadatas and i < len(metadatas) else {})
+            meta = metadatas[i] if metadatas and i < len(metadatas) else {}
             meta["store"] = collection_name
 
             # Update or insert
@@ -305,14 +317,22 @@ class LightweightVectorStore:
             for j, existing in enumerate(collection):
                 if existing.id == doc_id:
                     collection[j] = VectorDocument(
-                        id=doc_id, document=doc_text, embedding=embedding, metadata=meta,
+                        id=doc_id,
+                        document=doc_text,
+                        embedding=embedding,
+                        metadata=meta,
                     )
                     found = True
                     break
             if not found:
-                collection.append(VectorDocument(
-                    id=doc_id, document=doc_text, embedding=embedding, metadata=meta,
-                ))
+                collection.append(
+                    VectorDocument(
+                        id=doc_id,
+                        document=doc_text,
+                        embedding=embedding,
+                        metadata=meta,
+                    )
+                )
             count += 1
 
         self._save_to_disk()
@@ -350,12 +370,14 @@ class LightweightVectorStore:
             path = self._persist_dir / f"{name}.json"
             data = []
             for doc in docs:
-                data.append({
-                    "id": doc.id,
-                    "document": doc.document,
-                    "embedding": doc.embedding.tolist(),
-                    "metadata": doc.metadata,
-                })
+                data.append(
+                    {
+                        "id": doc.id,
+                        "document": doc.document,
+                        "embedding": doc.embedding.tolist(),
+                        "metadata": doc.metadata,
+                    }
+                )
             try:
                 with open(path, "w") as f:
                     json.dump(data, f)
@@ -373,12 +395,14 @@ class LightweightVectorStore:
                     data = json.load(f)
                 docs = []
                 for item in data:
-                    docs.append(VectorDocument(
-                        id=item["id"],
-                        document=item["document"],
-                        embedding=np.array(item["embedding"], dtype=np.float32),
-                        metadata=item.get("metadata", {}),
-                    ))
+                    docs.append(
+                        VectorDocument(
+                            id=item["id"],
+                            document=item["document"],
+                            embedding=np.array(item["embedding"], dtype=np.float32),
+                            metadata=item.get("metadata", {}),
+                        )
+                    )
                 self._collections[name] = docs
                 logger.info("vector_store_loaded", collection=name, count=len(docs))
             except Exception as exc:

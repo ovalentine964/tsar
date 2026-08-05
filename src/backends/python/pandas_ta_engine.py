@@ -91,7 +91,9 @@ class PandasTAEngine(PricingEngine):
         if rsi is not None and not rsi.dropna().empty:
             return float(rsi.iloc[-1])
 
-        logger.warning("RSI returned no data (len=%d, period=%d), defaulting to 50.0", len(closes), period)
+        logger.warning(
+            "RSI returned no data (len=%d, period=%d), defaulting to 50.0", len(closes), period
+        )
         return 50.0
 
     async def calculate_macd(
@@ -240,7 +242,9 @@ class PandasTAEngine(PricingEngine):
         if atr is not None and not atr.dropna().empty:
             return float(atr.iloc[-1])
 
-        logger.warning("ATR returned no data (len=%d, period=%d), defaulting to 0.0", len(closes), period)
+        logger.warning(
+            "ATR returned no data (len=%d, period=%d), defaulting to 0.0", len(closes), period
+        )
         return 0.0
 
     async def calculate_ema(self, data: list[float], period: int = 20) -> list[float]:
@@ -273,7 +277,9 @@ class PandasTAEngine(PricingEngine):
         if ema is not None and not ema.dropna().empty:
             return [float(v) for v in ema.dropna().tolist()]
 
-        logger.warning("EMA returned no data (len=%d, period=%d), returning fallback", len(data), period)
+        logger.warning(
+            "EMA returned no data (len=%d, period=%d), returning fallback", len(data), period
+        )
         return [data[-1]]
 
     async def detect_support_resistance(
@@ -305,8 +311,16 @@ class PandasTAEngine(PricingEngine):
         if len(ohlcv) < 5:
             current_price = ohlcv[-1].close
             return SRLevels(
-                supports=(SRLevel(price=current_price * 0.98, strength=0.3, level_type="support", touches=1),),
-                resistances=(SRLevel(price=current_price * 1.02, strength=0.3, level_type="resistance", touches=1),),
+                supports=(
+                    SRLevel(
+                        price=current_price * 0.98, strength=0.3, level_type="support", touches=1
+                    ),
+                ),
+                resistances=(
+                    SRLevel(
+                        price=current_price * 1.02, strength=0.3, level_type="resistance", touches=1
+                    ),
+                ),
             )
 
         highs = np.array([c.high for c in ohlcv], dtype=float)
@@ -321,9 +335,9 @@ class PandasTAEngine(PricingEngine):
         pivot_lows: list[tuple[int, float]] = []
 
         for i in range(pivot_window, len(ohlcv) - pivot_window):
-            if highs[i] == max(highs[i - pivot_window: i + pivot_window + 1]):
+            if highs[i] == max(highs[i - pivot_window : i + pivot_window + 1]):
                 pivot_highs.append((i, highs[i]))
-            if lows[i] == min(lows[i - pivot_window: i + pivot_window + 1]):
+            if lows[i] == min(lows[i - pivot_window : i + pivot_window + 1]):
                 pivot_lows.append((i, lows[i]))
 
         # ── Step 2: Cluster nearby levels ───────────────────────

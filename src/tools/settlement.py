@@ -25,9 +25,8 @@ Usage:
 
 from __future__ import annotations
 
-import asyncio
 import logging
-from typing import Any, Optional
+from typing import Any
 
 from src.tools import register_tool
 
@@ -56,8 +55,8 @@ class SettlementTools:
             return
 
         try:
-            from src.backends.defi.settlement import SettlementEngine
             from src.backends.defi.l2_optimizer import L2Optimizer
+            from src.backends.defi.settlement import SettlementEngine
 
             self._settlement_engine = SettlementEngine()
             self._l2_optimizer = L2Optimizer()
@@ -376,9 +375,7 @@ class SettlementTools:
     # Tool 7: Get Gas Trend (bonus)
     # ───────────────────────────────────────────────────────────────────
 
-    async def get_gas_trend(
-        self, chain: str = "ethereum"
-    ) -> dict[str, Any]:
+    async def get_gas_trend(self, chain: str = "ethereum") -> dict[str, Any]:
         """
         Get EIP-1559 base fee trend for a chain.
 
@@ -432,9 +429,7 @@ class SettlementTools:
             return {"error": "L2 optimizer not available"}
 
         try:
-            return await self._l2_optimizer.optimize_priority_fee(
-                chain=chain, urgency=urgency
-            )
+            return await self._l2_optimizer.optimize_priority_fee(chain=chain, urgency=urgency)
 
         except Exception as e:
             logger.error("optimize_priority_fee failed: %s", e)

@@ -23,9 +23,7 @@ Usage:
 
 from __future__ import annotations
 
-import asyncio
 import logging
-import time
 import uuid
 from collections import defaultdict
 from dataclasses import dataclass, field
@@ -35,13 +33,13 @@ from typing import TYPE_CHECKING, Any
 import numpy as np
 
 if TYPE_CHECKING:
-    from src.interfaces.execution_engine import ExecutionEngine
     from src.interfaces.exchange_gateway import ExchangeGateway
-    from src.interfaces.types import ExecutionResult, Fill, Order
+    from src.interfaces.execution_engine import ExecutionEngine
 
 from src.interfaces.types import (
     Order as OrderType_Order,
-    OrderRequest,
+)
+from src.interfaces.types import (
     OrderSide,
     OrderStatus,
     OrderType,
@@ -414,15 +412,9 @@ class ExecutionTools:
         """
         # Clean up OCO groups if this order is part of one
         for group_id, group in list(self._oco_groups.items()):
-            if group.status == "active" and (
-                order_id in (group.sl_order_id, group.tp_order_id)
-            ):
+            if group.status == "active" and (order_id in (group.sl_order_id, group.tp_order_id)):
                 # Cancel the other leg
-                other_id = (
-                    group.tp_order_id
-                    if order_id == group.sl_order_id
-                    else group.sl_order_id
-                )
+                other_id = group.tp_order_id if order_id == group.sl_order_id else group.sl_order_id
                 try:
                     await self._engine.cancel_order(other_id)
                 except Exception as exc:
@@ -471,9 +463,7 @@ class ExecutionTools:
         # Get current order status to extract original parameters
         status = await self._engine.get_order_status(order_id)
         if status in (OrderStatus.FILLED, OrderStatus.CANCELLED, OrderStatus.REJECTED):
-            raise ValueError(
-                f"Cannot modify order {order_id} — status is {status.value}"
-            )
+            raise ValueError(f"Cannot modify order {order_id} — status is {status.value}")
 
         # Get open orders to find the original
         open_orders = await self._engine.get_open_orders("")
@@ -496,9 +486,7 @@ class ExecutionTools:
             order_type=original.order_type.value,
             quantity=new_quantity if new_quantity is not None else original.quantity,
             price=new_price if new_price is not None else original.price,
-            stop_price=(
-                new_stop_price if new_stop_price is not None else original.stop_price
-            ),
+            stop_price=(new_stop_price if new_stop_price is not None else original.stop_price),
         )
 
     async def replace_order(
@@ -546,11 +534,7 @@ class ExecutionTools:
             order_type=new_order_type or original.order_type.value,
             quantity=new_quantity if new_quantity is not None else original.quantity,
             price=new_price if new_price is not None else original.price,
-            stop_price=(
-                new_stop_price
-                if new_stop_price is not None
-                else original.stop_price
-            ),
+            stop_price=(new_stop_price if new_stop_price is not None else original.stop_price),
         )
 
     # ── 3. OCO Orders ──────────────────────────────────────────────
@@ -810,12 +794,8 @@ class ExecutionTools:
             median_slippage_bps=round(float(np.median(abs_slippages)), 4),
             max_slippage_bps=round(float(np.max(abs_slippages)), 4),
             total_slippage_usd=round(sum(usd_costs), 4),
-            slippage_by_hour={
-                h: round(float(np.mean(v)), 4) for h, v in sorted(by_hour.items())
-            },
-            slippage_by_symbol={
-                s: round(float(np.mean(v)), 4) for s, v in by_symbol.items()
-            },
+            slippage_by_hour={h: round(float(np.mean(v)), 4) for h, v in sorted(by_hour.items())},
+            slippage_by_symbol={s: round(float(np.mean(v)), 4) for s, v in by_symbol.items()},
         )
 
     # ── 5. Fill Quality Analyzer ────────────────────────────────────
@@ -872,14 +852,11 @@ class ExecutionTools:
         fill_rate = total_filled / requested_qty if requested_qty > 0 else 0.0
 
         # Volume-weighted average price
-        total_cost = sum(p * q for p, q in zip(fill_prices, fill_quantities))
+        total_cost = sum(p * q for p, q in zip(fill_prices, fill_quantities, strict=False))
         avg_price = total_cost / total_filled if total_filled > 0 else 0.0
 
         # Price variance
-        if len(fill_prices) > 1:
-            price_variance = float(np.var(fill_prices))
-        else:
-            price_variance = 0.0
+        price_variance = float(np.var(fill_prices)) if len(fill_prices) > 1 else 0.0
 
         # Time to fill
         placement_time = self._order_timestamps.get(order_id)
@@ -939,7 +916,9 @@ class ExecutionTools:
         """
         # Collect order IDs from history
         order_ids = []
-        for result in self._engine._order_history if hasattr(self._engine, "_order_history") else []:
+        for result in (
+            self._engine._order_history if hasattr(self._engine, "_order_history") else []
+        ):
             if symbol and result.symbol != symbol:
                 continue
             order_ids.append(result.order_id)
@@ -966,18 +945,10 @@ class ExecutionTools:
 
         return {
             "total_orders": len(reports),
-            "avg_fill_rate": round(
-                float(np.mean([r.fill_rate for r in reports])), 4
-            ),
-            "avg_fills_per_order": round(
-                float(np.mean([r.num_fills for r in reports])), 2
-            ),
-            "avg_time_to_fill_ms": round(
-                float(np.mean([r.time_to_fill_ms for r in reports])), 2
-            ),
-            "partial_fill_rate": round(
-                sum(1 for r in reports if r.is_partial) / len(reports), 4
-            ),
+            "avg_fill_rate": round(float(np.mean([r.fill_rate for r in reports])), 4),
+            "avg_fills_per_order": round(float(np.mean([r.num_fills for r in reports])), 2),
+            "avg_time_to_fill_ms": round(float(np.mean([r.time_to_fill_ms for r in reports])), 2),
+            "partial_fill_rate": round(sum(1 for r in reports if r.is_partial) / len(reports), 4),
             "avg_price_improvement_bps": round(
                 float(np.mean([r.price_improvement_bps for r in reports])), 4
             ),
@@ -1006,25 +977,23 @@ class ExecutionTools:
         """
         # ── Exchange Hardening: Pre-flight validation ──────────────
         # Check exchange limits before building the Order
-        if hasattr(self._gateway, 'validate_order_limits'):
-            is_valid, err_msg = self._gateway.validate_order_limits(
-                symbol, side, quantity, price
-            )
+        if hasattr(self._gateway, "validate_order_limits"):
+            is_valid, err_msg = self._gateway.validate_order_limits(symbol, side, quantity, price)
             if not is_valid:
                 raise ValueError(f"Order rejected by exchange limits: {err_msg}")
 
         # Apply precision via gateway if available
-        if hasattr(self._gateway, 'amount_to_precision'):
+        if hasattr(self._gateway, "amount_to_precision"):
             quantity = self._gateway.amount_to_precision(symbol, quantity)
-        if price is not None and hasattr(self._gateway, 'price_to_precision'):
+        if price is not None and hasattr(self._gateway, "price_to_precision"):
             price = self._gateway.price_to_precision(symbol, price)
-        if stop_price is not None and hasattr(self._gateway, 'price_to_precision'):
+        if stop_price is not None and hasattr(self._gateway, "price_to_precision"):
             stop_price = self._gateway.price_to_precision(symbol, stop_price)
 
         # Map string args to enums
         side_enum = OrderSide(side.lower())
         type_enum = OrderType(order_type.lower())
-        tif_enum = TimeInForce(time_in_force.lower())
+        TimeInForce(time_in_force.lower())
 
         order = OrderType_Order(
             order_id="",  # Assigned by engine

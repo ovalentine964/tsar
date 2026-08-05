@@ -25,7 +25,12 @@ from src.utils.logging import get_logger
 
 # ChromaDB optional import
 try:
-    from src.knowledge.chromadb_store import ChromaVectorStore, VectorSearchResult, is_chromadb_available
+    from src.knowledge.chromadb_store import (
+        ChromaVectorStore,
+        VectorSearchResult,
+        is_chromadb_available,
+    )
+
     _CHROMA_IMPORT_OK = True
 except ImportError:
     _CHROMA_IMPORT_OK = False
@@ -36,6 +41,7 @@ except ImportError:
 # RAG Blueprint optional import
 try:
     from src.knowledge.rag_blueprint_search import RAGBlueprintSearch
+
     _RAG_BLUEPRINT_IMPORT_OK = True
 except ImportError:
     _RAG_BLUEPRINT_IMPORT_OK = False
@@ -109,16 +115,16 @@ class SearchResult:
 
 # CJK Unified Ideographs + Extensions, Thai, Arabic, Cyrillic, etc.
 _CJK_RANGES = (
-    (0x4E00, 0x9FFF),    # CJK Unified Ideographs
-    (0x3400, 0x4DBF),    # CJK Extension A
-    (0xF900, 0xFAFF),    # CJK Compatibility Ideographs
-    (0x2E80, 0x2EFF),    # CJK Radicals Supplement
-    (0x3000, 0x303F),    # CJK Symbols and Punctuation
-    (0x0E00, 0x0E7F),    # Thai
-    (0x0600, 0x06FF),    # Arabic
-    (0x0400, 0x04FF),    # Cyrillic
-    (0x0370, 0x03FF),    # Greek
-    (0x0500, 0x052F),    # Cyrillic Supplement
+    (0x4E00, 0x9FFF),  # CJK Unified Ideographs
+    (0x3400, 0x4DBF),  # CJK Extension A
+    (0xF900, 0xFAFF),  # CJK Compatibility Ideographs
+    (0x2E80, 0x2EFF),  # CJK Radicals Supplement
+    (0x3000, 0x303F),  # CJK Symbols and Punctuation
+    (0x0E00, 0x0E7F),  # Thai
+    (0x0600, 0x06FF),  # Arabic
+    (0x0400, 0x04FF),  # Cyrillic
+    (0x0370, 0x03FF),  # Greek
+    (0x0500, 0x052F),  # Cyrillic Supplement
 )
 
 
@@ -260,15 +266,23 @@ class MemoryRecall:
                     persist_dir=self._chromadb_dir,
                     embedding_fn=self._embedding_fn,
                 )
-                logger.info("chromadb_initialized_with_recall", available=self._chroma_store.available)
+                logger.info(
+                    "chromadb_initialized_with_recall", available=self._chroma_store.available
+                )
             except Exception as exc:
                 logger.warning("chromadb_init_failed", error=str(exc))
                 self._chroma_store = None
 
-        logger.info("memory_recall_initialized", db_path=self._db_path, chromadb=self._chroma_store is not None)
+        logger.info(
+            "memory_recall_initialized",
+            db_path=self._db_path,
+            chromadb=self._chroma_store is not None,
+        )
 
         # Initialize RAG Blueprint if available and enabled
-        if _RAG_BLUEPRINT_IMPORT_OK and self._nvidia_config.get("rag_blueprint", {}).get("enabled", False):
+        if _RAG_BLUEPRINT_IMPORT_OK and self._nvidia_config.get("rag_blueprint", {}).get(
+            "enabled", False
+        ):
             try:
                 rag_cfg = self._nvidia_config.get("rag_blueprint", {})
                 self._rag_blueprint = RAGBlueprintSearch(self, rag_cfg)
@@ -634,9 +648,8 @@ class MemoryRecall:
         # Compute combined score
         results: list[SearchResult] = []
         for key, data in merged.items():
-            combined = (
-                fts_weight * data.get("fts_score_norm", 1.0)
-                + vector_weight * data.get("vec_score_norm", 1.0)
+            combined = fts_weight * data.get("fts_score_norm", 1.0) + vector_weight * data.get(
+                "vec_score_norm", 1.0
             )
             results.append(
                 SearchResult(
@@ -662,14 +675,16 @@ class MemoryRecall:
         spread = max_s - min_s if max_s != min_s else 1.0
         normalized = []
         for r in results:
-            normalized.append({
-                "store": r.store,
-                "record_id": r.record_id,
-                "score": r.score,
-                "score_norm": (abs(r.score) - min_s) / spread,
-                "snippet": r.snippet,
-                "data": r.data,
-            })
+            normalized.append(
+                {
+                    "store": r.store,
+                    "record_id": r.record_id,
+                    "score": r.score,
+                    "score_norm": (abs(r.score) - min_s) / spread,
+                    "snippet": r.snippet,
+                    "data": r.data,
+                }
+            )
         return normalized
 
     # ── RAG Blueprint enhanced search ───────────────────────
@@ -745,9 +760,7 @@ class MemoryRecall:
         for sn in targets:
             fts_table = _STORE_REGISTRY[sn]["fts_table"]
             try:
-                await self._db.execute(
-                    f"INSERT INTO {fts_table}({fts_table}) VALUES('rebuild')"
-                )
+                await self._db.execute(f"INSERT INTO {fts_table}({fts_table}) VALUES('rebuild')")
                 count += 1
                 logger.info("fts_index_rebuilt", store=sn)
             except Exception as exc:

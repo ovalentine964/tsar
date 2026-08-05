@@ -1,5 +1,5 @@
 """
-VMPM Candlestick Confirmer — Candlestick pattern confirmation for entries.
+TSAR Candlestick Confirmer — Candlestick pattern confirmation for entries.
 
 Patterns Detected:
   REVERSAL (high score):
@@ -74,7 +74,7 @@ class CandleResult:
 
 
 class CandlestickConfirmer:
-    """Candlestick pattern confirmation for VMPM entry pipeline.
+    """Candlestick pattern confirmation for TSAR entry pipeline.
 
     Analyzes recent candles for reversal and continuation patterns.
     Score is boosted when pattern appears at a key S/R level.
@@ -144,7 +144,9 @@ class CandlestickConfirmer:
 
         # Pick best pattern aligned with direction
         best_pattern, best_score = self._select_best_pattern(
-            patterns, direction_hint, at_level,
+            patterns,
+            direction_hint,
+            at_level,
         )
 
         # Compute body/wick ratios for the last candle
@@ -154,15 +156,21 @@ class CandlestickConfirmer:
         # Determine direction
         direction = "neutral"
         if best_pattern in (
-            CandlePattern.BULLISH_ENGULFING, CandlePattern.BULLISH_PIN_BAR,
-            CandlePattern.HAMMER, CandlePattern.MORNING_STAR,
-            CandlePattern.BULLISH_DOJI, CandlePattern.THREE_WHITE_SOLDIERS,
+            CandlePattern.BULLISH_ENGULFING,
+            CandlePattern.BULLISH_PIN_BAR,
+            CandlePattern.HAMMER,
+            CandlePattern.MORNING_STAR,
+            CandlePattern.BULLISH_DOJI,
+            CandlePattern.THREE_WHITE_SOLDIERS,
         ):
             direction = "bullish"
         elif best_pattern in (
-            CandlePattern.BEARISH_ENGULFING, CandlePattern.BEARISH_PIN_BAR,
-            CandlePattern.SHOOTING_STAR, CandlePattern.EVENING_STAR,
-            CandlePattern.BEARISH_DOJI, CandlePattern.THREE_BLACK_CROWS,
+            CandlePattern.BEARISH_ENGULFING,
+            CandlePattern.BEARISH_PIN_BAR,
+            CandlePattern.SHOOTING_STAR,
+            CandlePattern.EVENING_STAR,
+            CandlePattern.BEARISH_DOJI,
+            CandlePattern.THREE_BLACK_CROWS,
         ):
             direction = "bearish"
 
@@ -177,7 +185,10 @@ class CandlestickConfirmer:
 
         logger.debug(
             "Candlestick: pattern=%s direction=%s score=%.2f at_level=%s",
-            best_pattern.value, direction, best_score, at_level,
+            best_pattern.value,
+            direction,
+            best_score,
+            at_level,
         )
         return result
 
@@ -215,7 +226,11 @@ class CandlestickConfirmer:
         return patterns
 
     def _detect_engulfing(
-        self, o: np.ndarray, h: np.ndarray, l: np.ndarray, c: np.ndarray,
+        self,
+        o: np.ndarray,
+        h: np.ndarray,
+        l: np.ndarray,
+        c: np.ndarray,
     ) -> list[tuple[CandlePattern, float]]:
         """Detect bullish/bearish engulfing patterns."""
         patterns: list[tuple[CandlePattern, float]] = []
@@ -234,19 +249,21 @@ class CandlestickConfirmer:
             return patterns
 
         # Bullish engulfing: prev bearish, curr bullish, curr body engulfs prev
-        if prev_c < prev_o and curr_c > curr_o:
-            if curr_o <= prev_c and curr_c >= prev_o:
-                patterns.append((CandlePattern.BULLISH_ENGULFING, 0.85))
+        if prev_c < prev_o and curr_c > curr_o and curr_o <= prev_c and curr_c >= prev_o:
+            patterns.append((CandlePattern.BULLISH_ENGULFING, 0.85))
 
         # Bearish engulfing: prev bullish, curr bearish, curr body engulfs prev
-        if prev_c > prev_o and curr_c < curr_o:
-            if curr_o >= prev_c and curr_c <= prev_o:
-                patterns.append((CandlePattern.BEARISH_ENGULFING, 0.85))
+        if prev_c > prev_o and curr_c < curr_o and curr_o >= prev_c and curr_c <= prev_o:
+            patterns.append((CandlePattern.BEARISH_ENGULFING, 0.85))
 
         return patterns
 
     def _detect_pin_bars(
-        self, o: np.ndarray, h: np.ndarray, l: np.ndarray, c: np.ndarray,
+        self,
+        o: np.ndarray,
+        h: np.ndarray,
+        l: np.ndarray,
+        c: np.ndarray,
     ) -> list[tuple[CandlePattern, float]]:
         """Detect pin bars (long wick, small body)."""
         patterns: list[tuple[CandlePattern, float]] = []
@@ -271,7 +288,11 @@ class CandlestickConfirmer:
         return patterns
 
     def _detect_doji(
-        self, o: np.ndarray, h: np.ndarray, l: np.ndarray, c: np.ndarray,
+        self,
+        o: np.ndarray,
+        h: np.ndarray,
+        l: np.ndarray,
+        c: np.ndarray,
     ) -> list[tuple[CandlePattern, float]]:
         """Detect doji candles (very small body)."""
         patterns: list[tuple[CandlePattern, float]] = []
@@ -292,7 +313,11 @@ class CandlestickConfirmer:
         return patterns
 
     def _detect_hammer_shooting_star(
-        self, o: np.ndarray, h: np.ndarray, l: np.ndarray, c: np.ndarray,
+        self,
+        o: np.ndarray,
+        h: np.ndarray,
+        l: np.ndarray,
+        c: np.ndarray,
     ) -> list[tuple[CandlePattern, float]]:
         """Detect hammer (bullish) and shooting star (bearish)."""
         patterns: list[tuple[CandlePattern, float]] = []
@@ -316,7 +341,11 @@ class CandlestickConfirmer:
         return patterns
 
     def _detect_inside_bar(
-        self, o: np.ndarray, h: np.ndarray, l: np.ndarray, c: np.ndarray,
+        self,
+        o: np.ndarray,
+        h: np.ndarray,
+        l: np.ndarray,
+        c: np.ndarray,
     ) -> list[tuple[CandlePattern, float]]:
         """Detect inside bar (current range within previous range)."""
         patterns: list[tuple[CandlePattern, float]] = []
@@ -330,7 +359,11 @@ class CandlestickConfirmer:
         return patterns
 
     def _detect_stars(
-        self, o: np.ndarray, h: np.ndarray, l: np.ndarray, c: np.ndarray,
+        self,
+        o: np.ndarray,
+        h: np.ndarray,
+        l: np.ndarray,
+        c: np.ndarray,
     ) -> list[tuple[CandlePattern, float]]:
         """Detect morning star (bullish) and evening star (bearish) 3-candle patterns."""
         patterns: list[tuple[CandlePattern, float]] = []
@@ -345,27 +378,35 @@ class CandlestickConfirmer:
             return patterns
 
         # Morning star: big bearish, small body, big bullish
-        c0_body = abs(c[-3] - o[-3])
+        abs(c[-3] - o[-3])
         c1_body = abs(c[-2] - o[-2])
-        c2_body = abs(c[-1] - o[-1])
+        abs(c[-1] - o[-1])
 
-        if (c[-3] < o[-3]  # First candle bearish
+        if (
+            c[-3] < o[-3]  # First candle bearish
             and c1_body / ranges[1] < body_threshold  # Middle candle small
             and c[-1] > o[-1]  # Third candle bullish
-            and c[-1] > (o[-3] + c[-3]) / 2):  # Closes above midpoint of first
+            and c[-1] > (o[-3] + c[-3]) / 2
+        ):  # Closes above midpoint of first
             patterns.append((CandlePattern.MORNING_STAR, 0.90))
 
         # Evening star: big bullish, small body, big bearish
-        if (c[-3] > o[-3]  # First candle bullish
+        if (
+            c[-3] > o[-3]  # First candle bullish
             and c1_body / ranges[1] < body_threshold  # Middle candle small
             and c[-1] < o[-1]  # Third candle bearish
-            and c[-1] < (o[-3] + c[-3]) / 2):  # Closes below midpoint of first
+            and c[-1] < (o[-3] + c[-3]) / 2
+        ):  # Closes below midpoint of first
             patterns.append((CandlePattern.EVENING_STAR, 0.90))
 
         return patterns
 
     def _detect_soldiers_crows(
-        self, o: np.ndarray, h: np.ndarray, l: np.ndarray, c: np.ndarray,
+        self,
+        o: np.ndarray,
+        h: np.ndarray,
+        l: np.ndarray,
+        c: np.ndarray,
     ) -> list[tuple[CandlePattern, float]]:
         """Detect three white soldiers (bullish) and three black crows (bearish)."""
         patterns: list[tuple[CandlePattern, float]] = []
@@ -374,14 +415,12 @@ class CandlestickConfirmer:
             return patterns
 
         # Three white soldiers: 3 consecutive bullish candles, each closing higher
-        if all(c[-i] > o[-i] for i in range(1, 4)):
-            if c[-1] > c[-2] > c[-3]:
-                patterns.append((CandlePattern.THREE_WHITE_SOLDIERS, 0.70))
+        if all(c[-i] > o[-i] for i in range(1, 4)) and c[-1] > c[-2] > c[-3]:
+            patterns.append((CandlePattern.THREE_WHITE_SOLDIERS, 0.70))
 
         # Three black crows: 3 consecutive bearish candles, each closing lower
-        if all(c[-i] < o[-i] for i in range(1, 4)):
-            if c[-1] < c[-2] < c[-3]:
-                patterns.append((CandlePattern.THREE_BLACK_CROWS, 0.70))
+        if all(c[-i] < o[-i] for i in range(1, 4)) and c[-1] < c[-2] < c[-3]:
+            patterns.append((CandlePattern.THREE_BLACK_CROWS, 0.70))
 
         return patterns
 
@@ -404,10 +443,7 @@ class CandlestickConfirmer:
         atr = float(np.mean(highs[-5:] - lows[-5:])) if len(highs) >= 5 else 0.0
         threshold = atr * self.genome["level_proximity_atr_mult"]
 
-        for level in key_levels:
-            if abs(price - level) <= threshold:
-                return True
-        return False
+        return any(abs(price - level) <= threshold for level in key_levels)
 
     def _select_best_pattern(
         self,
@@ -421,24 +457,32 @@ class CandlestickConfirmer:
 
         # Filter by direction alignment
         bullish_patterns = {
-            CandlePattern.BULLISH_ENGULFING, CandlePattern.BULLISH_PIN_BAR,
-            CandlePattern.HAMMER, CandlePattern.MORNING_STAR,
-            CandlePattern.BULLISH_DOJI, CandlePattern.THREE_WHITE_SOLDIERS,
+            CandlePattern.BULLISH_ENGULFING,
+            CandlePattern.BULLISH_PIN_BAR,
+            CandlePattern.HAMMER,
+            CandlePattern.MORNING_STAR,
+            CandlePattern.BULLISH_DOJI,
+            CandlePattern.THREE_WHITE_SOLDIERS,
         }
         bearish_patterns = {
-            CandlePattern.BEARISH_ENGULFING, CandlePattern.BEARISH_PIN_BAR,
-            CandlePattern.SHOOTING_STAR, CandlePattern.EVENING_STAR,
-            CandlePattern.BEARISH_DOJI, CandlePattern.THREE_BLACK_CROWS,
+            CandlePattern.BEARISH_ENGULFING,
+            CandlePattern.BEARISH_PIN_BAR,
+            CandlePattern.SHOOTING_STAR,
+            CandlePattern.EVENING_STAR,
+            CandlePattern.BEARISH_DOJI,
+            CandlePattern.THREE_BLACK_CROWS,
         }
 
         # Prefer direction-aligned patterns
         aligned: list[tuple[CandlePattern, float]] = []
         for pattern, base_score in patterns:
-            if direction_hint == "bullish" and pattern in bullish_patterns:
-                aligned.append((pattern, base_score))
-            elif direction_hint == "bearish" and pattern in bearish_patterns:
-                aligned.append((pattern, base_score))
-            elif direction_hint == "neutral":
+            if (
+                direction_hint == "bullish"
+                and pattern in bullish_patterns
+                or direction_hint == "bearish"
+                and pattern in bearish_patterns
+                or direction_hint == "neutral"
+            ):
                 aligned.append((pattern, base_score))
 
         # Fall back to all patterns if none aligned

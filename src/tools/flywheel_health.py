@@ -29,7 +29,6 @@ import sqlite3
 import time
 from dataclasses import asdict, dataclass, field
 from datetime import UTC, datetime
-from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
@@ -57,6 +56,7 @@ class FlywheelStatus:
     - Mutations applied (EVOLVE stage)
     - Cycle count and timing
     """
+
     # Pipeline throughput
     trades_processed: int = 0
     lessons_extracted: int = 0
@@ -106,14 +106,21 @@ class FlywheelStatus:
         - Throughput (30%): non-zero cycle count
         - Freshness (30%): last run within 24 hours
         """
-        readiness = sum([
-            self.shadow_extractor_ready,
-            self.rule_validator_ready,
-            self.genome_mutator_ready,
-            self.strategy_geneticist_ready,
-        ]) / 4.0
+        readiness = (
+            sum(
+                [
+                    self.shadow_extractor_ready,
+                    self.rule_validator_ready,
+                    self.genome_mutator_ready,
+                    self.strategy_geneticist_ready,
+                ]
+            )
+            / 4.0
+        )
 
-        throughput = min(1.0, self.flywheel_cycle_count / 10.0) if self.flywheel_cycle_count > 0 else 0.0
+        throughput = (
+            min(1.0, self.flywheel_cycle_count / 10.0) if self.flywheel_cycle_count > 0 else 0.0
+        )
 
         if self.last_run_time:
             try:
@@ -243,21 +250,16 @@ class FlywheelHealthTool:
 
             # Count mutations
             try:
-                row = conn.execute(
-                    "SELECT COUNT(*) as cnt FROM strategy_mutations"
-                ).fetchone()
+                row = conn.execute("SELECT COUNT(*) as cnt FROM strategy_mutations").fetchone()
                 if row:
-                    status.genome_proposals = max(
-                        status.genome_proposals, row["cnt"]
-                    )
+                    status.genome_proposals = max(status.genome_proposals, row["cnt"])
             except sqlite3.OperationalError:
                 pass  # Table may not exist yet
 
             # Last run time from most recent mutation
             try:
                 row = conn.execute(
-                    "SELECT created_at FROM strategy_mutations "
-                    "ORDER BY created_at DESC LIMIT 1"
+                    "SELECT created_at FROM strategy_mutations ORDER BY created_at DESC LIMIT 1"
                 ).fetchone()
                 if row:
                     status.last_run_time = row["created_at"]

@@ -24,9 +24,9 @@ Role: TRADE_PREVIEW
 
 from __future__ import annotations
 
+import contextlib
 import logging
-import time
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from enum import StrEnum
 from typing import Any
 
@@ -103,11 +103,11 @@ class BlendedSignal:
 
 # Default routing table: regime → (mode, vmpm_weight, fallback_weight, sizing_mult)
 _ROUTING_TABLE: dict[MarketRegime, tuple[RoutingMode, float, float, float]] = {
-    MarketRegime.STRONG_TREND_UP:   (RoutingMode.VMPM_TREND,       0.7, 0.3, 1.0),
-    MarketRegime.STRONG_TREND_DOWN: (RoutingMode.VMPM_TREND,       0.7, 0.3, 1.0),
-    MarketRegime.RANGING:           (RoutingMode.VMPM_REVERSION,   0.6, 0.4, 0.8),
-    MarketRegime.HIGH_VOLATILITY:   (RoutingMode.BLENDED,          0.5, 0.5, 0.5),
-    MarketRegime.UNCERTAIN:         (RoutingMode.SKIP,             0.0, 0.0, 0.0),
+    MarketRegime.STRONG_TREND_UP: (RoutingMode.VMPM_TREND, 0.7, 0.3, 1.0),
+    MarketRegime.STRONG_TREND_DOWN: (RoutingMode.VMPM_TREND, 0.7, 0.3, 1.0),
+    MarketRegime.RANGING: (RoutingMode.VMPM_REVERSION, 0.6, 0.4, 0.8),
+    MarketRegime.HIGH_VOLATILITY: (RoutingMode.BLENDED, 0.5, 0.5, 0.5),
+    MarketRegime.UNCERTAIN: (RoutingMode.SKIP, 0.0, 0.0, 0.0),
 }
 
 
@@ -182,10 +182,8 @@ class VMPMStrategyRouter(BaseAgent):
 
         # Load Momentum genome
         momentum_genome = None
-        try:
+        with contextlib.suppress(FileNotFoundError):
             momentum_genome = StrategyGenome.from_yaml("config/strategies/momentum.yaml")
-        except FileNotFoundError:
-            pass
         self._momentum = MomentumStrategy(genome=momentum_genome)
 
         # MeanReversion (no genome needed for Day1)
@@ -216,7 +214,8 @@ class VMPMStrategyRouter(BaseAgent):
             self._regime_data = data
             logger.info(
                 "Regime updated: %s (confidence=%.2f)",
-                self._current_regime.value, self._regime_confidence,
+                self._current_regime.value,
+                self._regime_confidence,
             )
 
     async def run_cycle(self) -> None:
@@ -234,9 +233,7 @@ class VMPMStrategyRouter(BaseAgent):
     # CORE ROUTING LOGIC
     # ═══════════════════════════════════════════════════════════════════════
 
-    def route_and_generate_signal(
-        self, market_data: dict[str, Any]
-    ) -> dict[str, Any] | None:
+    def route_and_generate_signal(self, market_data: dict[str, Any]) -> dict[str, Any] | None:
         """Main entry point: route to optimal strategy and generate signal.
 
         This is the core method called by the Orchestrator or SignalScout
@@ -387,20 +384,25 @@ class VMPMStrategyRouter(BaseAgent):
             return self._build_single_signal(vmpm_signal, routing, "vmpm_only", market_data)
 
         if fallback_signal and not vmpm_signal:
-            return self._build_single_signal(fallback_signal, routing, f"{routing.secondary_strategy}_only", market_data)
+            return self._build_single_signal(
+                fallback_signal, routing, f"{routing.secondary_strategy}_only", market_data
+            )
 
         # Both signals exist — check direction agreement
         if vmpm_side != fallback_side:
             logger.debug(
                 "Conflicting signals: VMPM=%s(%.2f) vs %s=%s(%.2f) — skipping",
-                vmpm_side, vmpm_score, routing.secondary_strategy, fallback_side, fallback_score,
+                vmpm_side,
+                vmpm_score,
+                routing.secondary_strategy,
+                fallback_side,
+                fallback_score,
             )
             return None
 
         # Direction agrees — blend with regime weights
         combined_score = (
-            vmpm_score * routing.vmpm_weight +
-            fallback_score * routing.fallback_weight
+            vmpm_score * routing.vmpm_weight + fallback_score * routing.fallback_weight
         ) / (routing.vmpm_weight + routing.fallback_weight)
 
         # Check minimum combined score
@@ -417,7 +419,7 @@ class VMPMStrategyRouter(BaseAgent):
         base_pct = vmpm_signal.get("position_size_pct", 2.0)
         position_pct = base_pct * routing.position_size_mult
 
-        symbol = market_data.get("symbol", "?")
+        market_data.get("symbol", "?")
 
         return BlendedSignal(
             side=vmpm_side,
@@ -537,18 +539,21 @@ class VMPMStrategyRouter(BaseAgent):
     def get_health(self) -> dict[str, Any]:
         """Return health status including routing metrics."""
         health = super().get_health()
-        health.update({
-            "current_regime": self._current_regime.value,
-            "signals_routed": self._signals_routed,
-            "signals_blended": self._signals_blended,
-            "signals_skipped": self._signals_skipped,
-        })
+        health.update(
+            {
+                "current_regime": self._current_regime.value,
+                "signals_routed": self._signals_routed,
+                "signals_blended": self._signals_blended,
+                "signals_skipped": self._signals_skipped,
+            }
+        )
         return health
 
 
 # ═══════════════════════════════════════════════════════════════════════
 # BLENDED SIGNAL SERIALIZATION
 # ═══════════════════════════════════════════════════════════════════════
+
 
 def _blended_to_dict(blended: BlendedSignal) -> dict[str, Any]:
     """Convert BlendedSignal to dict for event publishing."""

@@ -12,9 +12,7 @@ from __future__ import annotations
 
 import contextlib
 import json
-import math
 import sqlite3
-from collections import defaultdict
 from contextlib import contextmanager
 from dataclasses import asdict, dataclass, field
 from datetime import UTC, datetime
@@ -108,6 +106,7 @@ class _DictBackend:
 
     def keys(self, pattern: str) -> list[str]:
         import fnmatch
+
         all_keys = set(self._hashes.keys()) | set(self._lists.keys())
         return [k for k in all_keys if fnmatch.fnmatch(k, pattern)]
 
@@ -118,7 +117,10 @@ class _RedisBackend:
 
     def get_hash(self, key: str) -> dict[str, str]:
         raw = self._r.hgetall(key)
-        return {k.decode() if isinstance(k, bytes) else k: v.decode() if isinstance(v, bytes) else v for k, v in raw.items()}
+        return {
+            k.decode() if isinstance(k, bytes) else k: v.decode() if isinstance(v, bytes) else v
+            for k, v in raw.items()
+        }
 
     def set_hash(self, key: str, mapping: dict[str, str]) -> None:
         if mapping:
@@ -178,13 +180,21 @@ class RegimeStateStore:
             "lookback_hours": str(state.lookback_hours),
         }
         self._backend.set_hash(self._key("current"), mapping)
-        logger.info("global_regime_updated", dominant=state.dominant_regime, confidence=state.confidence)
+        logger.info(
+            "global_regime_updated", dominant=state.dominant_regime, confidence=state.confidence
+        )
 
     def get_global_regime(self) -> RegimeState | None:
         raw = self._backend.get_hash(self._key("current"))
         if not raw:
             return None
-        scalar_keys = {"dominant_regime", "confidence", "last_updated", "model_version", "lookback_hours"}
+        scalar_keys = {
+            "dominant_regime",
+            "confidence",
+            "last_updated",
+            "model_version",
+            "lookback_hours",
+        }
         probs: dict[str, float] = {}
         for k, v in raw.items():
             if k not in scalar_keys:
@@ -241,14 +251,18 @@ class RegimeStateStore:
     def record_transition(self, transition: RegimeTransition) -> None:
         payload = json.dumps(transition.to_dict())
         self._backend.lpush_trim(self._key("transitions"), payload, self._TRANSITION_MAX)
-        logger.info("regime_transition", from_regime=transition.from_regime, to_regime=transition.to_regime)
+        logger.info(
+            "regime_transition", from_regime=transition.from_regime, to_regime=transition.to_regime
+        )
 
     def get_recent_transitions(self, limit: int = 50) -> list[RegimeTransition]:
         raw = self._backend.lrange(self._key("transitions"), 0, limit - 1)
         return [RegimeTransition.from_dict(json.loads(r)) for r in raw]
 
     def update_indicators(self, indicators: dict[str, Any]) -> None:
-        mapping = {k: json.dumps(v) if not isinstance(v, str) else str(v) for k, v in indicators.items()}
+        mapping = {
+            k: json.dumps(v) if not isinstance(v, str) else str(v) for k, v in indicators.items()
+        }
         self._backend.set_hash(self._key("indicators"), mapping)
 
     def get_indicators(self) -> dict[str, Any]:
@@ -287,11 +301,12 @@ class RegimeTransitionEdge:
 
     Models: from_regime → to_regime with probability P, observed in time T.
     """
+
     from_regime: str = ""
     to_regime: str = ""
-    probability: float = 0.0          # P(to | from) — conditional probability
-    observation_count: int = 0        # number of times this transition was observed
-    avg_duration_hours: float = 0.0   # average time spent in from_regime before transition
+    probability: float = 0.0  # P(to | from) — conditional probability
+    observation_count: int = 0  # number of times this transition was observed
+    avg_duration_hours: float = 0.0  # average time spent in from_regime before transition
     min_duration_hours: float = 0.0
     max_duration_hours: float = 0.0
     last_observed: str = ""
@@ -308,6 +323,7 @@ class RegimeTransitionEdge:
 @dataclass
 class RegimeGraphSnapshot:
     """A point-in-time snapshot of the regime transition graph."""
+
     edges: list[RegimeTransitionEdge] = field(default_factory=list)
     regimes: list[str] = field(default_factory=list)
     total_observations: int = 0
@@ -364,6 +380,7 @@ class RegimeGraphSnapshot:
 @dataclass
 class RegimePathProbability:
     """Probability of a specific regime sequence."""
+
     path: list[str] = field(default_factory=list)
     probability: float = 0.0
     avg_duration_hours: float = 0.0
@@ -439,11 +456,14 @@ class TemporalRegimeGraph:
         ts = timestamp or _utcnow_iso()
         with self._conn() as conn:
             # Insert raw observation
-            conn.execute("""
+            conn.execute(
+                """
                 INSERT INTO regime_transitions
                     (from_regime, to_regime, duration_hours, asset, observed_at)
                 VALUES (?, ?, ?, ?, ?)
-            """, (from_regime, to_regime, duration_hours, asset, ts))
+            """,
+                (from_regime, to_regime, duration_hours, asset, ts),
+            )
 
         # Update aggregated graph
         self._rebuild_edge(from_regime, to_regime, asset)
@@ -451,7 +471,8 @@ class TemporalRegimeGraph:
     def _rebuild_edge(self, from_regime: str, to_regime: str, asset: str) -> None:
         """Recompute aggregated edge statistics from raw observations."""
         with self._conn() as conn:
-            row = conn.execute("""
+            row = conn.execute(
+                """
                 SELECT
                     COUNT(*) AS obs_count,
                     AVG(duration_hours) AS avg_dur,
@@ -460,23 +481,29 @@ class TemporalRegimeGraph:
                     MAX(observed_at) AS last_obs
                 FROM regime_transitions
                 WHERE from_regime = ? AND to_regime = ? AND asset = ?
-            """, (from_regime, to_regime, asset)).fetchone()
+            """,
+                (from_regime, to_regime, asset),
+            ).fetchone()
 
             if not row:
                 return
 
             # Total transitions from this regime (for probability calculation)
-            total_row = conn.execute("""
+            total_row = conn.execute(
+                """
                 SELECT COUNT(*) AS total
                 FROM regime_transitions
                 WHERE from_regime = ? AND asset = ?
-            """, (from_regime, asset)).fetchone()
+            """,
+                (from_regime, asset),
+            ).fetchone()
 
             total = total_row["total"] if total_row else 1
             prob = row["obs_count"] / total if total > 0 else 0.0
 
             # Upsert aggregated edge
-            conn.execute("""
+            conn.execute(
+                """
                 INSERT INTO regime_transition_edges
                     (from_regime, to_regime, probability, observation_count,
                      avg_duration_hours, min_duration_hours, max_duration_hours,
@@ -489,11 +516,19 @@ class TemporalRegimeGraph:
                     min_duration_hours = excluded.min_duration_hours,
                     max_duration_hours = excluded.max_duration_hours,
                     last_observed = excluded.last_observed
-            """, (
-                from_regime, to_regime, prob, row["obs_count"],
-                row["avg_dur"] or 0.0, row["min_dur"] or 0.0,
-                row["max_dur"] or 0.0, row["last_obs"] or "", asset,
-            ))
+            """,
+                (
+                    from_regime,
+                    to_regime,
+                    prob,
+                    row["obs_count"],
+                    row["avg_dur"] or 0.0,
+                    row["min_dur"] or 0.0,
+                    row["max_dur"] or 0.0,
+                    row["last_obs"] or "",
+                    asset,
+                ),
+            )
 
     # ── Transition queries ───────────────────────────────────
 
@@ -617,9 +652,7 @@ class TemporalRegimeGraph:
 
     # ── Analysis helpers ─────────────────────────────────────
 
-    def get_regime_durations(
-        self, regime: str, asset: str = "GLOBAL"
-    ) -> dict[str, float]:
+    def get_regime_durations(self, regime: str, asset: str = "GLOBAL") -> dict[str, float]:
         """Get duration statistics for time spent in a regime."""
         sql = """
             SELECT
@@ -679,9 +712,7 @@ class TemporalRegimeGraph:
     def get_graph_stats(self) -> dict[str, Any]:
         """Return summary statistics for the regime graph."""
         with self._conn() as conn:
-            obs_row = conn.execute(
-                "SELECT COUNT(*) AS cnt FROM regime_transitions"
-            ).fetchone()
+            obs_row = conn.execute("SELECT COUNT(*) AS cnt FROM regime_transitions").fetchone()
             edge_row = conn.execute(
                 "SELECT COUNT(*) AS cnt FROM regime_transition_edges"
             ).fetchone()

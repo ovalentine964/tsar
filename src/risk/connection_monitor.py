@@ -1,4 +1,5 @@
 """Connection monitor — kills trading if exchange is unreachable."""
+
 import asyncio
 import time
 

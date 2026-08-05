@@ -77,18 +77,25 @@ class FactorLibrary:
     """
 
     VALID_CATEGORIES = {
-        "momentum",       # Technical indicators: RSI, MACD, Stochastic, etc.
-        "mean_reversion", # Mean reversion indicators: BB %B, Z-Score, etc.
-        "volatility",     # Volatility indicators: ATR, BB width, etc.
-        "volume",         # Volume indicators: OBV, CMF, etc.
-        "trend",          # Trend indicators: ADX, Aroon, Ichimoku, etc.
-        "pattern",        # Candlestick patterns: engulfing, pin bar, etc.
-        "risk_factor",    # Risk factors: beta, correlation, drawdown, etc.
-        "macro_factor",   # Macro factors: DXY sensitivity, rate sensitivity, etc.
+        "momentum",  # Technical indicators: RSI, MACD, Stochastic, etc.
+        "mean_reversion",  # Mean reversion indicators: BB %B, Z-Score, etc.
+        "volatility",  # Volatility indicators: ATR, BB width, etc.
+        "volume",  # Volume indicators: OBV, CMF, etc.
+        "trend",  # Trend indicators: ADX, Aroon, Ichimoku, etc.
+        "pattern",  # Candlestick patterns: engulfing, pin bar, etc.
+        "risk_factor",  # Risk factors: beta, correlation, drawdown, etc.
+        "macro_factor",  # Macro factors: DXY sensitivity, rate sensitivity, etc.
     }
 
     # Category classification: which are pure indicators vs risk/macro factors
-    INDICATOR_CATEGORIES = {"momentum", "mean_reversion", "volatility", "volume", "trend", "pattern"}
+    INDICATOR_CATEGORIES = {
+        "momentum",
+        "mean_reversion",
+        "volatility",
+        "volume",
+        "trend",
+        "pattern",
+    }
     RISK_FACTOR_CATEGORIES = {"risk_factor", "macro_factor"}
 
     def __init__(self, db_path: str | Path = ":memory:") -> None:
@@ -302,17 +309,19 @@ class FactorLibrary:
         windows: list[dict[str, Any]] = []
 
         for i in range(0, len(history), window_size):
-            chunk = history[i:i + window_size]
+            chunk = history[i : i + window_size]
             if not chunk:
                 continue
             ic_mean = sum(r.ic_value for r in chunk) / len(chunk)
-            windows.append({
-                "window_index": len(windows),
-                "window_start": chunk[0].timestamp,
-                "window_end": chunk[-1].timestamp,
-                "ic_mean": round(ic_mean, 6),
-                "n_observations": len(chunk),
-            })
+            windows.append(
+                {
+                    "window_index": len(windows),
+                    "window_start": chunk[0].timestamp,
+                    "window_end": chunk[-1].timestamp,
+                    "ic_mean": round(ic_mean, 6),
+                    "n_observations": len(chunk),
+                }
+            )
 
         # Compute decay rate (IC change per window)
         if len(windows) >= 2:
@@ -354,13 +363,15 @@ class FactorLibrary:
                 continue
             slope = decay[0].get("overall_decay_slope", 0.0) if decay else 0.0
             if slope < threshold:
-                alerts.append({
-                    "factor_name": meta.name,
-                    "category": meta.category,
-                    "decay_slope": slope,
-                    "latest_ic": decay[-1]["ic_mean"] if decay else 0.0,
-                    "n_windows": len(decay),
-                })
+                alerts.append(
+                    {
+                        "factor_name": meta.name,
+                        "category": meta.category,
+                        "decay_slope": slope,
+                        "latest_ic": decay[-1]["ic_mean"] if decay else 0.0,
+                        "n_windows": len(decay),
+                    }
+                )
         return alerts
 
     # ── Computation ──────────────────────────────────────────
@@ -386,8 +397,7 @@ class FactorLibrary:
         """
         if factor_name not in self._functions:
             raise KeyError(
-                f"Factor '{factor_name}' not registered. "
-                f"Available: {list(self._functions.keys())}"
+                f"Factor '{factor_name}' not registered. Available: {list(self._functions.keys())}"
             )
 
         # Merge default params with overrides
@@ -538,10 +548,9 @@ class FactorLibrary:
         # where γ = Euler-Mascheroni constant ≈ 0.5772
         euler_gamma = 0.5772156649
         log_n = math.log(n_trials) if n_trials > 1 else 1.0
-        expected_max_sharpe = (
-            math.sqrt(2 * log_n) * (1 - euler_gamma / log_n)
-            + euler_gamma / math.sqrt(2 * log_n)
-        )
+        expected_max_sharpe = math.sqrt(2 * log_n) * (
+            1 - euler_gamma / log_n
+        ) + euler_gamma / math.sqrt(2 * log_n)
 
         # Standard error of Sharpe ratio (with skewness/kurtosis correction)
         # SE(SR) = sqrt((1 + 0.5*SR² - γ₁*SR + (γ₂-3)/4*SR²) / (T-1))
@@ -673,9 +682,7 @@ class FactorLibrary:
             try:
                 factor_vals = self.compute(meta.name, ohlcv_data)
                 # Align indices
-                common_idx = factor_vals.dropna().index.intersection(
-                    forward_returns.dropna().index
-                )
+                common_idx = factor_vals.dropna().index.intersection(forward_returns.dropna().index)
                 if len(common_idx) < 20:
                     continue
 
@@ -699,10 +706,7 @@ class FactorLibrary:
         # Also apply Bonferroni for conservative comparison
         bonf_results = self.apply_fdr_correction(p_values, alpha=alpha, method="bonferroni")
 
-        significant = [
-            name for name, res in fdr_results.items()
-            if res["significant"]
-        ]
+        significant = [name for name, res in fdr_results.items() if res["significant"]]
 
         return {
             "significant_factors": significant,

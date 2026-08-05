@@ -22,9 +22,8 @@ from __future__ import annotations
 
 import asyncio
 import logging
-import math
 import time
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import Any
 
@@ -403,11 +402,14 @@ class FundamentalAnalysisTools:
                 if 'rel="last"' in link_header:
                     # Parse last page number from Link header
                     import re
+
                     match = re.search(r'page=(\d+)>; rel="last"', link_header)
                     if match:
                         contributors = int(match.group(1))
                 else:
-                    contributors = len(contrib_resp.json()) if isinstance(contrib_resp.json(), list) else 0
+                    contributors = (
+                        len(contrib_resp.json()) if isinstance(contrib_resp.json(), list) else 0
+                    )
 
             # Fetch recent commits for last_commit calculation
             recent_commits_resp = await client.get(
@@ -421,7 +423,9 @@ class FundamentalAnalysisTools:
             if recent_commits_resp.status_code == 200:
                 commits_list = recent_commits_resp.json()
                 if commits_list:
-                    commit_date = commits_list[0].get("commit", {}).get("committer", {}).get("date", "")
+                    commit_date = (
+                        commits_list[0].get("commit", {}).get("committer", {}).get("date", "")
+                    )
                     if commit_date:
                         try:
                             last_dt = datetime.fromisoformat(commit_date.replace("Z", "+00:00"))
@@ -430,12 +434,8 @@ class FundamentalAnalysisTools:
                             pass
 
             # Compute scores
-            activity_score = self._compute_activity_score(
-                commits_30d, contributors, stars, forks
-            )
-            health_score = self._compute_health_score(
-                commits_30d, last_commit_days, open_issues
-            )
+            activity_score = self._compute_activity_score(commits_30d, contributors, stars, forks)
+            health_score = self._compute_health_score(commits_30d, last_commit_days, open_issues)
 
             result = GitHubActivity(
                 repo=repo,
@@ -478,12 +478,7 @@ class FundamentalAnalysisTools:
         star_score = min(1.0, stars / 50_000)  # 50k stars = max
         fork_score = min(1.0, forks / 10_000)  # 10k forks = max
 
-        return (
-            commit_score * 0.40
-            + contrib_score * 0.30
-            + star_score * 0.15
-            + fork_score * 0.15
-        )
+        return commit_score * 0.40 + contrib_score * 0.30 + star_score * 0.15 + fork_score * 0.15
 
     @staticmethod
     def _compute_health_score(
@@ -787,7 +782,7 @@ class FundamentalAnalysisTools:
         # Known burn mechanisms
         burn_rates = {
             "ETH": 0.005,  # EIP-1559 burn
-            "BNB": 0.01,   # Quarterly burn
+            "BNB": 0.01,  # Quarterly burn
             "SOL": 0.005,  # Fee burn
         }
         burn = burn_rates.get(symbol, 0.0)
@@ -943,12 +938,17 @@ class FundamentalAnalysisTools:
             # Based on volume, rank, and market cap
             rank_score = max(0, 1.0 - market_struct.rank / 100)
             vol_score = min(1.0, market_struct.volume_24h / 1_000_000_000)
-            community_score = (rank_score * 0.5 + vol_score * 0.5)
+            community_score = rank_score * 0.5 + vol_score * 0.5
 
         # Fundamental score (weighted combination)
         scores: list[tuple[float, float]] = []
         if market_struct:
-            scores.append((0.4, market_struct.tokenomics.tokenomics_score if market_struct.tokenomics else 0.5))
+            scores.append(
+                (
+                    0.4,
+                    market_struct.tokenomics.tokenomics_score if market_struct.tokenomics else 0.5,
+                )
+            )
         if github:
             scores.append((0.3, github.activity_score))
         if tvl and tvl.tvl > 0:
@@ -998,7 +998,7 @@ class FundamentalAnalysisTools:
                 return 0.0
 
             resp = await client.get(
-                f"https://api.coingecko.com/api/v3/simple/price",
+                "https://api.coingecko.com/api/v3/simple/price",
                 params={
                     "ids": coin_id,
                     "vs_currencies": "usd",

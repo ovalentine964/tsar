@@ -51,8 +51,8 @@ class SizingConfig:
     max_single_position_pct: float = 0.15
 
     # Fee parameters (C-001)
-    maker_fee_pct: float = 0.001    # 0.1% Binance default
-    taker_fee_pct: float = 0.001    # 0.1% Binance default
+    maker_fee_pct: float = 0.001  # 0.1% Binance default
+    taker_fee_pct: float = 0.001  # 0.1% Binance default
     fee_adjusted_kelly: bool = True
     min_rr_ratio_after_fees: float = 1.5
 
@@ -121,10 +121,7 @@ class PositionSizer:
 
         # --- Determine if micro-capital mode applies (H-005) ---
         cfg = self._config
-        is_micro = (
-            cfg.micro_capital_enabled
-            and equity < cfg.micro_capital_threshold_usd
-        )
+        is_micro = cfg.micro_capital_enabled and equity < cfg.micro_capital_threshold_usd
 
         # Select parameters based on mode
         if is_micro:
@@ -193,9 +190,7 @@ class PositionSizer:
         # --- Step 7: Fee cost check (C-001) ---
         # Calculate round-trip fee cost and verify trade is still profitable
         round_trip_fee = self._round_trip_fee(notional, cfg.taker_fee_pct)
-        net_risk_reward = self._net_risk_reward(
-            entry_price, stop_loss, notional, cfg.taker_fee_pct
-        )
+        net_risk_reward = self._net_risk_reward(entry_price, stop_loss, notional, cfg.taker_fee_pct)
 
         if net_risk_reward < cfg.min_rr_ratio_after_fees:
             # After fees, R:R is too low — don't trade
@@ -214,9 +209,7 @@ class PositionSizer:
                 notional = quantity * entry_price
                 risk_amount = quantity * risk_per_unit
                 capped = True
-                cap_reason = (
-                    f"Increased to meet minimum notional ${min_notional:.2f}"
-                )
+                cap_reason = f"Increased to meet minimum notional ${min_notional:.2f}"
             else:
                 # Can't meet minimum without exceeding risk cap
                 return self._zero_result(
@@ -230,9 +223,7 @@ class PositionSizer:
             # Round down to nearest valid quantity step
             quantity = int(quantity / min_qty_step) * min_qty_step
             if quantity <= 0:
-                return self._zero_result(
-                    f"Quantity rounded to zero (min step={min_qty_step})"
-                )
+                return self._zero_result(f"Quantity rounded to zero (min step={min_qty_step})")
             notional = quantity * entry_price
             risk_amount = quantity * risk_per_unit
 
@@ -306,8 +297,7 @@ class PositionSizer:
 
         if adjusted < base_kelly:
             logger.debug(
-                f"Fee-adjusted Kelly: {base_kelly:.4f} → {adjusted:.4f} "
-                f"(fee_ratio={fee_ratio:.4f})"
+                f"Fee-adjusted Kelly: {base_kelly:.4f} → {adjusted:.4f} (fee_ratio={fee_ratio:.4f})"
             )
 
         return max(0.0, adjusted)
@@ -365,9 +355,7 @@ class PositionSizer:
     # ------------------------------------------------------------------
 
     @staticmethod
-    def _kelly_fraction(
-        win_rate: float, avg_win: float, avg_loss: float
-    ) -> float:
+    def _kelly_fraction(win_rate: float, avg_win: float, avg_loss: float) -> float:
         """Pure Kelly criterion: f* = (p*b - q) / b.
 
         Where p=win_rate, q=1-p, b=avg_win/avg_loss.

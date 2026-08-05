@@ -204,9 +204,7 @@ class WalkForwardValidator:
             optimized_params: dict[str, Any] = {}
 
             if self._optimize_fn is not None:
-                optimized_params = self._optimize_fn(
-                    strategy, train_data, config.backtest_config
-                )
+                optimized_params = self._optimize_fn(strategy, train_data, config.backtest_config)
                 # Recreate strategy with optimized params if possible
                 try:
                     strategy = self._strategy_factory(**optimized_params)
@@ -223,16 +221,18 @@ class WalkForwardValidator:
             test_engine = BacktestEngine(strategy, config.backtest_config)
             test_result = test_engine.run(test_data)
 
-            window_results.append(WindowResult(
-                window_index=idx,
-                train_start=train_start,
-                train_end=train_end,
-                test_start=test_start,
-                test_end=test_end,
-                train_result=train_result,
-                test_result=test_result,
-                train_params=optimized_params,
-            ))
+            window_results.append(
+                WindowResult(
+                    window_index=idx,
+                    train_start=train_start,
+                    train_end=train_end,
+                    test_start=test_start,
+                    test_end=test_end,
+                    train_result=train_result,
+                    test_result=test_result,
+                    train_params=optimized_params,
+                )
+            )
 
             logger.info(
                 f"Window {idx + 1}/{len(windows)}: "
@@ -249,9 +249,7 @@ class WalkForwardValidator:
         is_overfit = overfit_score > config.overfit_threshold
 
         # Consistency: fraction of windows with positive test Sharpe
-        positive_test = sum(
-            1 for w in window_results if w.test_result.metrics.sharpe_ratio > 0
-        )
+        positive_test = sum(1 for w in window_results if w.test_result.metrics.sharpe_ratio > 0)
         consistency = positive_test / len(window_results) if window_results else 0.0
 
         if is_overfit:
@@ -340,11 +338,22 @@ class WalkForwardValidator:
         """Aggregate metrics across windows by averaging."""
         if not metrics_list:
             return BacktestMetrics(
-                total_return=0.0, cagr=0.0, sharpe_ratio=0.0, sortino_ratio=0.0,
-                calmar_ratio=0.0, max_drawdown=0.0, max_drawdown_duration=0,
-                win_rate=0.0, profit_factor=0.0, avg_win=0.0, avg_loss=0.0,
-                total_trades=0, winning_trades=0, losing_trades=0,
-                avg_trade_duration=0.0, expectancy=0.0,
+                total_return=0.0,
+                cagr=0.0,
+                sharpe_ratio=0.0,
+                sortino_ratio=0.0,
+                calmar_ratio=0.0,
+                max_drawdown=0.0,
+                max_drawdown_duration=0,
+                win_rate=0.0,
+                profit_factor=0.0,
+                avg_win=0.0,
+                avg_loss=0.0,
+                total_trades=0,
+                winning_trades=0,
+                losing_trades=0,
+                avg_trade_duration=0.0,
+                expectancy=0.0,
             )
 
         len(metrics_list)

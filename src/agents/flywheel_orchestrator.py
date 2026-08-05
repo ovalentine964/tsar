@@ -146,6 +146,7 @@ class FlywheelOrchestrator(BaseAgent):
 
             # Strategy Geneticist (wire mutations back to strategy params)
             from src.agents.strategy_geneticist import StrategyGeneticist
+
             self._strategy_geneticist = StrategyGeneticist(
                 config=self.config,
                 trading_mode=self.trading_mode,
@@ -172,7 +173,8 @@ class FlywheelOrchestrator(BaseAgent):
 
         logger.debug(
             "Flywheel: trade #%d recorded (since_last_flywheel=%d)",
-            self._trade_count, self._trades_since_flywheel,
+            self._trade_count,
+            self._trades_since_flywheel,
         )
 
         # Check if it's time to run the flywheel
@@ -233,33 +235,43 @@ class FlywheelOrchestrator(BaseAgent):
             run_id = self._flywheel_runs
             logger.info(
                 "🔄 ═══ FLYWHEEL RUN #%d STARTING (trade_count=%d) ═══",
-                run_id, self._trade_count,
+                run_id,
+                self._trade_count,
             )
 
             try:
-                await self._publish_flywheel_event("flywheel.cycle_started", {
-                    "run_id": run_id,
-                    "trade_count": self._trade_count,
-                })
+                await self._publish_flywheel_event(
+                    "flywheel.cycle_started",
+                    {
+                        "run_id": run_id,
+                        "trade_count": self._trade_count,
+                    },
+                )
 
                 # ── Step 1: EXTRACT — ShadowExtractor ──────────
                 rules = await self._step_extract(run_id)
                 if not rules:
                     logger.info("🔄 Flywheel #%d: no rules extracted, cycle complete", run_id)
-                    await self._publish_flywheel_event("flywheel.cycle_complete", {
-                        "run_id": run_id,
-                        "outcome": "no_rules",
-                    })
+                    await self._publish_flywheel_event(
+                        "flywheel.cycle_complete",
+                        {
+                            "run_id": run_id,
+                            "outcome": "no_rules",
+                        },
+                    )
                     return
 
                 # ── Step 2: VALIDATE — RuleValidator ───────────
                 validated = await self._step_validate(run_id, rules)
                 if not validated:
                     logger.info("🔄 Flywheel #%d: no rules validated, cycle complete", run_id)
-                    await self._publish_flywheel_event("flywheel.cycle_complete", {
-                        "run_id": run_id,
-                        "outcome": "no_validated_rules",
-                    })
+                    await self._publish_flywheel_event(
+                        "flywheel.cycle_complete",
+                        {
+                            "run_id": run_id,
+                            "outcome": "no_validated_rules",
+                        },
+                    )
                     return
 
                 # ── Step 3: MUTATE — GenomeMutator ─────────────
@@ -271,25 +283,34 @@ class FlywheelOrchestrator(BaseAgent):
                 logger.info(
                     "🔄 ═══ FLYWHEEL RUN #%d COMPLETE: "
                     "%d rules → %d validated → %d proposals → %d applied ═══",
-                    run_id, len(rules), len(validated),
-                    len(proposals), applied,
+                    run_id,
+                    len(rules),
+                    len(validated),
+                    len(proposals),
+                    applied,
                 )
 
-                await self._publish_flywheel_event("flywheel.cycle_complete", {
-                    "run_id": run_id,
-                    "rules_extracted": len(rules),
-                    "rules_validated": len(validated),
-                    "mutations_proposed": len(proposals),
-                    "mutations_applied": applied,
-                    "outcome": "success",
-                })
+                await self._publish_flywheel_event(
+                    "flywheel.cycle_complete",
+                    {
+                        "run_id": run_id,
+                        "rules_extracted": len(rules),
+                        "rules_validated": len(validated),
+                        "mutations_proposed": len(proposals),
+                        "mutations_applied": applied,
+                        "outcome": "success",
+                    },
+                )
 
             except Exception as e:
                 logger.error("🔄 Flywheel #%d failed: %s", run_id, e)
-                await self._publish_flywheel_event("flywheel.cycle_error", {
-                    "run_id": run_id,
-                    "error": str(e),
-                })
+                await self._publish_flywheel_event(
+                    "flywheel.cycle_error",
+                    {
+                        "run_id": run_id,
+                        "error": str(e),
+                    },
+                )
 
     async def _step_extract(self, run_id: int) -> list[Any]:
         """Step 1: Extract rules from trade history via ShadowExtractor."""
@@ -309,8 +330,11 @@ class FlywheelOrchestrator(BaseAgent):
             self._total_rules_extracted += len(extraction.rules)
             logger.info(
                 "🔄 Flywheel #%d — EXTRACT: %d rules from %d trades (%d winners, %d losers)",
-                run_id, len(extraction.rules), extraction.source_trade_count,
-                extraction.winning_trade_count, extraction.losing_trade_count,
+                run_id,
+                len(extraction.rules),
+                extraction.source_trade_count,
+                extraction.winning_trade_count,
+                extraction.losing_trade_count,
             )
             return extraction.rules
 
@@ -340,7 +364,9 @@ class FlywheelOrchestrator(BaseAgent):
 
             logger.info(
                 "🔄 Flywheel #%d — VALIDATE: %d/%d passed",
-                run_id, len(passed), len(validated),
+                run_id,
+                len(passed),
+                len(validated),
             )
             return passed
 
@@ -356,7 +382,8 @@ class FlywheelOrchestrator(BaseAgent):
 
         logger.info(
             "🔄 Flywheel #%d — Step 3: MUTATE (%d validated rules)",
-            run_id, len(validated_rules),
+            run_id,
+            len(validated_rules),
         )
         try:
             proposals = await self._genome_mutator.propose_mutations(validated_rules)
@@ -364,7 +391,8 @@ class FlywheelOrchestrator(BaseAgent):
 
             logger.info(
                 "🔄 Flywheel #%d — MUTATE: %d proposals",
-                run_id, len(proposals),
+                run_id,
+                len(proposals),
             )
             return proposals
 
@@ -390,7 +418,8 @@ class FlywheelOrchestrator(BaseAgent):
 
         logger.info(
             "🔄 Flywheel #%d — Step 4: EVOLVE (%d proposals)",
-            run_id, len(proposals),
+            run_id,
+            len(proposals),
         )
 
         applied = 0
@@ -418,7 +447,8 @@ class FlywheelOrchestrator(BaseAgent):
             except Exception as e:
                 logger.error(
                     "Flywheel #%d evolve step failed for proposal: %s",
-                    run_id, e,
+                    run_id,
+                    e,
                 )
 
         self._total_mutations_applied += applied
@@ -439,25 +469,29 @@ class FlywheelOrchestrator(BaseAgent):
     def get_health(self) -> dict[str, Any]:
         """Get flywheel orchestrator health status."""
         base_health = super().get_health()
-        base_health.update({
-            "flywheel": {
-                "runs": self._flywheel_runs,
-                "total_trades_processed": self._trade_count,
-                "trades_since_flywheel": self._trades_since_flywheel,
-                "total_rules_extracted": self._total_rules_extracted,
-                "total_rules_validated": self._total_rules_validated,
-                "total_mutations_proposed": self._total_mutations_proposed,
-                "total_mutations_applied": self._total_mutations_applied,
-                "pipeline_ready": all([
-                    self._shadow_extractor,
-                    self._rule_validator,
-                    self._genome_mutator,
-                    self._strategy_geneticist,
-                ]),
-                "batch_size": self.BATCH_SIZE,
-                "cooldown_s": self.COOLDOWN_SECONDS,
-            },
-        })
+        base_health.update(
+            {
+                "flywheel": {
+                    "runs": self._flywheel_runs,
+                    "total_trades_processed": self._trade_count,
+                    "trades_since_flywheel": self._trades_since_flywheel,
+                    "total_rules_extracted": self._total_rules_extracted,
+                    "total_rules_validated": self._total_rules_validated,
+                    "total_mutations_proposed": self._total_mutations_proposed,
+                    "total_mutations_applied": self._total_mutations_applied,
+                    "pipeline_ready": all(
+                        [
+                            self._shadow_extractor,
+                            self._rule_validator,
+                            self._genome_mutator,
+                            self._strategy_geneticist,
+                        ]
+                    ),
+                    "batch_size": self.BATCH_SIZE,
+                    "cooldown_s": self.COOLDOWN_SECONDS,
+                },
+            }
+        )
         return base_health
 
     async def trigger_flywheel(self) -> None:

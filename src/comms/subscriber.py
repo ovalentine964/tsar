@@ -45,6 +45,7 @@ class EventSubscriber:
 
         if self._redis is None:
             from src.comms.publisher import _get_global_bus
+
             self._bus = _get_global_bus()
             logger.info("EventSubscriber using in-memory bus")
         else:
@@ -227,9 +228,7 @@ class EventSubscriber:
                         await callback(event)
                         read_index = idx
                     except Exception:
-                        logger.exception(
-                            "Error processing in-memory event %d from %s", idx, stream
-                        )
+                        logger.exception("Error processing in-memory event %d from %s", idx, stream)
 
                 # If no entries, yield to avoid busy-wait
                 if not entries:

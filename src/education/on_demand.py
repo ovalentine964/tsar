@@ -19,7 +19,6 @@ from typing import Any
 
 from src.education.message_formatter import TelegramFormatter as Fmt
 
-
 # ═══════════════════════════════════════════════════════════════════════
 # LEARNING TOPICS DATABASE
 # ═══════════════════════════════════════════════════════════════════════
@@ -478,7 +477,8 @@ class OnDemandEducation:
 
         # Find best pattern (min 2 trades)
         valid = {
-            k: v for k, v in pattern_stats.items()
+            k: v
+            for k, v in pattern_stats.items()
             if (v["wins"] + v["losses"]) >= 2 and v["win_rate"] >= 0.5
         }
 
@@ -509,7 +509,7 @@ class OnDemandEducation:
             lines.append(Fmt.bullet("Trend-following works well in trending regimes"))
             lines.append(Fmt.bullet("Letting winners run maximizes R:R"))
         else:
-            lines.append(Fmt.bullet(f"This pattern has been consistently profitable"))
+            lines.append(Fmt.bullet("This pattern has been consistently profitable"))
             lines.append(Fmt.bullet("Keep focusing on this setup"))
 
         lines.extend(["", Fmt.separator(), "[📊 Full Analysis] [🔧 Adjust Strategy]"])
@@ -524,10 +524,7 @@ class OnDemandEducation:
         if not pattern_stats:
             return "📊 Not enough data yet. Need at least 2 trades to identify patterns."
 
-        valid = {
-            k: v for k, v in pattern_stats.items()
-            if (v["wins"] + v["losses"]) >= 2
-        }
+        valid = {k: v for k, v in pattern_stats.items() if (v["wins"] + v["losses"]) >= 2}
 
         if not valid:
             return "📊 No patterns with 2+ trades yet."
@@ -594,16 +591,18 @@ class OnDemandEducation:
         else:
             lines.append(Fmt.bullet("No specific error categories identified yet"))
 
-        lines.extend([
-            "",
-            f"{Fmt.section_header(Fmt.TARGET, 'HOW TO IMPROVE')}",
-            Fmt.bullet("Review each loss with /explain [trade_id]"),
-            Fmt.bullet("Check if the regime matched your strategy"),
-            Fmt.bullet("Ensure R:R was at least 2:1"),
-            "",
-            Fmt.separator(),
-            "[📊 Full Analysis] [🔧 View Rules] [📖 Learn More]",
-        ])
+        lines.extend(
+            [
+                "",
+                f"{Fmt.section_header(Fmt.TARGET, 'HOW TO IMPROVE')}",
+                Fmt.bullet("Review each loss with /explain [trade_id]"),
+                Fmt.bullet("Check if the regime matched your strategy"),
+                Fmt.bullet("Ensure R:R was at least 2:1"),
+                "",
+                Fmt.separator(),
+                "[📊 Full Analysis] [🔧 View Rules] [📖 Learn More]",
+            ]
+        )
         return "\n".join(lines)
 
     # ── /quiz ─────────────────────────────────────────────────────────
@@ -634,18 +633,18 @@ class OnDemandEducation:
         for option in question["options"]:
             lines.append(option)
 
-        lines.extend([
-            "",
-            f"Your score: {score}/{num - 1}",
-            "",
-            Fmt.separator(),
-            "[A] [B] [C] [D] [Skip]",
-        ])
+        lines.extend(
+            [
+                "",
+                f"Your score: {score}/{num - 1}",
+                "",
+                Fmt.separator(),
+                "[A] [B] [C] [D] [Skip]",
+            ]
+        )
         return "\n".join(lines)
 
-    def check_quiz_answer(
-        self, question: dict, answer: str
-    ) -> tuple[bool, str]:
+    def check_quiz_answer(self, question: dict, answer: str) -> tuple[bool, str]:
         """Check a quiz answer. Returns (correct, explanation)."""
         answer = answer.upper().strip()
         correct = answer == question["answer"]
@@ -664,9 +663,7 @@ class OnDemandEducation:
         """Calculate pattern statistics from trade list."""
         from collections import defaultdict
 
-        stats: dict[str, dict] = defaultdict(
-            lambda: {"wins": 0, "losses": 0, "pnl": 0}
-        )
+        stats: dict[str, dict] = defaultdict(lambda: {"wins": 0, "losses": 0, "pnl": 0})
 
         for trade in trades:
             reflection = self._get_reflection(trade)
@@ -691,6 +688,7 @@ class OnDemandEducation:
     def _get_reflection(trade: dict) -> dict:
         """Extract reflection dict from trade."""
         import json
+
         reflection = trade.get("reflection", {})
         if isinstance(reflection, str):
             try:
@@ -703,6 +701,7 @@ class OnDemandEducation:
     def _get_outcome(trade: dict) -> str:
         """Extract outcome from trade."""
         import json
+
         reflection = trade.get("reflection", {})
         if isinstance(reflection, str):
             try:

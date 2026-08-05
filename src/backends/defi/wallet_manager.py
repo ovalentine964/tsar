@@ -23,7 +23,7 @@ from __future__ import annotations
 import json
 import logging
 import os
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import UTC, datetime
 from enum import StrEnum
 from pathlib import Path
@@ -62,10 +62,10 @@ DEFAULT_RPC: dict[str, str] = {
 
 # Chain IDs for EVM networks
 CHAIN_IDS: dict[str, int] = {
-    Chain.ETHEREUM: 11155111,   # Sepolia
-    Chain.POLYGON: 80002,       # Amoy
-    Chain.ARBITRUM: 421614,     # Arbitrum Sepolia
-    Chain.BASE: 84532,          # Base Sepolia
+    Chain.ETHEREUM: 11155111,  # Sepolia
+    Chain.POLYGON: 80002,  # Amoy
+    Chain.ARBITRUM: 421614,  # Arbitrum Sepolia
+    Chain.BASE: 84532,  # Base Sepolia
 }
 
 # Native token symbols
@@ -80,10 +80,10 @@ NATIVE_TOKEN: dict[str, str] = {
 
 # Well-known wrapped native tokens for DEX swaps
 WRAPPED_NATIVE: dict[str, str] = {
-    Chain.ETHEREUM: "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2",   # WETH
-    Chain.POLYGON: "0x0d500B1d8E8eF31E21C99d1Db9A6444d3ADf1270",     # WMATIC
-    Chain.ARBITRUM: "0x82aF49447D8a07e3bd95BD0d56f35241523fBab1",    # WETH
-    Chain.BASE: "0x4200000000000000000000000000000000000006",         # WETH
+    Chain.ETHEREUM: "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2",  # WETH
+    Chain.POLYGON: "0x0d500B1d8E8eF31E21C99d1Db9A6444d3ADf1270",  # WMATIC
+    Chain.ARBITRUM: "0x82aF49447D8a07e3bd95BD0d56f35241523fBab1",  # WETH
+    Chain.BASE: "0x4200000000000000000000000000000000000006",  # WETH
 }
 
 
@@ -421,15 +421,18 @@ class WalletManager:
         """
         if chain == Chain.SOLANA:
             from solders.keypair import Keypair
+
             kp = Keypair.from_base58_string(private_key)
             return str(kp.pubkey())
         elif chain == Chain.BITCOIN:
             import hashlib
+
             privkey_bytes = bytes.fromhex(private_key)
             address_hash = hashlib.sha256(privkey_bytes).hexdigest()[:40]
             return f"tb1q{address_hash[:38]}"
         else:
             from eth_account import Account
+
             acct = Account.from_key(private_key)
             return acct.address
 
@@ -482,12 +485,14 @@ class WalletManager:
         result = []
         for name, chains in self._wallets.items():
             for chain, data in chains.items():
-                result.append(WalletInfo(
-                    name=name,
-                    address=data["address"],
-                    chain=chain,
-                    created_at=data.get("created_at", ""),
-                ))
+                result.append(
+                    WalletInfo(
+                        name=name,
+                        address=data["address"],
+                        chain=chain,
+                        created_at=data.get("created_at", ""),
+                    )
+                )
         return result
 
     def delete_wallet(self, name: str, chain: str | None = None) -> bool:
@@ -609,7 +614,7 @@ class WalletManager:
         native_wei = w3.eth.get_balance(address)
         native_symbol = NATIVE_TOKEN.get(chain, "ETH")
         native_decimals = 18
-        native_float = native_wei / (10 ** native_decimals)
+        native_float = native_wei / (10**native_decimals)
 
         native = TokenBalance(
             symbol=native_symbol,
@@ -629,13 +634,15 @@ class WalletManager:
                 raw_balance = contract.functions.balanceOf(address).call()
                 decimals = contract.functions.decimals().call()
                 symbol = contract.functions.symbol().call()
-                tokens.append(TokenBalance(
-                    symbol=symbol,
-                    balance=str(raw_balance),
-                    decimals=decimals,
-                    balance_float=raw_balance / (10 ** decimals),
-                    contract=token_address,
-                ))
+                tokens.append(
+                    TokenBalance(
+                        symbol=symbol,
+                        balance=str(raw_balance),
+                        decimals=decimals,
+                        balance_float=raw_balance / (10**decimals),
+                        contract=token_address,
+                    )
+                )
             except Exception as exc:
                 logger.warning("Failed to get token balance for %s: %s", token_address, exc)
 
@@ -716,9 +723,7 @@ class WalletManager:
         try:
             # Ensure required fields
             if "nonce" not in tx_dict:
-                tx_dict["nonce"] = w3.eth.get_transaction_count(
-                    self.get_address(name, chain)
-                )
+                tx_dict["nonce"] = w3.eth.get_transaction_count(self.get_address(name, chain))
             if "chainId" not in tx_dict:
                 tx_dict["chainId"] = CHAIN_IDS.get(chain, 1)
 

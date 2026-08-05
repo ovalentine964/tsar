@@ -168,8 +168,11 @@ class PatternLibrary:
         return False
 
     def list_patterns(
-        self, pattern_type: str | None = None, status: str | None = None,
-        min_confidence: float = 0.0, limit: int = 100
+        self,
+        pattern_type: str | None = None,
+        status: str | None = None,
+        min_confidence: float = 0.0,
+        limit: int = 100,
     ) -> list[Pattern]:
         clauses: list[str] = ["confidence >= ?"]
         params: list[Any] = [min_confidence]
@@ -320,7 +323,9 @@ class PatternLibrary:
             cursor = conn.execute(sql, (pattern_id, trade_id))
         return cursor.rowcount > 0
 
-    def get_example_trades(self, pattern_id: str, primary_only: bool = False) -> list[dict[str, Any]]:
+    def get_example_trades(
+        self, pattern_id: str, primary_only: bool = False
+    ) -> list[dict[str, Any]]:
         """Get example trades for a pattern via junction table."""
         extra = "AND pet.is_primary = 1" if primary_only else ""
         sql = f"""
@@ -345,7 +350,9 @@ class PatternLibrary:
             conn.execute(sql, d)
         return rel.relationship_id
 
-    def get_relationships(self, pattern_id: str, direction: str = "both") -> list[PatternRelationship]:
+    def get_relationships(
+        self, pattern_id: str, direction: str = "both"
+    ) -> list[PatternRelationship]:
         if direction == "outgoing":
             sql = "SELECT * FROM pattern_relationships WHERE pattern_a_id = ?"
         elif direction == "incoming":
@@ -359,7 +366,9 @@ class PatternLibrary:
             rows = conn.execute(sql, (pattern_id,)).fetchall()
         return [PatternRelationship(**dict(r)) for r in rows]
 
-    def get_co_occurring_patterns(self, pattern_id: str, min_strength: float = 0.5) -> list[dict[str, Any]]:
+    def get_co_occurring_patterns(
+        self, pattern_id: str, min_strength: float = 0.5
+    ) -> list[dict[str, Any]]:
         sql = """
             SELECT
                 CASE WHEN pr.pattern_a_id = ? THEN pr.pattern_b_id ELSE pr.pattern_a_id END AS related_pattern_id,
@@ -372,7 +381,9 @@ class PatternLibrary:
             ORDER BY pr.strength DESC
         """
         with self._conn() as conn:
-            rows = conn.execute(sql, (pattern_id, pattern_id, pattern_id, pattern_id, min_strength)).fetchall()
+            rows = conn.execute(
+                sql, (pattern_id, pattern_id, pattern_id, pattern_id, min_strength)
+            ).fetchall()
         return [dict(r) for r in rows]
 
     def get_top_patterns(self, limit: int = 10, metric: str = "expectancy") -> list[Pattern]:

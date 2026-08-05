@@ -227,8 +227,10 @@ class ImprovementTracker:
         if len(self._pnl_history) < 2:
             return 0.0
         mean_pnl = sum(self._pnl_history) / len(self._pnl_history)
-        variance = sum((p - mean_pnl) ** 2 for p in self._pnl_history) / (len(self._pnl_history) - 1)
-        std_pnl = variance ** 0.5
+        variance = sum((p - mean_pnl) ** 2 for p in self._pnl_history) / (
+            len(self._pnl_history) - 1
+        )
+        std_pnl = variance**0.5
         if std_pnl == 0:
             return 0.0
         # Annualize assuming ~252 trading days, 4 trades/day
@@ -384,7 +386,9 @@ class ImprovementTracker:
             if state.get("baseline"):
                 self._baseline = MetricSnapshot.from_dict(state["baseline"])
             self._snapshots = [MetricSnapshot.from_dict(s) for s in state.get("snapshots", [])]
-            logger.info(f"Loaded metrics: {self._trade_count} trades, baseline={'yes' if self._baseline else 'no'}")
+            logger.info(
+                f"Loaded metrics: {self._trade_count} trades, baseline={'yes' if self._baseline else 'no'}"
+            )
         except Exception as e:
             logger.error(f"Failed to load metrics: {e}")
 

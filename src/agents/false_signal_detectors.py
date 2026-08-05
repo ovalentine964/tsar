@@ -136,7 +136,10 @@ class FalseSignalDetector:
                     f"Price near breakout level but volume only "
                     f"{vol_ratio:.2f}× average (need ≥{self._breakout_vol_threshold}×)"
                 ),
-                confidence=min(1.0, (self._breakout_vol_threshold - vol_ratio) / self._breakout_vol_threshold + 0.5),
+                confidence=min(
+                    1.0,
+                    (self._breakout_vol_threshold - vol_ratio) / self._breakout_vol_threshold + 0.5,
+                ),
             )
 
         return None
@@ -188,7 +191,7 @@ class FalseSignalDetector:
                         description=(
                             f"Possible stop hunt: price spiked down "
                             f"{spike_range:.2f} then recovered {recovery:.2f} "
-                            f"({recovery/spike_range*100:.0f}% reversal)"
+                            f"({recovery / spike_range * 100:.0f}% reversal)"
                         ),
                         confidence=recovery / spike_range,
                     )
@@ -207,7 +210,7 @@ class FalseSignalDetector:
                         description=(
                             f"Possible stop hunt: price spiked up "
                             f"{spike_range:.2f} then reversed {recovery:.2f} "
-                            f"({recovery/spike_range*100:.0f}% reversal)"
+                            f"({recovery / spike_range * 100:.0f}% reversal)"
                         ),
                         confidence=recovery / spike_range,
                     )
@@ -275,7 +278,10 @@ class FalseSignalDetector:
         price_change_pct = abs(metadata.get("price_change_pct", 0))
         price_change_minutes = metadata.get("price_change_minutes", 60)
 
-        if price_change_pct > self._news_spike_pct and price_change_minutes < self._news_spike_minutes:
+        if (
+            price_change_pct > self._news_spike_pct
+            and price_change_minutes < self._news_spike_minutes
+        ):
             # Check if sentiment spike is recent
             sentiment_age_minutes = market_context.get("sentiment_spike_age_minutes", 999)
             if sentiment_age_minutes < 30:

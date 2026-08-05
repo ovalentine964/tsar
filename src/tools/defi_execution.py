@@ -23,12 +23,14 @@ Usage:
 from __future__ import annotations
 
 import logging
-from dataclasses import dataclass, field
-from datetime import UTC, datetime
+from dataclasses import dataclass
 from typing import Any
 
-from src.backends.defi.dex_executor import DexExecutor, GasEstimate, SwapQuote, SwapResult, SwapStatus
-from src.backends.defi.wallet_manager import WalletBalance, WalletInfo, WalletManager
+from src.backends.defi.dex_executor import (
+    DexExecutor,
+    SwapStatus,
+)
+from src.backends.defi.wallet_manager import WalletInfo, WalletManager
 
 logger = logging.getLogger(__name__)
 
@@ -314,7 +316,9 @@ class DeFiExecutionTools:
             to_amount=raw.to_amount,
             effective_price=effective_price,
             price_impact=raw.price_impact,
-            gas_cost_native=raw.gas_estimate / 1e18 if raw.chain != "solana" else raw.gas_estimate / 1e9,
+            gas_cost_native=raw.gas_estimate / 1e18
+            if raw.chain != "solana"
+            else raw.gas_estimate / 1e9,
             gas_cost_usd=raw.gas_cost_usd,
             route=raw.route,
             slippage=raw.slippage,
@@ -360,13 +364,15 @@ class DeFiExecutionTools:
 
         tokens = []
         for tb in wallet_bal.token_balances:
-            tokens.append({
-                "symbol": tb.symbol,
-                "balance": tb.balance_float,
-                "balance_raw": tb.balance,
-                "decimals": tb.decimals,
-                "contract": tb.contract,
-            })
+            tokens.append(
+                {
+                    "symbol": tb.symbol,
+                    "balance": tb.balance_float,
+                    "balance_raw": tb.balance,
+                    "decimals": tb.decimals,
+                    "contract": tb.contract,
+                }
+            )
 
         from src.backends.defi.wallet_manager import NATIVE_TOKEN
 

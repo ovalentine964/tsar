@@ -365,7 +365,7 @@ class DexExecutor:
 
         # Get token decimals for amount conversion
         from_decimals = self._get_token_decimals(chain, from_addr)
-        amount_wei = int(amount * (10 ** from_decimals))
+        amount_wei = int(amount * (10**from_decimals))
 
         url = f"{_ONEINCH_BASE}/swap/v6.0/{chain_id}/quote"
         params = {
@@ -384,7 +384,7 @@ class DexExecutor:
         data = resp.json()
 
         to_decimals = self._get_token_decimals(chain, to_addr)
-        to_amount = int(data.get("dstAmount", 0)) / (10 ** to_decimals)
+        to_amount = int(data.get("dstAmount", 0)) / (10**to_decimals)
         gas_estimate = int(data.get("gas", _DEFAULT_GAS_LIMIT))
 
         # Estimate gas cost
@@ -430,7 +430,7 @@ class DexExecutor:
 
         # SOL has 9 decimals, USDC has 6, etc.
         from_decimals = 9 if from_token.upper() == "SOL" else 6
-        amount_lamports = int(amount * (10 ** from_decimals))
+        amount_lamports = int(amount * (10**from_decimals))
 
         url = f"{_JUPITER_BASE}/quote"
         params = {
@@ -445,7 +445,7 @@ class DexExecutor:
         data = resp.json()
 
         to_decimals = 9 if to_token.upper() == "SOL" else 6
-        to_amount = int(data.get("outAmount", 0)) / (10 ** to_decimals)
+        to_amount = int(data.get("outAmount", 0)) / (10**to_decimals)
 
         # Jupiter doesn't return gas directly, estimate ~5000 lamports
         gas_lamports = 5000
@@ -538,7 +538,11 @@ class DexExecutor:
 
         logger.info(
             "Starting swap: %s %.6f %s → %s on %s",
-            wallet_name, amount, from_token, to_token, chain,
+            wallet_name,
+            amount,
+            from_token,
+            to_token,
+            chain,
         )
 
         try:
@@ -547,13 +551,21 @@ class DexExecutor:
 
             # 2. Gas pre-check
             gas_info = await self.get_gas_estimate(chain)
-            logger.info("Gas estimate: %.6f %s ($%.2f)", gas_info.gas_cost_native, NATIVE_TOKEN.get(chain, "ETH"), gas_info.gas_cost_usd)
+            logger.info(
+                "Gas estimate: %.6f %s ($%.2f)",
+                gas_info.gas_cost_native,
+                NATIVE_TOKEN.get(chain, "ETH"),
+                gas_info.gas_cost_usd,
+            )
 
             # 3. Check/token approval (EVM only) — exact amount only, never unlimited
             if chain != "solana":
                 from_addr = self._resolve_token(chain, from_token)
                 native_symbol = NATIVE_TOKEN.get(chain, "ETH")
-                if from_token.upper() != native_symbol and from_addr != "0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE":
+                if (
+                    from_token.upper() != native_symbol
+                    and from_addr != "0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE"
+                ):
                     # Approve exact trade amount +5% buffer for slippage (not unlimited)
                     approval_amount = int(amount * 1.05 * (10 ** quote.get("from_decimals", 18)))
                     await self.approve_token(wallet_name, chain, from_addr, amount=approval_amount)
@@ -593,7 +605,7 @@ class DexExecutor:
         to_addr = self._resolve_token(chain, quote.to_token)
         chain_id = CHAIN_IDS.get(chain)
         from_decimals = self._get_token_decimals(chain, from_addr)
-        amount_wei = int(quote.from_amount * (10 ** from_decimals))
+        amount_wei = int(quote.from_amount * (10**from_decimals))
 
         # Get swap transaction from 1inch
         url = f"{_ONEINCH_BASE}/swap/v6.0/{chain_id}/swap"
@@ -697,10 +709,10 @@ class DexExecutor:
         """Execute a Solana swap via Jupiter."""
         http = await self._get_http()
 
-        from_mint = self._resolve_token("solana", quote.from_token)
-        to_mint = self._resolve_token("solana", quote.to_token)
+        self._resolve_token("solana", quote.from_token)
+        self._resolve_token("solana", quote.to_token)
         from_decimals = 9 if quote.from_token.upper() == "SOL" else 6
-        amount_lamports = int(quote.from_amount * (10 ** from_decimals))
+        int(quote.from_amount * (10**from_decimals))
 
         address = self._wallet_manager.get_address(wallet_name, "solana")
 
@@ -732,6 +744,7 @@ class DexExecutor:
 
         # Decode and sign
         import base64
+
         from solders.transaction import VersionedTransaction
 
         tx_bytes = base64.b64decode(swap_tx_b64)
@@ -748,8 +761,9 @@ class DexExecutor:
 
             # Confirm
             from solders.signature import Signature
+
             sig = Signature.from_string(tx_hash)
-            confirmation = await client.confirm_transaction(sig)
+            await client.confirm_transaction(sig)
 
             return SwapResult(
                 status=SwapStatus.CONFIRMED,
@@ -842,7 +856,10 @@ class DexExecutor:
 
         logger.info(
             "Approving %s wei of %s for spender %s on %s",
-            amount, token_address, spender, chain,
+            amount,
+            token_address,
+            spender,
+            chain,
         )
 
         contract = w3.eth.contract(
@@ -853,11 +870,13 @@ class DexExecutor:
         tx = contract.functions.approve(
             w3.to_checksum_address(spender),
             amount,
-        ).build_transaction({
-            "from": address,
-            "nonce": w3.eth.get_transaction_count(address),
-            "chainId": CHAIN_IDS.get(chain, 1),
-        })
+        ).build_transaction(
+            {
+                "from": address,
+                "nonce": w3.eth.get_transaction_count(address),
+                "chainId": CHAIN_IDS.get(chain, 1),
+            }
+        )
 
         # Estimate gas
         try:
@@ -907,7 +926,7 @@ class DexExecutor:
         if chain == "solana":
             return GasEstimate(
                 gas_limit=200_000,  # Compute units
-                gas_price=5000,      # Lamports per CU
+                gas_price=5000,  # Lamports per CU
                 gas_cost_native=5000 / 1e9 * 200_000,
                 gas_cost_usd=0.001,  # Very cheap
             )

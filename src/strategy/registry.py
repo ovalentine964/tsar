@@ -210,9 +210,7 @@ class StrategyRegistry:
 
         strategy = self._strategies.get(strategy_type)
         if strategy is None:
-            logger.warning(
-                "No strategy registered for genome type '%s'", strategy_type
-            )
+            logger.warning("No strategy registered for genome type '%s'", strategy_type)
             return False
 
         # Update strategy parameters from genome
@@ -258,9 +256,7 @@ class StrategyRegistry:
                 logger.warning("Failed to parse risk_params for %s", strategy_type)
 
         if updated:
-            logger.info(
-                "Applied genome weights to strategy '%s'", strategy_type
-            )
+            logger.info("Applied genome weights to strategy '%s'", strategy_type)
         return updated
 
     def aggregate_signals(
@@ -350,9 +346,13 @@ class StrategyRegistry:
             return None
 
         # Weighted average
-        weighted_entry = sum(s.get("entry_price", 0) * s.get("score", 0) for s in winners) / total_weight
+        weighted_entry = (
+            sum(s.get("entry_price", 0) * s.get("score", 0) for s in winners) / total_weight
+        )
         weighted_sl = sum(s.get("stop_loss", 0) * s.get("score", 0) for s in winners) / total_weight
-        weighted_tp = sum(s.get("take_profit", 0) * s.get("score", 0) for s in winners) / total_weight
+        weighted_tp = (
+            sum(s.get("take_profit", 0) * s.get("score", 0) for s in winners) / total_weight
+        )
         weighted_score = total_weight / len(winners)
 
         return {

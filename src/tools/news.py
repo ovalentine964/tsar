@@ -16,6 +16,7 @@ All tools are async with caching and graceful degradation.
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import logging
 import re
 import time
@@ -124,12 +125,31 @@ _RSS_FEEDS: dict[str, str] = {
     "Decrypt": "https://decrypt.co/feed",
 }
 
-_HIGH_IMPACT_KEYWORDS = frozenset({
-    "sec", "etf", "regulation", "fed", "interest rate", "cpi",
-    "hack", "exploit", "vulnerability", "bankruptcy", "insolvency",
-    "partnership", "launch", "mainnet", "upgrade", "halving",
-    "whale", "institutional", "adoption", "ban", "approval",
-})
+_HIGH_IMPACT_KEYWORDS = frozenset(
+    {
+        "sec",
+        "etf",
+        "regulation",
+        "fed",
+        "interest rate",
+        "cpi",
+        "hack",
+        "exploit",
+        "vulnerability",
+        "bankruptcy",
+        "insolvency",
+        "partnership",
+        "launch",
+        "mainnet",
+        "upgrade",
+        "halving",
+        "whale",
+        "institutional",
+        "adoption",
+        "ban",
+        "approval",
+    }
+)
 
 
 # ═══════════════════════════════════════════════════════════════════════
@@ -241,9 +261,7 @@ class NewsAggregator:
         items = tuple(filtered[:limit])
 
         # Compute aggregates
-        overall_sentiment = (
-            sum(i.sentiment for i in items) / len(items) if items else 0.0
-        )
+        overall_sentiment = sum(i.sentiment for i in items) / len(items) if items else 0.0
         high_impact = sum(1 for i in items if i.relevance > 0.7)
         breaking = sum(1 for i in items if i.is_breaking)
 
@@ -257,9 +275,7 @@ class NewsAggregator:
             source_sentiments[item.source].append(item.sentiment)
 
         sentiment_by_source = {
-            src: round(sum(s) / len(s), 4)
-            for src, s in source_sentiments.items()
-            if s
+            src: round(sum(s) / len(s), 4) for src, s in source_sentiments.items() if s
         }
 
         # Top categories
@@ -330,10 +346,7 @@ class NewsAggregator:
         confidence = min(1.0, agreement_ratio * 0.6 + impact_boost * 0.4)
 
         # Key events from high-impact articles
-        key_events = tuple(
-            item.title for item in digest.items
-            if item.relevance > 0.7
-        )[:5]
+        key_events = tuple(item.title for item in digest.items if item.relevance > 0.7)[:5]
 
         # Reasoning
         if signal == "bullish":
@@ -460,12 +473,8 @@ class NewsAggregator:
                 published = post.get("published_at", "")
                 pub_dt = None
                 if published:
-                    try:
-                        pub_dt = datetime.fromisoformat(
-                            published.replace("Z", "+00:00")
-                        )
-                    except (ValueError, TypeError):
-                        pass
+                    with contextlib.suppress(ValueError, TypeError):
+                        pub_dt = datetime.fromisoformat(published.replace("Z", "+00:00"))
 
                 # Determine relevance
                 kind = post.get("kind", "")
@@ -479,21 +488,21 @@ class NewsAggregator:
 
                 # Categories from tags
                 categories = tuple(
-                    tag.get("title", "")
-                    for tag in post.get("tags", [])
-                    if tag.get("title")
+                    tag.get("title", "") for tag in post.get("tags", []) if tag.get("title")
                 )
 
-                items.append(NewsItem(
-                    title=post.get("title", ""),
-                    source=post.get("source", {}).get("title", "CryptoPanic"),
-                    url=post.get("url", ""),
-                    sentiment=round(sentiment, 4),
-                    relevance=relevance,
-                    published_at=pub_dt,
-                    categories=categories,
-                    is_breaking=is_important and sentiment != 0,
-                ))
+                items.append(
+                    NewsItem(
+                        title=post.get("title", ""),
+                        source=post.get("source", {}).get("title", "CryptoPanic"),
+                        url=post.get("url", ""),
+                        sentiment=round(sentiment, 4),
+                        relevance=relevance,
+                        published_at=pub_dt,
+                        categories=categories,
+                        is_breaking=is_important and sentiment != 0,
+                    )
+                )
 
         except Exception as exc:
             logger.debug("CryptoPanic fetch failed: %s", exc)
@@ -529,13 +538,13 @@ class NewsAggregator:
             # RSS 2.0
             channel = root.find("channel")
             if channel is not None:
-                for item_elem in channel.findall("item")[:limit * 2]:
+                for item_elem in channel.findall("item")[: limit * 2]:
                     item = self._parse_rss_item(item_elem, source, symbol)
                     if item:
                         items.append(item)
             else:
                 # Atom feed
-                for entry in root.findall("atom:entry", ns)[:limit * 2]:
+                for entry in root.findall("atom:entry", ns)[: limit * 2]:
                     item = self._parse_atom_entry(entry, source, symbol, ns)
                     if item:
                         items.append(item)
@@ -566,9 +575,7 @@ class NewsAggregator:
         pub_date = self._get_text(elem, "pubDate")
 
         # Parse categories
-        categories = tuple(
-            cat.text for cat in elem.findall("category") if cat.text
-        )
+        categories = tuple(cat.text for cat in elem.findall("category") if cat.text)
 
         # Compute relevance to symbol
         relevance = self._compute_relevance(title, description, symbol)
@@ -674,14 +681,42 @@ class NewsAggregator:
         title_lower = title.lower()
 
         bullish_words = {
-            "surge", "rally", "bullish", "rise", "gain", "jump", "soar",
-            "breakout", "record", "high", "adoption", "partnership",
-            "approval", "launch", "upgrade", "milestone", "growth",
+            "surge",
+            "rally",
+            "bullish",
+            "rise",
+            "gain",
+            "jump",
+            "soar",
+            "breakout",
+            "record",
+            "high",
+            "adoption",
+            "partnership",
+            "approval",
+            "launch",
+            "upgrade",
+            "milestone",
+            "growth",
         }
         bearish_words = {
-            "crash", "drop", "fall", "bearish", "plunge", "decline",
-            "hack", "exploit", "ban", "regulation", "lawsuit", "fraud",
-            "bankruptcy", "sell-off", "dump", "fear", "concern",
+            "crash",
+            "drop",
+            "fall",
+            "bearish",
+            "plunge",
+            "decline",
+            "hack",
+            "exploit",
+            "ban",
+            "regulation",
+            "lawsuit",
+            "fraud",
+            "bankruptcy",
+            "sell-off",
+            "dump",
+            "fear",
+            "concern",
         }
 
         bullish_hits = sum(1 for w in bullish_words if w in title_lower)
@@ -696,7 +731,7 @@ class NewsAggregator:
     @staticmethod
     def _strip_html(text: str) -> str:
         """Remove HTML tags from text."""
-        return re.sub(r'<[^>]+>', '', text).strip()
+        return re.sub(r"<[^>]+>", "", text).strip()
 
     @staticmethod
     def _get_text(elem: ET.Element, tag: str) -> str:

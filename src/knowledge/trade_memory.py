@@ -19,8 +19,6 @@ from typing import TYPE_CHECKING, Any
 
 from src.utils.logging import get_logger
 
-from src.utils.logging import get_logger
-
 if TYPE_CHECKING:
     from collections.abc import Generator
 
@@ -38,6 +36,7 @@ def _utcnow_iso() -> str:
 @dataclass
 class TradeRecord:
     """Represents a single trade record (maps to trade_records table)."""
+
     trade_id: str = field(default_factory=_ulid)
     symbol: str = ""
     asset_class: str = "crypto"
@@ -99,6 +98,7 @@ class TradeRecord:
 @dataclass
 class TradeSnapshot:
     """Market state snapshot at decision time."""
+
     snapshot_id: str = field(default_factory=_ulid)
     trade_id: str = ""
     snapshot_type: str = "decision"
@@ -127,6 +127,7 @@ class TradeSnapshot:
 @dataclass
 class TradeJournalEntry:
     """Free-form trade journal entry."""
+
     journal_id: str = field(default_factory=_ulid)
     trade_id: str = ""
     entry_type: str = "post_mortem"
@@ -180,7 +181,7 @@ class TradeMemory:
 
         # Auto-create schema on first access
         self._ensure_schema()
-            # but we keep it opt-in for backward compatibility
+        # but we keep it opt-in for backward compatibility
 
     def _ensure_schema(self) -> None:
         """Create tables if they don't exist (idempotent)."""
@@ -198,7 +199,9 @@ class TradeMemory:
                 return  # Schema already exists
 
             # Run initial migration
-            migration_path = Path(__file__).parent.parent.parent / "migrations" / "001_initial_schema.sql"
+            migration_path = (
+                Path(__file__).parent.parent.parent / "migrations" / "001_initial_schema.sql"
+            )
             if migration_path.exists():
                 migration_sql = migration_path.read_text()
                 conn.executescript(migration_sql)
@@ -461,6 +464,7 @@ class TradeMemory:
     @staticmethod
     def _format_fts_query(query: str) -> str:
         import re
+
         clean = re.sub(r"[^\w\s]", "", query)
         terms = [t for t in clean.split() if len(t) > 2]
         if not terms:
@@ -478,9 +482,7 @@ class TradeMemory:
             conn.execute(sql, d)
         return snapshot.snapshot_id
 
-    def get_snapshots(
-        self, trade_id: str, snapshot_type: str | None = None
-    ) -> list[TradeSnapshot]:
+    def get_snapshots(self, trade_id: str, snapshot_type: str | None = None) -> list[TradeSnapshot]:
         if snapshot_type:
             sql = "SELECT * FROM trade_snapshots WHERE trade_id = ? AND snapshot_type = ? ORDER BY created_at"
             params: tuple[Any, ...] = (trade_id, snapshot_type)
@@ -655,7 +657,9 @@ class TradeMemory:
 
     # ── Trade statistics ──────────────────────────────────────
 
-    def get_trade_stats(self, strategy_id: str | None = None, since: str | None = None) -> dict[str, Any]:
+    def get_trade_stats(
+        self, strategy_id: str | None = None, since: str | None = None
+    ) -> dict[str, Any]:
         """Compute aggregate trade statistics.
 
         Returns:
@@ -701,7 +705,13 @@ class TradeMemory:
 
         gross_profit = row["gross_profit"] or 0.0
         gross_loss = row["gross_loss"] or 0.0
-        profit_factor = (gross_profit / gross_loss) if gross_loss > 0 else float("inf") if gross_profit > 0 else 0.0
+        profit_factor = (
+            (gross_profit / gross_loss)
+            if gross_loss > 0
+            else float("inf")
+            if gross_profit > 0
+            else 0.0
+        )
 
         # Compute max drawdown from cumulative P&L series
         max_drawdown = self._compute_max_drawdown(strategy_id, since)
@@ -716,7 +726,9 @@ class TradeMemory:
             "trade_count": row["trade_count"],
         }
 
-    def _compute_max_drawdown(self, strategy_id: str | None = None, since: str | None = None) -> float:
+    def _compute_max_drawdown(
+        self, strategy_id: str | None = None, since: str | None = None
+    ) -> float:
         """Compute max drawdown from the cumulative P&L curve.
 
         Returns:

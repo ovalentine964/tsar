@@ -44,9 +44,9 @@ _DEFAULT_CONFIG = "config/mandate.yaml"
 class MandateStatus(StrEnum):
     """Lifecycle status of a mandate."""
 
-    DRAFT = "draft"        # Created but not committed
-    ACTIVE = "active"      # Committed and enforcing
-    REVOKED = "revoked"    # Deactivated by user
+    DRAFT = "draft"  # Created but not committed
+    ACTIVE = "active"  # Committed and enforcing
+    REVOKED = "revoked"  # Deactivated by user
 
 
 class MandateRules(BaseModel):
@@ -145,9 +145,7 @@ class MandateRules(BaseModel):
         valid_types = {ot.value for ot in OrderType}
         for ot in v:
             if ot not in valid_types:
-                raise ValueError(
-                    f"Invalid order type '{ot}' — must be one of {valid_types}."
-                )
+                raise ValueError(f"Invalid order type '{ot}' — must be one of {valid_types}.")
         return v
 
     @field_validator("allowed_sides")
@@ -157,9 +155,7 @@ class MandateRules(BaseModel):
         valid_sides = {s.value for s in OrderSide}
         for s in v:
             if s not in valid_sides:
-                raise ValueError(
-                    f"Invalid order side '{s}' — must be one of {valid_sides}."
-                )
+                raise ValueError(f"Invalid order side '{s}' — must be one of {valid_sides}.")
         return v
 
 
@@ -293,13 +289,15 @@ class Mandate:
         """
         self._validate_rules()
         now = datetime.now(UTC)
-        self._state = self._state.model_copy(update={
-            "status": MandateStatus.ACTIVE,
-            "committed_at": now,
-            "committed_by": user_id,
-            "revoked_at": None,
-            "revoked_by": None,
-        })
+        self._state = self._state.model_copy(
+            update={
+                "status": MandateStatus.ACTIVE,
+                "committed_at": now,
+                "committed_by": user_id,
+                "revoked_at": None,
+                "revoked_by": None,
+            }
+        )
         self._save_to_yaml()
         logger.info(
             f"Mandate COMMITTED by {user_id} at {now.isoformat()} — "
@@ -313,15 +311,16 @@ class Mandate:
             user_id: ID of the human revoking the mandate.
         """
         now = datetime.now(UTC)
-        self._state = self._state.model_copy(update={
-            "status": MandateStatus.REVOKED,
-            "revoked_at": now,
-            "revoked_by": user_id,
-        })
+        self._state = self._state.model_copy(
+            update={
+                "status": MandateStatus.REVOKED,
+                "revoked_at": now,
+                "revoked_by": user_id,
+            }
+        )
         self._save_to_yaml()
         logger.warning(
-            f"Mandate REVOKED by {user_id} at {now.isoformat()} — "
-            f"all live trades blocked"
+            f"Mandate REVOKED by {user_id} at {now.isoformat()} — all live trades blocked"
         )
 
     def update(self, user_id: str, **rule_changes: Any) -> None:
@@ -341,10 +340,12 @@ class Mandate:
         current_rules.update(rule_changes)
         new_rules = MandateRules(**current_rules)
 
-        self._state = self._state.model_copy(update={
-            "rules": new_rules,
-            "version": self._state.version + 1,
-        })
+        self._state = self._state.model_copy(
+            update={
+                "rules": new_rules,
+                "version": self._state.version + 1,
+            }
+        )
         self.commit(user_id)
         logger.info(
             f"Mandate UPDATED by {user_id} — "
@@ -474,8 +475,7 @@ class Mandate:
         symbol_upper = symbol.strip().upper()
         if symbol_upper not in rules.allowed_symbols:
             violations.append(
-                f"symbol_not_allowed: '{symbol}' is not in "
-                f"allowed_symbols {rules.allowed_symbols}"
+                f"symbol_not_allowed: '{symbol}' is not in allowed_symbols {rules.allowed_symbols}"
             )
 
         # Order type check
@@ -488,8 +488,7 @@ class Mandate:
         # Side check
         if side_str not in rules.allowed_sides:
             violations.append(
-                f"side_not_allowed: '{side_str}' is not in "
-                f"allowed_sides {rules.allowed_sides}"
+                f"side_not_allowed: '{side_str}' is not in allowed_sides {rules.allowed_sides}"
             )
 
         # Leverage check
@@ -542,7 +541,9 @@ class Mandate:
                 data[key] = str(data[key])
 
         # Ensure enums are serialized as strings
-        data["status"] = data["status"].value if isinstance(data["status"], MandateStatus) else data["status"]
+        data["status"] = (
+            data["status"].value if isinstance(data["status"], MandateStatus) else data["status"]
+        )
 
         with open(self._config_path, "w") as f:
             yaml.dump(data, f, default_flow_style=False, sort_keys=False)
@@ -680,8 +681,7 @@ class Mandate:
 
         if not rules.allowed_symbols:
             raise ValueError(
-                "Cannot commit mandate with empty allowed_symbols — "
-                "no trades would be permitted."
+                "Cannot commit mandate with empty allowed_symbols — no trades would be permitted."
             )
 
         if rules.max_position_size_pct <= 0:
@@ -692,8 +692,7 @@ class Mandate:
 
         if rules.max_daily_trades <= 0:
             raise ValueError(
-                "Cannot commit mandate with max_daily_trades <= 0 — "
-                "no trades would be permitted."
+                "Cannot commit mandate with max_daily_trades <= 0 — no trades would be permitted."
             )
 
         if not rules.allowed_order_types:

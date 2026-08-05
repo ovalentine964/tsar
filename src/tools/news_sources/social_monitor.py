@@ -19,6 +19,7 @@ early detection of sentiment shifts and emerging narratives.
 
 from __future__ import annotations
 
+import contextlib
 import logging
 import re
 import time
@@ -132,17 +133,46 @@ _ASSET_PATTERNS: dict[str, str] = {
     "UNI": r"\b(uniswap|uni)\b",
 }
 
-_BULLISH_KEYWORDS = frozenset({
-    "bullish", "moon", "pump", "rally", "buy", "accumulate",
-    "breakout", "surge", "hodl", "diamond hands", "to the moon",
-    "undervalued", "gem", "early", "adoption",
-})
+_BULLISH_KEYWORDS = frozenset(
+    {
+        "bullish",
+        "moon",
+        "pump",
+        "rally",
+        "buy",
+        "accumulate",
+        "breakout",
+        "surge",
+        "hodl",
+        "diamond hands",
+        "to the moon",
+        "undervalued",
+        "gem",
+        "early",
+        "adoption",
+    }
+)
 
-_BEARISH_KEYWORDS = frozenset({
-    "bearish", "dump", "crash", "sell", "short", "rug",
-    "scam", "hack", "exploit", "fear", "panic", "overvalued",
-    "bubble", "dead", "exit scam", "ponzi",
-})
+_BEARISH_KEYWORDS = frozenset(
+    {
+        "bearish",
+        "dump",
+        "crash",
+        "sell",
+        "short",
+        "rug",
+        "scam",
+        "hack",
+        "exploit",
+        "fear",
+        "panic",
+        "overvalued",
+        "bubble",
+        "dead",
+        "exit scam",
+        "ponzi",
+    }
+)
 
 
 # ═══════════════════════════════════════════════════════════════════════
@@ -230,6 +260,7 @@ class SocialChannelMonitor:
 
         # Fetch from all platforms in parallel
         import asyncio
+
         tasks = [
             self._fetch_reddit_posts(),
             self._fetch_discord_posts(),
@@ -247,8 +278,7 @@ class SocialChannelMonitor:
         # Filter by symbol
         if base_symbol and base_symbol != "GENERAL":
             all_posts = [
-                p for p in all_posts
-                if base_symbol in p.mentioned_assets or p.relevance > 0.7
+                p for p in all_posts if base_symbol in p.mentioned_assets or p.relevance > 0.7
             ]
 
         # Sort by score and relevance
@@ -259,10 +289,7 @@ class SocialChannelMonitor:
         all_posts = all_posts[:limit]
 
         # Build digest
-        if all_posts:
-            sentiment = sum(p.sentiment for p in all_posts) / len(all_posts)
-        else:
-            sentiment = 0.0
+        sentiment = sum(p.sentiment for p in all_posts) / len(all_posts) if all_posts else 0.0
 
         # Platform breakdown
         platform_counts: dict[str, int] = {}
@@ -330,10 +357,7 @@ class SocialChannelMonitor:
         """Fetch posts from Reddit crypto subreddits."""
         import asyncio
 
-        tasks = [
-            self._fetch_subreddit(sub)
-            for sub in self._subreddits
-        ]
+        tasks = [self._fetch_subreddit(sub) for sub in self._subreddits]
 
         results = await asyncio.gather(*tasks, return_exceptions=True)
 
@@ -411,10 +435,8 @@ class SocialChannelMonitor:
         created_utc = data.get("created_utc")
         pub_dt = None
         if created_utc:
-            try:
+            with contextlib.suppress(ValueError, TypeError, OSError):
                 pub_dt = datetime.fromtimestamp(float(created_utc), tz=UTC)
-            except (ValueError, TypeError, OSError):
-                pass
 
         return SocialPost(
             platform=SocialPlatform.REDDIT,
@@ -456,9 +478,22 @@ class SocialChannelMonitor:
         text_lower = text.lower()
 
         crypto_keywords = [
-            "crypto", "bitcoin", "ethereum", "blockchain", "defi",
-            "token", "coin", "binance", "web3", "nft", "altcoin",
-            "hodl", "mining", "staking", "wallet", "exchange",
+            "crypto",
+            "bitcoin",
+            "ethereum",
+            "blockchain",
+            "defi",
+            "token",
+            "coin",
+            "binance",
+            "web3",
+            "nft",
+            "altcoin",
+            "hodl",
+            "mining",
+            "staking",
+            "wallet",
+            "exchange",
         ]
 
         hits = sum(1 for kw in crypto_keywords if kw in text_lower)

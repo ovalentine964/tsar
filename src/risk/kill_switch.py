@@ -198,8 +198,7 @@ class KillSwitch:
 
         # FAIL-SAFE: if we can't read either, assume active
         logger.error(
-            "Kill switch state unreadable from both Redis and file — "
-            "FAIL-SAFE: assuming ACTIVE"
+            "Kill switch state unreadable from both Redis and file — FAIL-SAFE: assuming ACTIVE"
         )
         return True
 
@@ -236,15 +235,15 @@ class KillSwitch:
     # Internal: File operations
     # ------------------------------------------------------------------
 
-
     def _write_atomic(self, content_str: str, path: str) -> None:
         """Atomic file write — prevents partial writes."""
         import os
         import tempfile
+
         dir_name = os.path.dirname(path) or "."
         fd, tmp_path = tempfile.mkstemp(dir=dir_name)
         try:
-            with os.fdopen(fd, 'w') as f:
+            with os.fdopen(fd, "w") as f:
                 f.write(content_str)
             os.rename(tmp_path, path)  # Atomic on same filesystem
         except Exception:
@@ -336,7 +335,5 @@ class KillSwitch:
             "active": active,
             "reason": reason,
             "activated_at": time.time(),
-            "activated_at_human": time.strftime(
-                "%Y-%m-%d %H:%M:%S UTC", time.gmtime()
-            ),
+            "activated_at_human": time.strftime("%Y-%m-%d %H:%M:%S UTC", time.gmtime()),
         }

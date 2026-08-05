@@ -18,7 +18,6 @@ Publishes to:  tsar:stream:signals (veto events)
 
 from __future__ import annotations
 
-import asyncio
 import logging
 import time
 from dataclasses import dataclass, field
@@ -50,11 +49,11 @@ logger = logging.getLogger(__name__)
 class VetoLevel(StrEnum):
     """News-triggered veto levels."""
 
-    EMERGENCY   = "emergency"    # CRITICAL news → Kill switch, all symbols
+    EMERGENCY = "emergency"  # CRITICAL news → Kill switch, all symbols
     SYMBOL_BLOCK = "symbol_block"  # HIGH news → Block specific symbol
-    ENTRY_BLOCK  = "entry_block"   # MEDIUM-HIGH → Block new entries only
-    ALERT        = "alert"         # MEDIUM → Warning, reduce size
-    CLEAR        = "clear"         # Veto expired or lifted
+    ENTRY_BLOCK = "entry_block"  # MEDIUM-HIGH → Block new entries only
+    ALERT = "alert"  # MEDIUM → Warning, reduce size
+    CLEAR = "clear"  # Veto expired or lifted
 
 
 @dataclass
@@ -67,8 +66,8 @@ class VetoRecord:
     reason: str
     category: NewsCategory
     severity: NewsSeverity
-    issued_at: float         # time.time()
-    expires_at: float        # time.time()
+    issued_at: float  # time.time()
+    expires_at: float  # time.time()
     source_articles: list[str] = field(default_factory=list)
     override_requested: bool = False
     override_approved: bool = False
@@ -95,10 +94,10 @@ class GatekeeperDecision:
     veto_level: VetoLevel
     reason: str
     active_vetoes: list[VetoRecord]
-    news_sentiment: float       # -1.0 to +1.0 (time-decayed)
-    news_confidence: float      # 0.0 to 1.0
+    news_sentiment: float  # -1.0 to +1.0 (time-decayed)
+    news_confidence: float  # 0.0 to 1.0
     highest_severity: NewsSeverity
-    velocity_action: str        # "NORMAL", "ALERT", "VETO", "AMPLIFY"
+    velocity_action: str  # "NORMAL", "ALERT", "VETO", "AMPLIFY"
     timestamp: datetime | None = None
 
 
@@ -107,10 +106,10 @@ class GatekeeperDecision:
 # ═══════════════════════════════════════════════════════════════════════
 
 _DEFAULT_VETO_DURATIONS: dict[VetoLevel, int] = {
-    VetoLevel.EMERGENCY: 3600,     # 1 hour minimum for CRITICAL
+    VetoLevel.EMERGENCY: 3600,  # 1 hour minimum for CRITICAL
     VetoLevel.SYMBOL_BLOCK: 1800,  # 30 min for HIGH
-    VetoLevel.ENTRY_BLOCK: 900,    # 15 min for MEDIUM-HIGH
-    VetoLevel.ALERT: 300,          # 5 min advisory
+    VetoLevel.ENTRY_BLOCK: 900,  # 15 min for MEDIUM-HIGH
+    VetoLevel.ALERT: 300,  # 5 min advisory
 }
 
 _SEVERITY_VETO_MAP: dict[NewsSeverity, VetoLevel] = {
@@ -163,8 +162,12 @@ class NewsGatekeeper(BaseAgent):
         self._classifier = NewsClassifier(config=gk_config)
         velocity_config = VelocityConfig(
             avalanche_threshold=gk_config.get("velocity", {}).get("avalanche_threshold", 5),
-            avalanche_window_minutes=gk_config.get("velocity", {}).get("avalanche_window_minutes", 60),
-            silence_threshold_hours=gk_config.get("velocity", {}).get("silence_threshold_hours", 24),
+            avalanche_window_minutes=gk_config.get("velocity", {}).get(
+                "avalanche_window_minutes", 60
+            ),
+            silence_threshold_hours=gk_config.get("velocity", {}).get(
+                "silence_threshold_hours", 24
+            ),
             shift_threshold=gk_config.get("velocity", {}).get("sentiment_shift_threshold", 0.3),
         )
         self._velocity_detector = NewsVelocityDetector(config=velocity_config)
@@ -177,8 +180,8 @@ class NewsGatekeeper(BaseAgent):
 
         # State
         self._active_vetoes: dict[str, VetoRecord] = {}  # veto_id → VetoRecord
-        self._symbol_vetoes: dict[str, list[str]] = {}    # symbol → [veto_ids]
-        self._global_vetoes: list[str] = []               # veto_ids for all-symbol vetoes
+        self._symbol_vetoes: dict[str, list[str]] = {}  # symbol → [veto_ids]
+        self._global_vetoes: list[str] = []  # veto_ids for all-symbol vetoes
         self._last_classifications: list[ClassificationResult] = []
         self._last_velocity_report = None
 
@@ -194,8 +197,7 @@ class NewsGatekeeper(BaseAgent):
 
     async def on_shutdown(self) -> None:
         logger.info(
-            "NewsGatekeeper shutting down: %d active vetoes, "
-            "%d total issued, %d total expired",
+            "NewsGatekeeper shutting down: %d active vetoes, %d total issued, %d total expired",
             len(self._active_vetoes),
             self._total_vetoes_issued,
             self._total_vetoes_expired,
@@ -240,7 +242,9 @@ class NewsGatekeeper(BaseAgent):
         velocity_items = [
             {
                 "sentiment": c.sentiment,
-                "source": raw_items[i].get("source", "Unknown") if i < len(raw_items) else "Unknown",
+                "source": raw_items[i].get("source", "Unknown")
+                if i < len(raw_items)
+                else "Unknown",
                 "age_minutes": raw_items[i].get("age_minutes", 0) if i < len(raw_items) else 0,
                 "published_at": raw_items[i].get("published_at") if i < len(raw_items) else None,
             }
@@ -260,7 +264,9 @@ class NewsGatekeeper(BaseAgent):
             # Verify CRITICAL (multi-source check)
             sources = [r.get("source", "Unknown") for r in raw_items]
             verification = self._classifier.verify_critical(
-                classification, classifications, sources,
+                classification,
+                classifications,
+                sources,
             )
 
             if verification.verified:
@@ -276,7 +282,8 @@ class NewsGatekeeper(BaseAgent):
                 # Downgrade to HIGH if unverified
                 logger.warning(
                     "CRITICAL news downgraded to HIGH (unverified): %s flags=%s",
-                    raw.get("title", ""), verification.flags,
+                    raw.get("title", ""),
+                    verification.flags,
                 )
                 await self._issue_veto(
                     symbol=raw.get("symbol", "ALL"),
@@ -336,7 +343,8 @@ class NewsGatekeeper(BaseAgent):
         if existing:
             logger.debug(
                 "Veto already active for %s/%s, extending if needed",
-                symbol, category.value,
+                symbol,
+                category.value,
             )
             # Extend if new veto has longer duration
             duration = self._veto_durations.get(level, 300)
@@ -375,7 +383,10 @@ class NewsGatekeeper(BaseAgent):
 
         logger.warning(
             "🚨 VETO ISSUED [%s]: %s — %s (expires in %ds)",
-            level.value, symbol, reason, duration,
+            level.value,
+            symbol,
+            reason,
+            duration,
         )
 
         # Publish veto event
@@ -398,11 +409,8 @@ class NewsGatekeeper(BaseAgent):
 
     def _expire_vetoes(self) -> None:
         """Remove expired vetoes."""
-        now = time.time()
-        expired_ids = [
-            vid for vid, veto in self._active_vetoes.items()
-            if not veto.is_active
-        ]
+        time.time()
+        expired_ids = [vid for vid, veto in self._active_vetoes.items() if not veto.is_active]
 
         for vid in expired_ids:
             veto = self._active_vetoes.pop(vid)
@@ -417,7 +425,9 @@ class NewsGatekeeper(BaseAgent):
 
             logger.info(
                 "Veto expired: %s — %s (%s)",
-                vid, veto.reason, veto.symbol,
+                vid,
+                veto.reason,
+                veto.symbol,
             )
 
     def _find_active_veto(
@@ -482,9 +492,7 @@ class NewsGatekeeper(BaseAgent):
                 news_sentiment=self._compute_decayed_sentiment(),
                 news_confidence=self._compute_confidence(),
                 highest_severity=NewsSeverity.LOW,
-                velocity_action=getattr(
-                    self._last_velocity_report, "recommended_action", "NORMAL"
-                ),
+                velocity_action=getattr(self._last_velocity_report, "recommended_action", "NORMAL"),
                 timestamp=datetime.now(UTC),
             )
 
@@ -500,9 +508,7 @@ class NewsGatekeeper(BaseAgent):
             news_sentiment=self._compute_decayed_sentiment(),
             news_confidence=self._compute_confidence(),
             highest_severity=highest.severity,
-            velocity_action=getattr(
-                self._last_velocity_report, "recommended_action", "NORMAL"
-            ),
+            velocity_action=getattr(self._last_velocity_report, "recommended_action", "NORMAL"),
             timestamp=datetime.now(UTC),
         )
 
@@ -524,7 +530,9 @@ class NewsGatekeeper(BaseAgent):
         if veto.level == VetoLevel.EMERGENCY:
             logger.warning(
                 "⚠️ ADMIN OVERRIDE of EMERGENCY veto: %s — %s (reason: %s)",
-                veto_id, veto.reason, admin_reason,
+                veto_id,
+                veto.reason,
+                admin_reason,
             )
 
         veto.override_approved = True
@@ -538,7 +546,7 @@ class NewsGatekeeper(BaseAgent):
         if not self._last_classifications:
             return 0.0
 
-        now = time.time()
+        time.time()
         weighted_sum = 0.0
         total_weight = 0.0
 
@@ -546,7 +554,9 @@ class NewsGatekeeper(BaseAgent):
             # Apply time decay
             age_minutes = 0  # Would need actual age from raw items
             decayed = apply_time_decay(
-                c.sentiment, age_minutes, c.decay_rate_minutes,
+                c.sentiment,
+                age_minutes,
+                c.decay_rate_minutes,
             )
 
             # Weight by severity and source reliability

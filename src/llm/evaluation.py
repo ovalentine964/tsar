@@ -17,7 +17,6 @@ from __future__ import annotations
 
 import json
 import logging
-import time
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
@@ -32,6 +31,7 @@ logger = logging.getLogger(__name__)
 try:
     # NVIDIA Nemo Evaluator Plugin
     from nemo_evaluator import NemoEvaluator
+
     NEMO_EVALUATOR_AVAILABLE = True
     logger.info("nemo_evaluator_available", msg="NVIDIA Nemo Evaluator enabled")
 except ImportError:
@@ -55,6 +55,7 @@ class SignalAccuracyMetrics:
         avg_score_losers: Average signal score for losing trades.
         score_calibration: How well scores predict outcomes (higher = better).
     """
+
     total_signals: int = 0
     profitable_signals: int = 0
     accuracy: float = 0.0
@@ -73,6 +74,7 @@ class PredictionQualityMetrics:
         avg_confidence_alignment: How well LLM confidence matched actual results.
         bias_detection_rate: How often bias warnings preceded actual losses.
     """
+
     narratives_evaluated: int = 0
     directional_accuracy: float = 0.0
     avg_confidence_alignment: float = 0.0
@@ -89,6 +91,7 @@ class LessonRelevanceMetrics:
         improvement_after_lesson: Win rate change after applying lessons.
         avg_rule_confidence: Average confidence of extracted rules.
     """
+
     lessons_extracted: int = 0
     lessons_applied: int = 0
     improvement_after_lesson: float = 0.0
@@ -107,6 +110,7 @@ class EvaluationReport:
         evaluated_at: Timestamp of evaluation.
         lookback_days: Number of days of history analyzed.
     """
+
     signal_accuracy: SignalAccuracyMetrics = field(default_factory=SignalAccuracyMetrics)
     prediction_quality: PredictionQualityMetrics = field(default_factory=PredictionQualityMetrics)
     lesson_relevance: LessonRelevanceMetrics = field(default_factory=LessonRelevanceMetrics)
@@ -127,13 +131,17 @@ class EvaluationReport:
             "prediction_quality": {
                 "narratives_evaluated": self.prediction_quality.narratives_evaluated,
                 "directional_accuracy": round(self.prediction_quality.directional_accuracy, 4),
-                "avg_confidence_alignment": round(self.prediction_quality.avg_confidence_alignment, 4),
+                "avg_confidence_alignment": round(
+                    self.prediction_quality.avg_confidence_alignment, 4
+                ),
                 "bias_detection_rate": round(self.prediction_quality.bias_detection_rate, 4),
             },
             "lesson_relevance": {
                 "lessons_extracted": self.lesson_relevance.lessons_extracted,
                 "lessons_applied": self.lesson_relevance.lessons_applied,
-                "improvement_after_lesson": round(self.lesson_relevance.improvement_after_lesson, 4),
+                "improvement_after_lesson": round(
+                    self.lesson_relevance.improvement_after_lesson, 4
+                ),
                 "avg_rule_confidence": round(self.lesson_relevance.avg_rule_confidence, 4),
             },
             "overall_score": round(self.overall_score, 4),
@@ -178,9 +186,7 @@ class LLMEvaluator:
             "%Y-%m-%dT%H:%M:%S.%fZ"
         )
 
-        closed_trades = self._memory.list_trades(
-            status="CLOSED", since=since, limit=1000
-        )
+        closed_trades = self._memory.list_trades(status="CLOSED", since=since, limit=1000)
 
         signal_acc = self._evaluate_signal_accuracy(closed_trades)
         pred_quality = self._evaluate_prediction_quality(closed_trades)
@@ -213,9 +219,7 @@ class LLMEvaluator:
         )
         return report
 
-    def _evaluate_signal_accuracy(
-        self, trades: list[Any]
-    ) -> SignalAccuracyMetrics:
+    def _evaluate_signal_accuracy(self, trades: list[Any]) -> SignalAccuracyMetrics:
         """Evaluate signal accuracy from closed trade outcomes.
 
         Checks:
@@ -248,9 +252,7 @@ class LLMEvaluator:
             score_calibration=max(0.0, min(1.0, calibration)),
         )
 
-    def _evaluate_prediction_quality(
-        self, trades: list[Any]
-    ) -> PredictionQualityMetrics:
+    def _evaluate_prediction_quality(self, trades: list[Any]) -> PredictionQualityMetrics:
         """Evaluate narrative/prediction quality.
 
         Checks:
@@ -288,17 +290,13 @@ class LLMEvaluator:
         return PredictionQualityMetrics(
             narratives_evaluated=total_with_direction,
             directional_accuracy=(
-                correct_direction / total_with_direction
-                if total_with_direction > 0
-                else 0.0
+                correct_direction / total_with_direction if total_with_direction > 0 else 0.0
             ),
             avg_confidence_alignment=max(0.0, alignment),
             bias_detection_rate=0.0,  # Requires bias warning tracking
         )
 
-    def _evaluate_lesson_relevance(
-        self, trades: list[Any]
-    ) -> LessonRelevanceMetrics:
+    def _evaluate_lesson_relevance(self, trades: list[Any]) -> LessonRelevanceMetrics:
         """Evaluate lesson extraction and application quality.
 
         Checks:
@@ -315,12 +313,12 @@ class LLMEvaluator:
         if len(trades) >= 10:
             sorted_trades = sorted(trades, key=lambda t: t.closed_at or "")
             mid = len(sorted_trades) // 2
-            first_half_winrate = sum(
-                1 for t in sorted_trades[:mid] if t.realized_pnl > 0
-            ) / max(1, mid)
-            second_half_winrate = sum(
-                1 for t in sorted_trades[mid:] if t.realized_pnl > 0
-            ) / max(1, len(sorted_trades) - mid)
+            first_half_winrate = sum(1 for t in sorted_trades[:mid] if t.realized_pnl > 0) / max(
+                1, mid
+            )
+            second_half_winrate = sum(1 for t in sorted_trades[mid:] if t.realized_pnl > 0) / max(
+                1, len(sorted_trades) - mid
+            )
             improvement = second_half_winrate - first_half_winrate
         else:
             improvement = 0.0
@@ -328,8 +326,7 @@ class LLMEvaluator:
         # Average rule confidence from extracted rules
         avg_confidence = 0.0
         confidences = [
-            t.confidence for t in trades
-            if hasattr(t, "confidence") and t.confidence is not None
+            t.confidence for t in trades if hasattr(t, "confidence") and t.confidence is not None
         ]
         if confidences:
             avg_confidence = sum(confidences) / len(confidences)
@@ -352,7 +349,7 @@ class LLMEvaluator:
         mean_x = sum(x) / n
         mean_y = sum(y) / n
 
-        cov = sum((xi - mean_x) * (yi - mean_y) for xi, yi in zip(x, y))
+        cov = sum((xi - mean_x) * (yi - mean_y) for xi, yi in zip(x, y, strict=False))
         var_x = sum((xi - mean_x) ** 2 for xi in x)
         var_y = sum((yi - mean_y) ** 2 for yi in y)
 
@@ -370,6 +367,7 @@ class LLMEvaluator:
 @dataclass
 class NemoDimensionScore:
     """Score for a single evaluation dimension."""
+
     dimension: str = ""
     score: float = 0.0
     weight: float = 1.0
@@ -379,6 +377,7 @@ class NemoDimensionScore:
 @dataclass
 class NemoEvaluationResult:
     """Result of Nemo Evaluator assessment."""
+
     overall_score: float = 0.0
     dimension_scores: list[NemoDimensionScore] = field(default_factory=list)
     accepted: bool = True
@@ -390,8 +389,12 @@ class NemoEvaluationResult:
         return {
             "overall_score": round(self.overall_score, 4),
             "dimensions": [
-                {"dimension": d.dimension, "score": round(d.score, 4),
-                 "weight": d.weight, "rationale": d.rationale}
+                {
+                    "dimension": d.dimension,
+                    "score": round(d.score, 4),
+                    "weight": d.weight,
+                    "rationale": d.rationale,
+                }
                 for d in self.dimension_scores
             ],
             "accepted": self.accepted,
@@ -429,16 +432,31 @@ class NemoTradeEvaluator:
         self._fallback = self._config.get("fallback", "internal")
 
         # Load dimension config
-        self._dimensions = self._config.get("dimensions", [
-            {"name": "factual_accuracy", "weight": 0.25,
-             "description": "Are claims supported by market data?"},
-            {"name": "risk_awareness", "weight": 0.25,
-             "description": "Does output consider risk implications?"},
-            {"name": "actionability", "weight": 0.25,
-             "description": "Can the output be directly acted upon?"},
-            {"name": "coherence", "weight": 0.25,
-             "description": "Is the reasoning logical and consistent?"},
-        ])
+        self._dimensions = self._config.get(
+            "dimensions",
+            [
+                {
+                    "name": "factual_accuracy",
+                    "weight": 0.25,
+                    "description": "Are claims supported by market data?",
+                },
+                {
+                    "name": "risk_awareness",
+                    "weight": 0.25,
+                    "description": "Does output consider risk implications?",
+                },
+                {
+                    "name": "actionability",
+                    "weight": 0.25,
+                    "description": "Can the output be directly acted upon?",
+                },
+                {
+                    "name": "coherence",
+                    "weight": 0.25,
+                    "description": "Is the reasoning logical and consistent?",
+                },
+            ],
+        )
 
         # Scoring thresholds
         scoring = self._config.get("scoring", {})
@@ -527,12 +545,14 @@ class NemoTradeEvaluator:
                 score = float(result.get("score", 0.5))
                 rationale = result.get("rationale", "")
 
-                dimension_scores.append(NemoDimensionScore(
-                    dimension=name,
-                    score=score,
-                    weight=weight,
-                    rationale=rationale,
-                ))
+                dimension_scores.append(
+                    NemoDimensionScore(
+                        dimension=name,
+                        score=score,
+                        weight=weight,
+                        rationale=rationale,
+                    )
+                )
 
                 total_weighted += score * weight
                 total_weight += weight
@@ -545,13 +565,11 @@ class NemoTradeEvaluator:
             if overall < self._auto_reject:
                 accepted = False
                 rejection_reason = (
-                    f"Score {overall:.2f} below auto-reject threshold "
-                    f"{self._auto_reject:.2f}"
+                    f"Score {overall:.2f} below auto-reject threshold {self._auto_reject:.2f}"
                 )
             elif not accepted:
                 rejection_reason = (
-                    f"Score {overall:.2f} below minimum acceptable "
-                    f"{self._min_acceptable:.2f}"
+                    f"Score {overall:.2f} below minimum acceptable {self._min_acceptable:.2f}"
                 )
 
             return NemoEvaluationResult(
@@ -577,52 +595,93 @@ class NemoTradeEvaluator:
         dimension_scores = []
 
         # Factual accuracy: check for data references
-        data_keywords = ["price", "volume", "rsi", "macd", "bollinger",
-                        "support", "resistance", "pattern", "indicator"]
+        data_keywords = [
+            "price",
+            "volume",
+            "rsi",
+            "macd",
+            "bollinger",
+            "support",
+            "resistance",
+            "pattern",
+            "indicator",
+        ]
         data_refs = sum(1 for kw in data_keywords if kw in text_lower)
         factual_score = min(1.0, data_refs / 4.0)
-        dimension_scores.append(NemoDimensionScore(
-            dimension="factual_accuracy",
-            score=factual_score,
-            weight=0.25,
-            rationale=f"Found {data_refs} data references",
-        ))
+        dimension_scores.append(
+            NemoDimensionScore(
+                dimension="factual_accuracy",
+                score=factual_score,
+                weight=0.25,
+                rationale=f"Found {data_refs} data references",
+            )
+        )
 
         # Risk awareness: check for risk-related terms
-        risk_keywords = ["risk", "stop loss", "stop-loss", "drawdown",
-                        "volatility", "position size", "kelly", "hedge"]
+        risk_keywords = [
+            "risk",
+            "stop loss",
+            "stop-loss",
+            "drawdown",
+            "volatility",
+            "position size",
+            "kelly",
+            "hedge",
+        ]
         risk_refs = sum(1 for kw in risk_keywords if kw in text_lower)
         risk_score = min(1.0, risk_refs / 3.0)
-        dimension_scores.append(NemoDimensionScore(
-            dimension="risk_awareness",
-            score=risk_score,
-            weight=0.25,
-            rationale=f"Found {risk_refs} risk references",
-        ))
+        dimension_scores.append(
+            NemoDimensionScore(
+                dimension="risk_awareness",
+                score=risk_score,
+                weight=0.25,
+                rationale=f"Found {risk_refs} risk references",
+            )
+        )
 
         # Actionability: check for action-oriented language
-        action_keywords = ["buy", "sell", "entry", "exit", "target",
-                          "take profit", "signal", "order", "execute"]
+        action_keywords = [
+            "buy",
+            "sell",
+            "entry",
+            "exit",
+            "target",
+            "take profit",
+            "signal",
+            "order",
+            "execute",
+        ]
         action_refs = sum(1 for kw in action_keywords if kw in text_lower)
         action_score = min(1.0, action_refs / 3.0)
-        dimension_scores.append(NemoDimensionScore(
-            dimension="actionability",
-            score=action_score,
-            weight=0.25,
-            rationale=f"Found {action_refs} action references",
-        ))
+        dimension_scores.append(
+            NemoDimensionScore(
+                dimension="actionability",
+                score=action_score,
+                weight=0.25,
+                rationale=f"Found {action_refs} action references",
+            )
+        )
 
         # Coherence: check for reasoning structure
-        coherence_keywords = ["because", "therefore", "however",
-                             "although", "if", "then", "analysis"]
+        coherence_keywords = [
+            "because",
+            "therefore",
+            "however",
+            "although",
+            "if",
+            "then",
+            "analysis",
+        ]
         coherence_refs = sum(1 for kw in coherence_keywords if kw in text_lower)
         coherence_score = min(1.0, coherence_refs / 3.0)
-        dimension_scores.append(NemoDimensionScore(
-            dimension="coherence",
-            score=coherence_score,
-            weight=0.25,
-            rationale=f"Found {coherence_refs} reasoning markers",
-        ))
+        dimension_scores.append(
+            NemoDimensionScore(
+                dimension="coherence",
+                score=coherence_score,
+                weight=0.25,
+                rationale=f"Found {coherence_refs} reasoning markers",
+            )
+        )
 
         # Weighted overall
         total = sum(d.score * d.weight for d in dimension_scores)

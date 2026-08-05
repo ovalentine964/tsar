@@ -30,12 +30,12 @@ SAFETY:
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import json
 import logging
 import os
-import signal
 import time
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
@@ -45,9 +45,7 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 # Default paths — configurable via risk.yaml kill_switch section
-DEFAULT_HEARTBEAT_PATH = os.environ.get(
-    "TSAR_HEARTBEAT_PATH", "./data/heartbeat.json"
-)
+DEFAULT_HEARTBEAT_PATH = os.environ.get("TSAR_HEARTBEAT_PATH", "./data/heartbeat.json")
 DEFAULT_WATCHDOG_MARKER_PATH = os.environ.get(
     "TSAR_WATCHDOG_MARKER_PATH", "./data/watchdog_alive.json"
 )
@@ -168,8 +166,7 @@ class Watchdog:
 
                 if self._stale_count >= self._config.stale_threshold:
                     await self._trigger_kill_switch(
-                        f"Watchdog encountered {self._stale_count} "
-                        f"consecutive errors: {e}"
+                        f"Watchdog encountered {self._stale_count} consecutive errors: {e}"
                     )
 
             await asyncio.sleep(self._config.check_interval)
@@ -232,9 +229,7 @@ class Watchdog:
             # No heartbeat file — could be main process hasn't started yet
             # or it crashed before writing first heartbeat
             self._stale_count += 1
-            logger.warning(
-                f"Watchdog: no heartbeat file (stale_count={self._stale_count})"
-            )
+            logger.warning(f"Watchdog: no heartbeat file (stale_count={self._stale_count})")
 
             if self._stale_count >= self._config.stale_threshold:
                 await self._trigger_kill_switch(
@@ -268,21 +263,16 @@ class Watchdog:
             if pid and not _is_pid_alive(pid):
                 self._stale_count += 1
                 logger.warning(
-                    f"Watchdog: main process PID {pid} is dead "
-                    f"(stale_count={self._stale_count})"
+                    f"Watchdog: main process PID {pid} is dead (stale_count={self._stale_count})"
                 )
 
                 if self._stale_count >= self._config.stale_threshold:
-                    await self._trigger_kill_switch(
-                        f"Main process PID {pid} is no longer alive"
-                    )
+                    await self._trigger_kill_switch(f"Main process PID {pid} is no longer alive")
                 return
 
         # Heartbeat is fresh — reset stale counter
         if self._stale_count > 0:
-            logger.info(
-                f"Watchdog: heartbeat recovered (was stale {self._stale_count} times)"
-            )
+            logger.info(f"Watchdog: heartbeat recovered (was stale {self._stale_count} times)")
         self._stale_count = 0
         self._last_heartbeat_ts = hb_ts
 
@@ -318,9 +308,7 @@ class Watchdog:
                     "active": True,
                     "reason": full_reason,
                     "activated_at": time.time(),
-                    "activated_at_human": time.strftime(
-                        "%Y-%m-%d %H:%M:%S UTC", time.gmtime()
-                    ),
+                    "activated_at_human": time.strftime("%Y-%m-%d %H:%M:%S UTC", time.gmtime()),
                     "source": "watchdog_emergency",
                 }
                 _write_atomic(
@@ -402,10 +390,8 @@ def _write_atomic(content: str, path: str) -> None:
             f.write(content)
         os.rename(tmp_path, path)
     except Exception:
-        try:
+        with contextlib.suppress(OSError):
             os.unlink(tmp_path)
-        except OSError:
-            pass
         raise
 
 

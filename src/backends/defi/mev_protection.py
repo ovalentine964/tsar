@@ -23,8 +23,6 @@ Usage::
 
 from __future__ import annotations
 
-import asyncio
-import hashlib
 import json
 import logging
 import time
@@ -65,6 +63,7 @@ USDT = "0xdAC17F958D2ee523a2206206994597C13D831ec7".lower()
 
 class MEVRiskLevel(StrEnum):
     """Estimated MEV risk for a proposed swap."""
+
     LOW = "low"
     MEDIUM = "medium"
     HIGH = "high"
@@ -73,6 +72,7 @@ class MEVRiskLevel(StrEnum):
 
 class SubmissionMethod(StrEnum):
     """How the transaction should be submitted."""
+
     PUBLIC_MEMPOOL = "public_mempool"
     FLASHBOTS_PROTECT = "flashbots_protect"
     JITO_BUNDLE = "jito_bundle"
@@ -95,6 +95,7 @@ class MEVRiskAssessment:
         gas_priority_gwei: Recommended priority fee (gwei).
         details: Human-readable explanation.
     """
+
     pair: str
     amount: float
     risk_level: MEVRiskLevel
@@ -124,6 +125,7 @@ class ProtectedQuote:
         valid_until: Timestamp (epoch seconds) when quote expires.
         route: DEX route used for the quote.
     """
+
     pair: str
     amount: float
     output_amount: float
@@ -149,6 +151,7 @@ class GasEstimate:
         block_number: Block number of the estimate.
         timestamp: When the estimate was computed.
     """
+
     base_fee_gwei: float
     low_priority_gwei: float
     medium_priority_gwei: float
@@ -168,6 +171,7 @@ class SimulationResult:
         error: Error message if simulation failed.
         logs: Emitted event logs.
     """
+
     success: bool
     gas_used: int
     return_data: str
@@ -338,8 +342,10 @@ class MEVProtection:
     def _parse_pair_tokens(self, pair: str) -> tuple[str, str]:
         """Resolve a pair string like 'WETH/USDC' to lowercase token addresses."""
         mapping = {
-            "WETH": WETH, "ETH": WETH,
-            "USDC": USDC, "USDT": USDT,
+            "WETH": WETH,
+            "ETH": WETH,
+            "USDC": USDC,
+            "USDT": USDT,
         }
         parts = pair.upper().split("/")
         if len(parts) != 2:
@@ -639,7 +645,9 @@ class MEVProtection:
             result = await self._eth_call("eth_call", [tx_params, "latest"])
             return SimulationResult(
                 success=True,
-                gas_used=int(result, 16) if isinstance(result, str) and result.startswith("0x") else 0,
+                gas_used=int(result, 16)
+                if isinstance(result, str) and result.startswith("0x")
+                else 0,
                 return_data=result or "0x",
                 error=None,
             )

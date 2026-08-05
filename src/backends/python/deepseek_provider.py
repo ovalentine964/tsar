@@ -186,6 +186,7 @@ class DeepSeekProvider(LLMProvider):
     def count_tokens(self, text: str) -> int:
         """Count tokens using tiktoken (falls back to heuristic)."""
         from src.llm.token_counter import count_tokens
+
         return count_tokens(text, model=self._default_model)
 
     def get_capabilities(self) -> ModelCapabilities:

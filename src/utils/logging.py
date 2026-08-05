@@ -105,11 +105,10 @@ def _setup_structlog(
 
 
 def _add_service_field(service_name: str) -> structlog.types.Processor:
-    def processor(
-        logger: Any, method_name: str, event_dict: dict[str, Any]
-    ) -> dict[str, Any]:
+    def processor(logger: Any, method_name: str, event_dict: dict[str, Any]) -> dict[str, Any]:
         event_dict["service"] = service_name
         return event_dict
+
     return processor
 
 

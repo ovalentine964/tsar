@@ -25,16 +25,14 @@ from dataclasses import dataclass, field
 from enum import StrEnum
 from typing import Any
 
-import numpy as np
-
 from src.agents.base import BaseAgent
+from src.tools.economic_calendar import EconomicCalendarTools
 
 # ── Domain Tools (Tools-to-Agents Wiring) ──────────────────────────
 from src.tools.fundamental import FundamentalAnalysisTools
-from src.tools.economic_calendar import EconomicCalendarTools
-from src.tools.sentiment import SocialSentimentAnalyzer
 from src.tools.news import NewsAggregator
 from src.tools.on_chain import OnChainAnalytics
+from src.tools.sentiment import SocialSentimentAnalyzer
 
 logger = logging.getLogger(__name__)
 
@@ -46,6 +44,7 @@ logger = logging.getLogger(__name__)
 
 class MacroRegime(StrEnum):
     """Macro risk regimes."""
+
     RISK_ON = "RISK_ON"
     TRANSITION = "TRANSITION"
     RISK_OFF = "RISK_OFF"
@@ -56,14 +55,14 @@ class MacroRegime(StrEnum):
 class MacroIndicators:
     """Snapshot of macro indicators."""
 
-    dxy: float = 0.0             # US Dollar Index
-    dxy_change_5d: float = 0.0   # 5-day DXY change
-    us10y: float = 0.0           # US 10-Year Treasury Yield
-    us10y_change_5d: float = 0.0 # 5-day yield change
-    fear_greed: int = 50         # Crypto Fear & Greed Index (0-100)
-    btc_dominance: float = 0.0   # BTC market dominance %
-    funding_rate: float = 0.0    # Perpetual funding rate
-    vix: float = 0.0             # CBOE Volatility Index (if available)
+    dxy: float = 0.0  # US Dollar Index
+    dxy_change_5d: float = 0.0  # 5-day DXY change
+    us10y: float = 0.0  # US 10-Year Treasury Yield
+    us10y_change_5d: float = 0.0  # 5-day yield change
+    fear_greed: int = 50  # Crypto Fear & Greed Index (0-100)
+    btc_dominance: float = 0.0  # BTC market dominance %
+    funding_rate: float = 0.0  # Perpetual funding rate
+    vix: float = 0.0  # CBOE Volatility Index (if available)
     computed_at: float = 0.0
 
     def to_dict(self) -> dict[str, Any]:
@@ -168,16 +167,18 @@ class MacroDataFetcher:
         try:
             import aiohttp
 
-            async with aiohttp.ClientSession() as session:
-                async with session.get(
+            async with (
+                aiohttp.ClientSession() as session,
+                session.get(
                     "https://api.alternative.me/fng/?limit=2",
                     timeout=aiohttp.ClientTimeout(total=10),
-                ) as resp:
-                    if resp.status == 200:
-                        data = await resp.json()
-                        values = data.get("data", [])
-                        if values:
-                            return int(values[0]["value"])
+                ) as resp,
+            ):
+                if resp.status == 200:
+                    data = await resp.json()
+                    values = data.get("data", [])
+                    if values:
+                        return int(values[0]["value"])
         except ImportError:
             logger.debug("aiohttp not available for Fear & Greed fetch")
         except Exception as e:
@@ -190,14 +191,16 @@ class MacroDataFetcher:
         try:
             import aiohttp
 
-            async with aiohttp.ClientSession() as session:
-                async with session.get(
+            async with (
+                aiohttp.ClientSession() as session,
+                session.get(
                     "https://api.coingecko.com/api/v3/global",
                     timeout=aiohttp.ClientTimeout(total=10),
-                ) as resp:
-                    if resp.status == 200:
-                        data = await resp.json()
-                        return data.get("data", {}).get("market_cap_percentage", {}).get("btc", None)
+                ) as resp,
+            ):
+                if resp.status == 200:
+                    data = await resp.json()
+                    return data.get("data", {}).get("market_cap_percentage", {}).get("btc", None)
         except ImportError:
             pass
         except Exception as e:
@@ -434,6 +437,7 @@ class MacroAgent(BaseAgent):
         """Initialize pricing engine and domain tools."""
         try:
             from src.interfaces import get_pricing_engine
+
             self._pricing_engine = get_pricing_engine()
         except Exception:
             logger.debug("Pricing engine not available for macro data")
@@ -504,12 +508,11 @@ class MacroAgent(BaseAgent):
                 if sentiment and sentiment.fear_greed_index:
                     # Blend tool-derived fear/greed with fetched value (60/40)
                     tool_fg = sentiment.fear_greed_index
-                    indicators.fear_greed = int(
-                        indicators.fear_greed * 0.4 + tool_fg * 0.6
-                    )
+                    indicators.fear_greed = int(indicators.fear_greed * 0.4 + tool_fg * 0.6)
                     logger.info(
                         "MacroAgent: sentiment enriched — fear_greed=%d (tool=%d)",
-                        indicators.fear_greed, tool_fg,
+                        indicators.fear_greed,
+                        tool_fg,
                     )
             except Exception:
                 logger.debug("Sentiment enrichment failed", exc_info=True)
@@ -526,7 +529,8 @@ class MacroAgent(BaseAgent):
                         indicators.fear_greed = min(100, indicators.fear_greed + 10)
                     logger.info(
                         "MacroAgent: news enriched — signal=%s confidence=%.2f",
-                        news_signal.signal, news_signal.confidence,
+                        news_signal.signal,
+                        news_signal.confidence,
                     )
             except Exception:
                 logger.debug("News enrichment failed", exc_info=True)
@@ -573,7 +577,10 @@ class MacroAgent(BaseAgent):
             return
 
         # These may not be available on all exchanges
-        for symbol, setter in [("DXY", self._fetcher.update_dxy), ("US10Y", self._fetcher.update_us10y)]:
+        for symbol, setter in [
+            ("DXY", self._fetcher.update_dxy),
+            ("US10Y", self._fetcher.update_us10y),
+        ]:
             try:
                 ohlcv = await self._pricing_engine.get_ohlcv(symbol, "1d", limit=6)
                 if ohlcv and len(ohlcv) >= 2:

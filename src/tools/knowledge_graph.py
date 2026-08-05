@@ -441,13 +441,8 @@ class KnowledgeGraphTools:
                     regimes.add(node.node_id)
 
         # Compute pattern stats from trades
-        total_pnl = sum(
-            t.get("realized_pnl", 0) for t in trades.values()
-        )
-        wins = sum(
-            1 for t in trades.values()
-            if t.get("realized_pnl", 0) > 0
-        )
+        total_pnl = sum(t.get("realized_pnl", 0) for t in trades.values())
+        wins = sum(1 for t in trades.values() if t.get("realized_pnl", 0) > 0)
 
         return {
             "pattern_id": pattern_id,
@@ -501,13 +496,8 @@ class KnowledgeGraphTools:
                     self.graph.enrich_node(node)
                     lessons[node.node_id] = node.data
 
-        total_pnl = sum(
-            t.get("realized_pnl", 0) for t in trades.values()
-        )
-        wins = sum(
-            1 for t in trades.values()
-            if t.get("realized_pnl", 0) > 0
-        )
+        total_pnl = sum(t.get("realized_pnl", 0) for t in trades.values())
+        wins = sum(1 for t in trades.values() if t.get("realized_pnl", 0) > 0)
 
         return {
             "regime": regime,

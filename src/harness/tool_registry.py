@@ -27,13 +27,13 @@ Usage:
 from __future__ import annotations
 
 import asyncio
-import importlib
 import logging
 import re
 import time
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Callable, Awaitable
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -46,6 +46,7 @@ logger = logging.getLogger(__name__)
 @dataclass
 class ToolParameter:
     """JSON Schema parameter for a tool."""
+
     name: str
     type: str = "string"
     description: str = ""
@@ -68,6 +69,7 @@ class ToolDefinition:
         }
     }
     """
+
     name: str
     description: str
     category: str = "general"
@@ -114,6 +116,7 @@ class ToolDefinition:
 @dataclass
 class SkillDefinition:
     """A skill loaded from a .md file."""
+
     name: str
     description: str
     path: str
@@ -225,7 +228,9 @@ class SkillLoader:
         name = frontmatter.get("name", path.stem)
         description = frontmatter.get("description", "")
         tools_str = frontmatter.get("tools", "")
-        tools = [t.strip() for t in tools_str.strip("[]").split(",") if t.strip()] if tools_str else []
+        tools = (
+            [t.strip() for t in tools_str.strip("[]").split(",") if t.strip()] if tools_str else []
+        )
 
         return SkillDefinition(
             name=name,
@@ -298,14 +303,16 @@ class ToolRegistry:
             parameters: Tool parameters (auto-inferred if None).
             requires_governance: Whether this tool needs risk checks.
         """
-        self.register(ToolDefinition(
-            name=name,
-            description=description,
-            category=category,
-            parameters=parameters or [],
-            handler=handler,
-            requires_governance=requires_governance,
-        ))
+        self.register(
+            ToolDefinition(
+                name=name,
+                description=description,
+                category=category,
+                parameters=parameters or [],
+                handler=handler,
+                requires_governance=requires_governance,
+            )
+        )
 
     def unregister(self, name: str) -> None:
         """Remove a tool from the registry."""
@@ -324,6 +331,7 @@ class ToolRegistry:
         """
         try:
             from src.tools import get_registered_tools
+
             tsar_tools = get_registered_tools()
         except ImportError:
             logger.warning("Could not import TSAR tools")
@@ -342,19 +350,25 @@ class ToolRegistry:
 
             # Determine if governance-required
             needs_gov = name in {
-                "execution", "order_router", "defi_execution",
-                "dex_executor", "intent_executor", "cross_chain",
+                "execution",
+                "order_router",
+                "defi_execution",
+                "dex_executor",
+                "intent_executor",
+                "cross_chain",
                 "settlement",
             }
 
-            self.register(ToolDefinition(
-                name=name,
-                description=description or f"TSAR tool: {name}",
-                category=category,
-                handler=self._make_tsar_handler(name, tool_class),
-                requires_governance=needs_gov,
-                priority=0 if needs_gov else 2,
-            ))
+            self.register(
+                ToolDefinition(
+                    name=name,
+                    description=description or f"TSAR tool: {name}",
+                    category=category,
+                    handler=self._make_tsar_handler(name, tool_class),
+                    requires_governance=needs_gov,
+                    priority=0 if needs_gov else 2,
+                )
+            )
             count += 1
 
         logger.info("Auto-discovered %d TSAR tools", count)
@@ -522,9 +536,7 @@ class ToolRegistry:
             self._rate_limit_state[name] = []
 
         # Prune old entries
-        self._rate_limit_state[name] = [
-            t for t in self._rate_limit_state[name] if t > window_start
-        ]
+        self._rate_limit_state[name] = [t for t in self._rate_limit_state[name] if t > window_start]
 
         if len(self._rate_limit_state[name]) >= limit:
             return False
@@ -562,6 +574,7 @@ class ToolRegistry:
         TSAR tools are class-based. This creates an async function
         that instantiates and calls the appropriate method.
         """
+
         async def handler(**kwargs: Any) -> Any:
             try:
                 instance = tool_class() if callable(tool_class) else tool_class

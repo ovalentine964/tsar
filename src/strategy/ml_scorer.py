@@ -22,7 +22,7 @@ import json
 import logging
 import pickle
 import time
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
@@ -124,7 +124,8 @@ class MLScorer:
         if len(X) < self._config.min_training_samples:
             logger.info(
                 "ML scorer: insufficient data (%d < %d)",
-                len(X), self._config.min_training_samples,
+                len(X),
+                self._config.min_training_samples,
             )
             return {
                 "status": "insufficient_data",
@@ -142,7 +143,9 @@ class MLScorer:
 
         logger.info(
             "ML scorer trained: %d samples, accuracy=%.3f, features=%d",
-            len(X), metrics.get("accuracy", 0), len(FEATURE_COLUMNS),
+            len(X),
+            metrics.get("accuracy", 0),
+            len(FEATURE_COLUMNS),
         )
         return metrics
 
@@ -172,7 +175,7 @@ class MLScorer:
 
         # Feature contributions (approximate via feature importance)
         contributions = {}
-        for i, fname in enumerate(FEATURE_COLUMNS):
+        for _i, fname in enumerate(FEATURE_COLUMNS):
             importance = self._feature_importance.get(fname, 0.0)
             contributions[fname] = round(importance * features.get(fname, 0.0), 4)
 
@@ -258,8 +261,8 @@ class MLScorer:
 
     def _fit_xgboost(self, X: np.ndarray, y: np.ndarray) -> dict[str, Any]:
         """Train XGBoost classifier."""
-        from sklearn.model_selection import cross_val_score
         import xgboost as xgb
+        from sklearn.model_selection import cross_val_score
 
         self._model = xgb.XGBClassifier(
             n_estimators=100,
@@ -278,7 +281,7 @@ class MLScorer:
 
         # Feature importance
         importances = self._model.feature_importances_
-        self._feature_importance = dict(zip(FEATURE_COLUMNS, importances.tolist()))
+        self._feature_importance = dict(zip(FEATURE_COLUMNS, importances.tolist(), strict=False))
 
         return {
             "status": "trained",
@@ -291,8 +294,8 @@ class MLScorer:
 
     def _fit_lightgbm(self, X: np.ndarray, y: np.ndarray) -> dict[str, Any]:
         """Train LightGBM classifier."""
-        from sklearn.model_selection import cross_val_score
         import lightgbm as lgb
+        from sklearn.model_selection import cross_val_score
 
         self._model = lgb.LGBMClassifier(
             n_estimators=100,
@@ -308,7 +311,7 @@ class MLScorer:
         cv_scores = cross_val_score(self._model, X, y, cv=min(5, len(X) // 5), scoring="accuracy")
 
         importances = self._model.feature_importances_
-        self._feature_importance = dict(zip(FEATURE_COLUMNS, importances.tolist()))
+        self._feature_importance = dict(zip(FEATURE_COLUMNS, importances.tolist(), strict=False))
 
         return {
             "status": "trained",
@@ -331,10 +334,14 @@ class MLScorer:
         self._model = LogisticRegression(random_state=42, max_iter=1000)
         self._model.fit(X_scaled, y)
 
-        cv_scores = cross_val_score(self._model, X_scaled, y, cv=min(5, len(X) // 5), scoring="accuracy")
+        cv_scores = cross_val_score(
+            self._model, X_scaled, y, cv=min(5, len(X) // 5), scoring="accuracy"
+        )
 
         coefs = np.abs(self._model.coef_[0])
-        self._feature_importance = dict(zip(FEATURE_COLUMNS, (coefs / coefs.sum()).tolist()))
+        self._feature_importance = dict(
+            zip(FEATURE_COLUMNS, (coefs / coefs.sum()).tolist(), strict=False)
+        )
 
         # Wrap to handle scaling in predict
         original_model = self._model
@@ -354,12 +361,15 @@ class MLScorer:
         try:
             self._model_path.parent.mkdir(parents=True, exist_ok=True)
             with open(self._model_path, "wb") as f:
-                pickle.dump({
-                    "model": self._model,
-                    "feature_importance": self._feature_importance,
-                    "training_samples": self._training_samples,
-                    "trained_at": time.time(),
-                }, f)
+                pickle.dump(
+                    {
+                        "model": self._model,
+                        "feature_importance": self._feature_importance,
+                        "training_samples": self._training_samples,
+                        "trained_at": time.time(),
+                    },
+                    f,
+                )
             logger.info("ML scorer model saved to %s", self._model_path)
         except Exception:
             logger.warning("Failed to save ML scorer model", exc_info=True)

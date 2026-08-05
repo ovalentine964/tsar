@@ -247,6 +247,7 @@ def from_redis_fields(fields: dict[str, bytes | str]) -> CloudEvent:
     Returns:
         CloudEvent instance.
     """
+
     def _str(v: bytes | str) -> str:
         return v.decode() if isinstance(v, bytes) else v
 

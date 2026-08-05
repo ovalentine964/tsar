@@ -26,7 +26,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import time
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from enum import StrEnum
 from typing import Any
 
@@ -120,6 +120,7 @@ PYTH_PRICE_IDS: dict[str, str] = {
 
 class OracleProvider(StrEnum):
     """Supported oracle providers."""
+
     CHAINLINK = "chainlink"
     PYTH = "pyth"
     ONCHAIN_TWAP = "onchain_twap"
@@ -127,10 +128,11 @@ class OracleProvider(StrEnum):
 
 class DeviationSeverity(StrEnum):
     """Price deviation severity levels."""
-    NORMAL = "normal"        # < 1%
-    WARNING = "warning"      # 1-3%
-    ALERT = "alert"          # 3-5%
-    CRITICAL = "critical"    # > 5%
+
+    NORMAL = "normal"  # < 1%
+    WARNING = "warning"  # 1-3%
+    ALERT = "alert"  # 3-5%
+    CRITICAL = "critical"  # > 5%
 
 
 @dataclass(frozen=True)
@@ -147,6 +149,7 @@ class OraclePrice:
         stale: Whether the price data is considered stale.
         round_id: Chainlink round ID (0 for non-Chainlink).
     """
+
     pair: str
     price: float
     decimals: int
@@ -171,6 +174,7 @@ class TWAPResult:
         std_dev: Standard deviation of prices.
         timestamp: When the TWAP was computed.
     """
+
     pair: str
     twap: float
     window_seconds: int
@@ -194,6 +198,7 @@ class PriceDeviation:
         direction: Whether oracle is "above" or "below" exchange.
         timestamp: When the check was performed.
     """
+
     pair: str
     oracle_price: float
     exchange_price: float
@@ -282,6 +287,7 @@ class OracleClient:
         Uses the first 4 bytes of keccak256 of the function signature.
         """
         import hashlib
+
         sig = f"{function_name}()"
         selector = hashlib.sha3_256(sig.encode()).digest()[:4].hex()
         return f"0x{selector}"
@@ -342,11 +348,11 @@ class OracleClient:
 
         round_id = int(clean[0:64], 16)
         answer = self._decode_int256("0x" + clean[64:128])
-        started_at = int(clean[128:192], 16)
+        int(clean[128:192], 16)
         updated_at = int(clean[192:256], 16)
-        answered_in_round = int(clean[256:320], 16)
+        int(clean[256:320], 16)
 
-        price = answer / (10 ** expected_decimals)
+        price = answer / (10**expected_decimals)
         now = time.time()
         stale = (now - updated_at) > self.staleness_threshold
 
@@ -391,8 +397,7 @@ class OracleClient:
         price_id = PYTH_PRICE_IDS.get(pair_upper)
         if price_id is None:
             raise ValueError(
-                f"Pyth price ID not found for {pair}. "
-                f"Available: {', '.join(PYTH_PRICE_IDS.keys())}"
+                f"Pyth price ID not found for {pair}. Available: {', '.join(PYTH_PRICE_IDS.keys())}"
             )
 
         client = await self._get_client()
@@ -415,7 +420,7 @@ class OracleClient:
         expo = int(price_obj.get("expo", 0))
         publish_time = int(price_obj.get("publishTime", time.time()))
 
-        price = price_raw * (10 ** expo)
+        price = price_raw * (10**expo)
         now = time.time()
         stale = (now - publish_time) > self.staleness_threshold
 
@@ -480,7 +485,7 @@ class OracleClient:
         history.append((timestamp, price))
         # Trim to max size
         if len(history) > self._max_history:
-            self._price_history[pair] = history[-self._max_history:]
+            self._price_history[pair] = history[-self._max_history :]
 
     async def compute_twap(
         self,
@@ -541,12 +546,10 @@ class OracleClient:
             total_weighted += window[i - 1][1] * dt
             total_time += dt
 
-        if total_time == 0:
-            twap = prices[-1]
-        else:
-            twap = total_weighted / total_time
+        twap = prices[-1] if total_time == 0 else total_weighted / total_time
 
         import math
+
         mean = sum(prices) / len(prices)
         variance = sum((p - mean) ** 2 for p in prices) / len(prices)
         std_dev = math.sqrt(variance)
@@ -657,6 +660,7 @@ class OracleClient:
         Returns:
             Dict mapping pair → OraclePrice (skips failures).
         """
+
         async def _fetch_one(p: str) -> tuple[str, OraclePrice | None]:
             try:
                 if provider == OracleProvider.CHAINLINK:

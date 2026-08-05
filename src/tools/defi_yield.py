@@ -15,25 +15,19 @@ All tools are async with caching and graceful degradation.
 
 from __future__ import annotations
 
-import asyncio
 import logging
 import time
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import Any
 
 import httpx
 
 from ..backends.defi.analytics_providers import (
-    DeFiLlamaClient,
     FallbackChain,
-    YieldPool,
 )
 from ..backends.defi.yield_optimizer import (
-    LiquidStakingOption,
-    RebalanceRecommendation,
     RiskScore,
-    YieldOpportunity,
     YieldOptimizer,
 )
 
@@ -218,7 +212,9 @@ class DeFiYieldTools:
                 avg_risk_apy = sum(o.risk_adjusted_apy for o in opportunities) / len(opportunities)
                 chains_seen = {o.chain for o in opportunities}
                 protocols_seen = {o.protocol for o in opportunities}
-                buy_count = sum(1 for o in opportunities if o.recommendation in ("strong_buy", "buy"))
+                buy_count = sum(
+                    1 for o in opportunities if o.recommendation in ("strong_buy", "buy")
+                )
             else:
                 avg_apy = avg_risk_apy = 0.0
                 chains_seen = protocols_seen = set()
@@ -318,7 +314,9 @@ class DeFiYieldTools:
                     "change_7d": tvl_data.tvl_change_7d if tvl_data else 0,
                     "change_30d": tvl_data.tvl_change_30d if tvl_data else 0,
                     "mcap_tvl_ratio": tvl_data.mcap_tvl_ratio if tvl_data else 0,
-                } if tvl_data else None,
+                }
+                if tvl_data
+                else None,
                 "interpretation": self._interpret_risk(risk),
                 "timestamp": datetime.now(UTC).isoformat(),
             }
@@ -427,7 +425,9 @@ class DeFiYieldTools:
                         "token": options[0].token,
                         "apy": options[0].apy,
                         "reasoning": f"Highest composite score ({options[0].composite_score:.2f}) with {options[0].recommendation} rating",
-                    } if options else None,
+                    }
+                    if options
+                    else None,
                     "comparison_count": len(options),
                     "timestamp": datetime.now(UTC).isoformat(),
                 }
@@ -456,18 +456,29 @@ class DeFiYieldTools:
         pools = await dl.get_yield_pools(min_tvl=1_000_000, min_apy=0.5)
 
         matching = [
-            p for p in pools
+            p
+            for p in pools
             if token.lower() in p.symbol.lower()
-            and p.protocol.lower() in [
-                "lido", "rocket-pool", "jito", "marinade", "stride",
-                "pstake", "ankr", "stader", "binance-staking",
-                "native-staking", "cosmos-staking",
+            and p.protocol.lower()
+            in [
+                "lido",
+                "rocket-pool",
+                "jito",
+                "marinade",
+                "stride",
+                "pstake",
+                "ankr",
+                "stader",
+                "binance-staking",
+                "native-staking",
+                "cosmos-staking",
             ]
         ]
 
         # Also include lending protocols (they offer "staking-like" yields)
         lending = [
-            p for p in pools
+            p
+            for p in pools
             if token.lower() in p.symbol.lower()
             and p.protocol.lower() in ["aave-v3", "compound-v3", "morpho", "spark"]
         ]
@@ -497,7 +508,9 @@ class DeFiYieldTools:
                 "protocol": all_options[0].protocol,
                 "chain": all_options[0].chain,
                 "apy": all_options[0].apy,
-            } if all_options else None,
+            }
+            if all_options
+            else None,
             "comparison_count": len(all_options),
             "timestamp": datetime.now(UTC).isoformat(),
         }
@@ -564,18 +577,20 @@ class DeFiYieldTools:
                     rewards = float(pos.get("rewardUsd", 0) or 0)
                     total_rewards += rewards
 
-                    positions.append({
-                        "protocol": protocol,
-                        "chain": chain,
-                        "position_type": pos.get("type", "unknown"),
-                        "symbol": pos.get("symbol", ""),
-                        "balance": float(pos.get("balance", 0) or 0),
-                        "balance_usd": balance_usd,
-                        "apy": float(pos.get("apy", 0) or 0),
-                        "rewards_pending": rewards,
-                        "health_factor": health,
-                        "pool_id": pos.get("pool", ""),
-                    })
+                    positions.append(
+                        {
+                            "protocol": protocol,
+                            "chain": chain,
+                            "position_type": pos.get("type", "unknown"),
+                            "symbol": pos.get("symbol", ""),
+                            "balance": float(pos.get("balance", 0) or 0),
+                            "balance_usd": balance_usd,
+                            "apy": float(pos.get("apy", 0) or 0),
+                            "rewards_pending": rewards,
+                            "health_factor": health,
+                            "pool_id": pos.get("pool", ""),
+                        }
+                    )
 
             # Sort by value
             positions.sort(key=lambda p: p["balance_usd"], reverse=True)
@@ -590,16 +605,20 @@ class DeFiYieldTools:
                 "chain_count": len({p["chain"] for p in positions}),
                 "health": {
                     "min_health_factor": min(health_factors) if health_factors else 0,
-                    "avg_health_factor": round(
-                        sum(health_factors) / len(health_factors), 2
-                    ) if health_factors else 0,
+                    "avg_health_factor": round(sum(health_factors) / len(health_factors), 2)
+                    if health_factors
+                    else 0,
                     "at_risk": any(h < 1.5 for h in health_factors),
                 },
                 "yield_summary": {
                     "weighted_apy": round(
                         sum(p["balance_usd"] * p["apy"] / 100 for p in positions)
-                        / total_value * 100, 2
-                    ) if total_value > 0 else 0,
+                        / total_value
+                        * 100,
+                        2,
+                    )
+                    if total_value > 0
+                    else 0,
                     "total_annual_yield_usd": round(
                         sum(p["balance_usd"] * p["apy"] / 100 for p in positions), 2
                     ),

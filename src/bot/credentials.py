@@ -159,9 +159,7 @@ def decrypt_credentials() -> dict[str, str]:
             result[name] = f.decrypt(encrypted_value.encode()).decode()
         except InvalidToken:
             logger.error("Failed to decrypt credential: %s", name)
-            raise RuntimeError(
-                f"Decryption failed for {name}. Check TSAR_MASTER_KEY."
-            ) from None
+            raise RuntimeError(f"Decryption failed for {name}. Check TSAR_MASTER_KEY.") from None
 
     return result
 
@@ -294,7 +292,7 @@ def restore_encrypted_credentials(backup_path: Path) -> None:
     f = _get_fernet()
     try:
         data = json.loads(backup_path.read_text())
-        for name, enc_val in data.get("credentials", {}).items():
+        for _name, enc_val in data.get("credentials", {}).items():
             f.decrypt(enc_val.encode())
     except (InvalidToken, json.JSONDecodeError) as exc:
         raise RuntimeError(
@@ -313,12 +311,14 @@ async def test_binance_connection(api_key: str, secret: str) -> dict[str, Any]:
     try:
         import ccxt
 
-        exchange = ccxt.binance({
-            "apiKey": api_key,
-            "secret": secret,
-            "sandbox": True,  # Always test with testnet first
-            "enableRateLimit": True,
-        })
+        exchange = ccxt.binance(
+            {
+                "apiKey": api_key,
+                "secret": secret,
+                "sandbox": True,  # Always test with testnet first
+                "enableRateLimit": True,
+            }
+        )
         balance = exchange.fetch_balance()
         usdt = balance.get("USDT", {}).get("free", 0)
         return {

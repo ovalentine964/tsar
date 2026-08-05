@@ -264,22 +264,35 @@ class StrategyGenomes:
             conn.execute(sql, d)
         return perf.snapshot_id
 
-    def get_performance_history(self, strategy_id: str, limit: int = 100) -> list[StrategyPerformance]:
+    def get_performance_history(
+        self, strategy_id: str, limit: int = 100
+    ) -> list[StrategyPerformance]:
         sql = "SELECT * FROM strategy_performance WHERE strategy_id = ? ORDER BY period_end DESC LIMIT ?"
         with self._conn() as conn:
             rows = conn.execute(sql, (strategy_id, limit)).fetchall()
         return [StrategyPerformance(**dict(r)) for r in rows]
 
     def update_genome_stats(
-        self, strategy_id: str, total_trades: int, winning_trades: int,
-        total_pnl: float, sharpe_ratio: float, max_drawdown: float,
-        win_rate: float, profit_factor: float,
-        rolling_sharpe_30d: float | None = None, consecutive_losses: int | None = None,
+        self,
+        strategy_id: str,
+        total_trades: int,
+        winning_trades: int,
+        total_pnl: float,
+        sharpe_ratio: float,
+        max_drawdown: float,
+        win_rate: float,
+        profit_factor: float,
+        rolling_sharpe_30d: float | None = None,
+        consecutive_losses: int | None = None,
     ) -> bool:
         fields: dict[str, Any] = {
-            "total_trades": total_trades, "winning_trades": winning_trades,
-            "total_pnl": total_pnl, "sharpe_ratio": sharpe_ratio,
-            "max_drawdown": max_drawdown, "win_rate": win_rate, "profit_factor": profit_factor,
+            "total_trades": total_trades,
+            "winning_trades": winning_trades,
+            "total_pnl": total_pnl,
+            "sharpe_ratio": sharpe_ratio,
+            "max_drawdown": max_drawdown,
+            "win_rate": win_rate,
+            "profit_factor": profit_factor,
         }
         if rolling_sharpe_30d is not None:
             fields["rolling_sharpe_30d"] = rolling_sharpe_30d
@@ -299,12 +312,19 @@ class StrategyGenomes:
         sql = f"INSERT INTO strategy_mutations ({cols}) VALUES ({placeholders})"
         with self._conn() as conn:
             conn.execute(sql, d)
-        logger.info("mutation_recorded", mutation_id=mutation.mutation_id, strategy_name=mutation.strategy_name)
+        logger.info(
+            "mutation_recorded",
+            mutation_id=mutation.mutation_id,
+            strategy_name=mutation.strategy_name,
+        )
         return mutation.mutation_id
 
     def get_mutations(
-        self, strategy_name: str | None = None, parent_id: str | None = None,
-        mutation_type: str | None = None, limit: int = 50
+        self,
+        strategy_name: str | None = None,
+        parent_id: str | None = None,
+        mutation_type: str | None = None,
+        limit: int = 50,
     ) -> list[StrategyMutation]:
         clauses: list[str] = []
         params: list[Any] = []
@@ -343,8 +363,12 @@ class StrategyGenomes:
         return [dict(r) for r in rows]
 
     def evaluate_gates(
-        self, strategy_id: str, min_trades: int = 30, min_win_rate: float = 0.45,
-        max_consecutive_losses: int = 7, min_profit_factor: float = 1.2
+        self,
+        strategy_id: str,
+        min_trades: int = 30,
+        min_win_rate: float = 0.45,
+        max_consecutive_losses: int = 7,
+        min_profit_factor: float = 1.2,
     ) -> dict[str, bool]:
         genome = self.get_genome(strategy_id)
         if genome is None:
@@ -408,7 +432,9 @@ class StrategyGenomes:
             logger.debug(
                 "apply_shadow_lesson: skipping low-confidence lesson "
                 "(genome=%s, confidence=%.2f, effective=%.2f)",
-                strategy_id, confidence, effective_confidence,
+                strategy_id,
+                confidence,
+                effective_confidence,
             )
             return None
 
@@ -427,14 +453,10 @@ class StrategyGenomes:
         if source == "shadow_losers":
             mutation_type = "risk_tightening"
             # For loss lessons, tighten exit rules
-            proposed_exit = self._build_tighter_exit_rules(
-                genome.exit_rules, conditions, loss_severity
-            )
-            proposed_entry = None
+            self._build_tighter_exit_rules(genome.exit_rules, conditions, loss_severity)
         else:
             mutation_type = "rule_addition"
-            proposed_exit = None
-            proposed_entry = json.dumps(conditions, indent=2) if conditions else None
+            json.dumps(conditions, indent=2) if conditions else None
 
         mutation = StrategyMutation(
             strategy_name=genome.name,
@@ -498,9 +520,11 @@ class StrategyGenomes:
         # Add time-based exit for trades that held too long
         for cond in loss_conditions:
             if cond.get("type") == "holding_period_above":
-                current.append({
-                    "type": "time_exit",
-                    "max_hours": cond.get("value", 48),
-                })
+                current.append(
+                    {
+                        "type": "time_exit",
+                        "max_hours": cond.get("value", 48),
+                    }
+                )
 
         return json.dumps(current, indent=2)

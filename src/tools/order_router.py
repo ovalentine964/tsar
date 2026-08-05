@@ -33,23 +33,21 @@ import asyncio
 import logging
 import time
 import uuid
-from collections import defaultdict
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 
 import numpy as np
 
 if TYPE_CHECKING:
-    from src.interfaces.execution_engine import ExecutionEngine
     from src.interfaces.exchange_gateway import ExchangeGateway
+    from src.interfaces.execution_engine import ExecutionEngine
 
 from src.interfaces.types import (
     Order,
     OrderSide,
     OrderStatus,
     OrderType,
-    TimeInForce,
     Timeframe,
 )
 
@@ -161,14 +159,13 @@ class SmartOrderRouter:
     """
 
     description = (
-        "Smart order routing: TWAP, VWAP, iceberg orders, "
-        "and adaptive large order execution"
+        "Smart order routing: TWAP, VWAP, iceberg orders, and adaptive large order execution"
     )
 
     # Impact thresholds — order size as % of visible liquidity
-    SMALL_ORDER_PCT = 0.01   # < 1% of book → simple execution
+    SMALL_ORDER_PCT = 0.01  # < 1% of book → simple execution
     MEDIUM_ORDER_PCT = 0.05  # 1-5% → moderate splitting
-    LARGE_ORDER_PCT = 0.15   # 5-15% → aggressive splitting
+    LARGE_ORDER_PCT = 0.15  # 5-15% → aggressive splitting
     # > 15% → institutional-grade TWAP/VWAP required
 
     def __init__(
@@ -229,9 +226,7 @@ class SmartOrderRouter:
         except Exception as exc:
             logger.warning("Failed to get orderbook for smart routing: %s", exc)
             # Fallback to direct execution
-            return await self._direct_execute(
-                strategy_id, symbol, side, quantity
-            )
+            return await self._direct_execute(strategy_id, symbol, side, quantity)
 
         # Estimate market impact
         impact_bps = self._estimate_market_impact(book, side, quantity)
@@ -239,14 +234,15 @@ class SmartOrderRouter:
         # Choose strategy based on impact and urgency
         if impact_bps < self.SMALL_ORDER_PCT * 10_000 or urgency == "aggressive":
             # Small order or urgent — execute directly
-            result = await self._direct_execute(
-                strategy_id, symbol, side, quantity
-            )
+            result = await self._direct_execute(strategy_id, symbol, side, quantity)
         elif impact_bps < self.MEDIUM_ORDER_PCT * 10_000:
             # Medium order — moderate time slicing
             slice_count = max(3, int(impact_bps / 2))
             result = await self._sliced_execute(
-                strategy_id, symbol, side, quantity,
+                strategy_id,
+                symbol,
+                side,
+                quantity,
                 num_slices=slice_count,
                 interval_s=self._default_slice_interval_s,
             )
@@ -260,12 +256,18 @@ class SmartOrderRouter:
             # Choose VWAP if we have volume data, TWAP otherwise
             try:
                 result = await self.vwap_execute(
-                    symbol, side, quantity, duration_s=duration_s,
+                    symbol,
+                    side,
+                    quantity,
+                    duration_s=duration_s,
                     parent_id=strategy_id,
                 )
             except Exception:
                 result = await self.twap_execute(
-                    symbol, side, quantity, duration_s=duration_s,
+                    symbol,
+                    side,
+                    quantity,
+                    duration_s=duration_s,
                     parent_id=strategy_id,
                 )
 
@@ -335,8 +337,7 @@ class SmartOrderRouter:
 
         if visible_qty <= 0 or visible_qty > total_quantity:
             raise ValueError(
-                f"visible_qty ({visible_qty}) must be > 0 and <= "
-                f"total_quantity ({total_quantity})"
+                f"visible_qty ({visible_qty}) must be > 0 and <= total_quantity ({total_quantity})"
             )
 
         children: list[ChildOrder] = []
@@ -411,9 +412,7 @@ class SmartOrderRouter:
                     await asyncio.sleep(refresh_delay_s)
 
             except Exception as exc:
-                logger.error(
-                    "Iceberg child %s failed: %s", child_id, exc
-                )
+                logger.error("Iceberg child %s failed: %s", child_id, exc)
                 failed_child = ChildOrder(
                     child_id=child_id,
                     parent_id=strategy_id,
@@ -440,9 +439,10 @@ class SmartOrderRouter:
             filled_quantity=round(filled_qty, 8),
             average_price=round(avg_price, 8),
             total_slippage_bps=round(
-                float(np.mean([
-                    c.slippage_bps for c in children if c.slippage_bps != 0
-                ])) if children else 0.0, 4
+                float(np.mean([c.slippage_bps for c in children if c.slippage_bps != 0]))
+                if children
+                else 0.0,
+                4,
             ),
             total_fee=round(total_fee, 8),
             num_children=len(children),
@@ -505,10 +505,9 @@ class SmartOrderRouter:
                     notional = total_quantity * (
                         book.asks[0].price if side == "buy" else book.bids[0].price
                     )
-                    num_slices = max(2, min(
-                        self._max_child_orders,
-                        int(notional / target_per_slice)
-                    ))
+                    num_slices = max(
+                        2, min(self._max_child_orders, int(notional / target_per_slice))
+                    )
                 else:
                     num_slices = max(2, min(self._max_child_orders, duration_s // 60))
             except Exception:
@@ -545,34 +544,42 @@ class SmartOrderRouter:
                     if side == "buy" and price.last > price_limit:
                         logger.info(
                             "TWAP slice %d skipped: price %.2f > limit %.2f",
-                            i, price.last, price_limit,
+                            i,
+                            price.last,
+                            price_limit,
                         )
-                        children.append(ChildOrder(
-                            child_id=child_id,
-                            parent_id=strategy_id,
-                            symbol=symbol,
-                            side=side,
-                            quantity=current_slice,
-                            price=price_limit,
-                            status="skipped",
-                            placed_at=_utcnow(),
-                        ))
+                        children.append(
+                            ChildOrder(
+                                child_id=child_id,
+                                parent_id=strategy_id,
+                                symbol=symbol,
+                                side=side,
+                                quantity=current_slice,
+                                price=price_limit,
+                                status="skipped",
+                                placed_at=_utcnow(),
+                            )
+                        )
                         continue
                     elif side == "sell" and price.last < price_limit:
                         logger.info(
                             "TWAP slice %d skipped: price %.2f < limit %.2f",
-                            i, price.last, price_limit,
+                            i,
+                            price.last,
+                            price_limit,
                         )
-                        children.append(ChildOrder(
-                            child_id=child_id,
-                            parent_id=strategy_id,
-                            symbol=symbol,
-                            side=side,
-                            quantity=current_slice,
-                            price=price_limit,
-                            status="skipped",
-                            placed_at=_utcnow(),
-                        ))
+                        children.append(
+                            ChildOrder(
+                                child_id=child_id,
+                                parent_id=strategy_id,
+                                symbol=symbol,
+                                side=side,
+                                quantity=current_slice,
+                                price=price_limit,
+                                status="skipped",
+                                placed_at=_utcnow(),
+                            )
+                        )
                         continue
                 except Exception:
                     pass
@@ -616,15 +623,17 @@ class SmartOrderRouter:
 
             except Exception as exc:
                 logger.error("TWAP slice %d failed: %s", i, exc)
-                children.append(ChildOrder(
-                    child_id=child_id,
-                    parent_id=strategy_id,
-                    symbol=symbol,
-                    side=side,
-                    quantity=current_slice,
-                    status="failed",
-                    placed_at=_utcnow(),
-                ))
+                children.append(
+                    ChildOrder(
+                        child_id=child_id,
+                        parent_id=strategy_id,
+                        symbol=symbol,
+                        side=side,
+                        quantity=current_slice,
+                        status="failed",
+                        placed_at=_utcnow(),
+                    )
+                )
                 num_failed += 1
 
         avg_price = total_cost / filled_qty if filled_qty > 0 else 0.0
@@ -639,9 +648,10 @@ class SmartOrderRouter:
             filled_quantity=round(filled_qty, 8),
             average_price=round(avg_price, 8),
             total_slippage_bps=round(
-                float(np.mean([
-                    c.slippage_bps for c in children if c.slippage_bps != 0
-                ])) if children else 0.0, 4
+                float(np.mean([c.slippage_bps for c in children if c.slippage_bps != 0]))
+                if children
+                else 0.0,
+                4,
             ),
             total_fee=round(total_fee, 8),
             num_children=len(children),
@@ -691,9 +701,7 @@ class SmartOrderRouter:
         strategy_id = parent_id or f"VWAP-{uuid.uuid4().hex[:8]}"
 
         # Get volume profile to determine slice sizes
-        volume_weights = await self._get_volume_weights(
-            symbol, duration_s, num_buckets
-        )
+        volume_weights = await self._get_volume_weights(symbol, duration_s, num_buckets)
 
         bucket_interval_s = duration_s / num_buckets
         children: list[ChildOrder] = []
@@ -726,29 +734,24 @@ class SmartOrderRouter:
             if price_limit is not None:
                 try:
                     price = await self._gateway.get_price(symbol)
-                    if side == "buy" and price.last > price_limit:
-                        children.append(ChildOrder(
-                            child_id=child_id,
-                            parent_id=strategy_id,
-                            symbol=symbol,
-                            side=side,
-                            quantity=bucket_qty,
-                            price=price_limit,
-                            status="skipped",
-                            placed_at=_utcnow(),
-                        ))
-                        continue
-                    elif side == "sell" and price.last < price_limit:
-                        children.append(ChildOrder(
-                            child_id=child_id,
-                            parent_id=strategy_id,
-                            symbol=symbol,
-                            side=side,
-                            quantity=bucket_qty,
-                            price=price_limit,
-                            status="skipped",
-                            placed_at=_utcnow(),
-                        ))
+                    if (
+                        side == "buy"
+                        and price.last > price_limit
+                        or side == "sell"
+                        and price.last < price_limit
+                    ):
+                        children.append(
+                            ChildOrder(
+                                child_id=child_id,
+                                parent_id=strategy_id,
+                                symbol=symbol,
+                                side=side,
+                                quantity=bucket_qty,
+                                price=price_limit,
+                                status="skipped",
+                                placed_at=_utcnow(),
+                            )
+                        )
                         continue
                 except Exception:
                     pass
@@ -792,15 +795,17 @@ class SmartOrderRouter:
 
             except Exception as exc:
                 logger.error("VWAP bucket %d failed: %s", i, exc)
-                children.append(ChildOrder(
-                    child_id=child_id,
-                    parent_id=strategy_id,
-                    symbol=symbol,
-                    side=side,
-                    quantity=bucket_qty,
-                    status="failed",
-                    placed_at=_utcnow(),
-                ))
+                children.append(
+                    ChildOrder(
+                        child_id=child_id,
+                        parent_id=strategy_id,
+                        symbol=symbol,
+                        side=side,
+                        quantity=bucket_qty,
+                        status="failed",
+                        placed_at=_utcnow(),
+                    )
+                )
                 num_failed += 1
 
         avg_price = total_cost / filled_qty if filled_qty > 0 else 0.0
@@ -815,9 +820,10 @@ class SmartOrderRouter:
             filled_quantity=round(filled_qty, 8),
             average_price=round(avg_price, 8),
             total_slippage_bps=round(
-                float(np.mean([
-                    c.slippage_bps for c in children if c.slippage_bps != 0
-                ])) if children else 0.0, 4
+                float(np.mean([c.slippage_bps for c in children if c.slippage_bps != 0]))
+                if children
+                else 0.0,
+                4,
             ),
             total_fee=round(total_fee, 8),
             num_children=len(children),
@@ -859,10 +865,7 @@ class SmartOrderRouter:
         mid_price = (book.bids[0].price + book.asks[0].price) / 2
 
         # Walk the book to simulate fill
-        if side == "buy":
-            levels = book.asks
-        else:
-            levels = book.bids
+        levels = book.asks if side == "buy" else book.bids
 
         remaining = quantity
         total_cost = 0.0
@@ -907,7 +910,7 @@ class SmartOrderRouter:
 
         first_price = prices[0]
         last_price = prices[-1]
-        avg_all = float(np.mean(prices))
+        float(np.mean(prices))
 
         # Drift from first to last
         drift = abs(last_price - first_price) / first_price * 10_000
@@ -1038,15 +1041,17 @@ class SmartOrderRouter:
 
             except Exception as exc:
                 logger.error("Slice %d failed: %s", i, exc)
-                children.append(ChildOrder(
-                    child_id=child_id,
-                    parent_id=strategy_id,
-                    symbol=symbol,
-                    side=side,
-                    quantity=current_slice,
-                    status="failed",
-                    placed_at=_utcnow(),
-                ))
+                children.append(
+                    ChildOrder(
+                        child_id=child_id,
+                        parent_id=strategy_id,
+                        symbol=symbol,
+                        side=side,
+                        quantity=current_slice,
+                        status="failed",
+                        placed_at=_utcnow(),
+                    )
+                )
 
         avg_price = total_cost / filled_qty if filled_qty > 0 else 0.0
 
@@ -1059,9 +1064,10 @@ class SmartOrderRouter:
             filled_quantity=round(filled_qty, 8),
             average_price=round(avg_price, 8),
             total_slippage_bps=round(
-                float(np.mean([
-                    c.slippage_bps for c in children if c.slippage_bps != 0
-                ])) if children else 0.0, 4
+                float(np.mean([c.slippage_bps for c in children if c.slippage_bps != 0]))
+                if children
+                else 0.0,
+                4,
             ),
             total_fee=round(total_fee, 8),
             num_children=len(children),
@@ -1097,9 +1103,7 @@ class SmartOrderRouter:
             # Get enough candles to cover the duration
             # Use 1m candles for fine granularity
             limit = min(500, max(num_buckets * 2, duration_s // 60))
-            ohlcv = await self._gateway.get_ohlcv(
-                symbol, Timeframe.M1, limit=limit
-            )
+            ohlcv = await self._gateway.get_ohlcv(symbol, Timeframe.M1, limit=limit)
 
             if not ohlcv:
                 # Equal weight fallback

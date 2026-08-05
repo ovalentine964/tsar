@@ -121,9 +121,15 @@ class FactorWeights:
 
     def validate(self) -> None:
         total = (
-            self.rsi + self.sr_proximity + self.volume + self.trend
-            + self.multi_timeframe + self.macro + self.news
-            + self.fundamental + self.sentiment
+            self.rsi
+            + self.sr_proximity
+            + self.volume
+            + self.trend
+            + self.multi_timeframe
+            + self.macro
+            + self.news
+            + self.fundamental
+            + self.sentiment
         )
         if abs(total - 1.0) > 0.001:
             raise ValueError(f"Weights must sum to 1.0, got {total:.4f}")
@@ -152,10 +158,10 @@ HIGH_IMPACT_WEIGHTS = FactorWeights(
     volume=0.05,
     trend=0.05,
     multi_timeframe=0.07,
-    macro=0.25,       # BOOSTED
-    news=0.18,        # BOOSTED
+    macro=0.25,  # BOOSTED
+    news=0.18,  # BOOSTED
     fundamental=0.07,
-    sentiment=0.15,   # Slightly boosted
+    sentiment=0.15,  # Slightly boosted
 )
 
 # Weights during medium-impact events (NFP, GDP)
@@ -165,8 +171,8 @@ MEDIUM_IMPACT_WEIGHTS = FactorWeights(
     volume=0.07,
     trend=0.07,
     multi_timeframe=0.09,
-    macro=0.20,       # Moderately boosted
-    news=0.15,        # Moderately boosted
+    macro=0.20,  # Moderately boosted
+    news=0.15,  # Moderately boosted
     fundamental=0.08,
     sentiment=0.10,
 )
@@ -214,8 +220,7 @@ class EventDrivenRules:
 
                 if hours_diff < blackout_hours:
                     return True, (
-                        f"FOMC blackout: {event.event} at {event.time} "
-                        f"({hours_diff:.1f}h away)"
+                        f"FOMC blackout: {event.event} at {event.time} ({hours_diff:.1f}h away)"
                     )
             except (ValueError, TypeError):
                 continue
@@ -233,7 +238,7 @@ class EventDrivenRules:
         """
         for event in calendar.inflation_events:
             if event.days_until == 0 and "cpi" in event.event.lower():
-                return True, 0.5, f"CPI day: position reduced to 50%"
+                return True, 0.5, "CPI day: position reduced to 50%"
 
         return False, 1.0, ""
 
@@ -403,11 +408,16 @@ class FundamentalScorer:
 
         calendar_task = asyncio.create_task(self._get_calendar())
         news_task = asyncio.create_task(self._news_aggregator.get_news_digest(symbol, limit=20))
-        fundamental_task = asyncio.create_task(self._fundamental_tools.get_project_fundamentals(symbol))
+        fundamental_task = asyncio.create_task(
+            self._fundamental_tools.get_project_fundamentals(symbol)
+        )
         sentiment_task = asyncio.create_task(self._sentiment_analyzer.get_social_sentiment(symbol))
 
         results = await asyncio.gather(
-            calendar_task, news_task, fundamental_task, sentiment_task,
+            calendar_task,
+            news_task,
+            fundamental_task,
+            sentiment_task,
             return_exceptions=True,
         )
 
@@ -423,14 +433,20 @@ class FundamentalScorer:
         sentiment_score = self._compute_sentiment_score(sentiment)
 
         # Count confirming factors
-        buy_count = sum(1 for s in [macro_score, news_score, fundamental_score, sentiment_score] if s > 0.0)
-        sell_count = sum(1 for s in [macro_score, news_score, fundamental_score, sentiment_score] if s < 0.0)
+        buy_count = sum(
+            1 for s in [macro_score, news_score, fundamental_score, sentiment_score] if s > 0.0
+        )
+        sell_count = sum(
+            1 for s in [macro_score, news_score, fundamental_score, sentiment_score] if s < 0.0
+        )
 
         # Event-driven rules
         is_allowed, event_reason, event_multiplier = True, "No event restrictions", 1.0
         if calendar:
             is_allowed, event_reason, event_multiplier = EventDrivenRules.evaluate_all(
-                symbol, calendar, news,
+                symbol,
+                calendar,
+                news,
             )
 
         result = FundamentalFactors(
@@ -531,7 +547,7 @@ class FundamentalScorer:
                     forecast = float(event.forecast.replace("%", ""))
                     prev = float(event.previous.replace("%", ""))
                     if forecast < prev:
-                        return 0.6   # Rate cut = bullish
+                        return 0.6  # Rate cut = bullish
                     elif forecast > prev:
                         return -0.6  # Rate hike = bearish
                 except ValueError:
@@ -545,7 +561,7 @@ class FundamentalScorer:
                     forecast = float(event.forecast.replace("%", ""))
                     prev = float(event.previous.replace("%", ""))
                     if forecast < prev:
-                        return 0.4   # Cooling inflation = bullish
+                        return 0.4  # Cooling inflation = bullish
                     elif forecast > prev:
                         return -0.4  # Rising inflation = bearish
                 except ValueError:
@@ -560,7 +576,7 @@ class FundamentalScorer:
                     if forecast > prev:
                         return -0.3  # Strong jobs = hawkish = bearish
                     elif forecast < prev:
-                        return 0.3   # Weak jobs = dovish = bullish
+                        return 0.3  # Weak jobs = dovish = bullish
                 except ValueError:
                     pass
             return 0.0
@@ -730,13 +746,13 @@ class FundamentalScorer:
         fg = sentiment.fear_greed_index
 
         if fg <= 10:
-            fg_signal = 0.9   # Extreme fear → strong buy
+            fg_signal = 0.9  # Extreme fear → strong buy
         elif fg <= 25:
-            fg_signal = 0.6   # Fear → buy
+            fg_signal = 0.6  # Fear → buy
         elif fg <= 40:
-            fg_signal = 0.3   # Cautious → mild buy
+            fg_signal = 0.3  # Cautious → mild buy
         elif fg <= 60:
-            fg_signal = 0.0   # Neutral
+            fg_signal = 0.0  # Neutral
         elif fg <= 75:
             fg_signal = -0.3  # Greed → mild sell
         elif fg <= 90:

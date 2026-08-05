@@ -22,8 +22,9 @@ The session manager determines:
 from __future__ import annotations
 
 import logging
-from dataclasses import dataclass, field
-from datetime import UTC, datetime, time as dt_time
+from dataclasses import dataclass
+from datetime import UTC, datetime
+from datetime import time as dt_time
 from enum import StrEnum
 from typing import Any
 
@@ -66,23 +67,23 @@ class SessionInfo:
 # ── Session definitions ────────────────────────────────────────────
 
 _SESSION_TIMES: dict[Session, tuple[dt_time, dt_time]] = {
-    Session.SYDNEY:   (dt_time(22, 0), dt_time(7, 0)),
-    Session.TOKYO:    (dt_time(0, 0),  dt_time(9, 0)),
-    Session.LONDON:   (dt_time(7, 0),  dt_time(16, 0)),
+    Session.SYDNEY: (dt_time(22, 0), dt_time(7, 0)),
+    Session.TOKYO: (dt_time(0, 0), dt_time(9, 0)),
+    Session.LONDON: (dt_time(7, 0), dt_time(16, 0)),
     Session.NEW_YORK: (dt_time(12, 0), dt_time(21, 0)),
 }
 
 _SESSION_PAIRS: dict[Session, tuple[str, ...]] = {
-    Session.SYDNEY:   ("AUD/USD", "NZD/USD"),
-    Session.TOKYO:    ("USD/JPY", "AUD/JPY"),
-    Session.LONDON:   ("EUR/USD", "GBP/USD", "EUR/GBP"),
+    Session.SYDNEY: ("AUD/USD", "NZD/USD"),
+    Session.TOKYO: ("USD/JPY", "AUD/JPY"),
+    Session.LONDON: ("EUR/USD", "GBP/USD", "EUR/GBP"),
     Session.NEW_YORK: ("EUR/USD", "GBP/USD", "USD/CAD"),
 }
 
 _SESSION_LIQUIDITY: dict[Session, LiquidityLevel] = {
-    Session.SYDNEY:   LiquidityLevel.LOW,
-    Session.TOKYO:    LiquidityLevel.MODERATE,
-    Session.LONDON:   LiquidityLevel.HIGH,
+    Session.SYDNEY: LiquidityLevel.LOW,
+    Session.TOKYO: LiquidityLevel.MODERATE,
+    Session.LONDON: LiquidityLevel.HIGH,
     Session.NEW_YORK: LiquidityLevel.HIGH,
 }
 
@@ -113,12 +114,16 @@ class SessionManager:
             # Boost score during peak liquidity
     """
 
-    def __init__(self, config: dict[str, Any] | None = None, *, genome: dict[str, Any] | None = None) -> None:
+    def __init__(
+        self, config: dict[str, Any] | None = None, *, genome: dict[str, Any] | None = None
+    ) -> None:
         self._config = config or genome or {}
         self._session_config = self._config.get("sessions", {})
-        self._overlap_mult = self._config.get("mutable_parameters", {}).get(
-            "session_overlap_mult", {}
-        ).get("current", 1.5)
+        self._overlap_mult = (
+            self._config.get("mutable_parameters", {})
+            .get("session_overlap_mult", {})
+            .get("current", 1.5)
+        )
 
     def get_session_info(self, now: datetime | None = None) -> SessionInfo:
         """Get the current session state.
@@ -142,8 +147,7 @@ class SessionManager:
         # Determine primary session (highest liquidity)
         primary: Session | None = None
         if active:
-            priority = {Session.LONDON: 4, Session.NEW_YORK: 3,
-                        Session.TOKYO: 2, Session.SYDNEY: 1}
+            priority = {Session.LONDON: 4, Session.NEW_YORK: 3, Session.TOKYO: 2, Session.SYDNEY: 1}
             primary = max(active, key=lambda s: priority.get(s, 0))
 
         # Check overlaps
@@ -240,9 +244,7 @@ class SessionManager:
 
         return None, False
 
-    def _determine_liquidity(
-        self, active: list[Session], is_overlap: bool
-    ) -> LiquidityLevel:
+    def _determine_liquidity(self, active: list[Session], is_overlap: bool) -> LiquidityLevel:
         """Determine the current liquidity level."""
         if is_overlap:
             # London/NY overlap = peak
@@ -255,13 +257,15 @@ class SessionManager:
 
         # Use the highest liquidity among active sessions
         levels = [_SESSION_LIQUIDITY.get(s, LiquidityLevel.LOW) for s in active]
-        priority = {LiquidityLevel.PEAK: 4, LiquidityLevel.HIGH: 3,
-                    LiquidityLevel.MODERATE: 2, LiquidityLevel.LOW: 1}
+        priority = {
+            LiquidityLevel.PEAK: 4,
+            LiquidityLevel.HIGH: 3,
+            LiquidityLevel.MODERATE: 2,
+            LiquidityLevel.LOW: 1,
+        }
         return max(levels, key=lambda l: priority.get(l, 0))
 
-    def _determine_bias(
-        self, active: list[Session], is_overlap: bool
-    ) -> str:
+    def _determine_bias(self, active: list[Session], is_overlap: bool) -> str:
         """Determine behavioral bias from active sessions."""
         if is_overlap:
             if Session.LONDON in active and Session.NEW_YORK in active:

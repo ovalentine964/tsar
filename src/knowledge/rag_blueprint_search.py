@@ -15,7 +15,6 @@ Requires: nvidia-rag (pip install nvidia-rag) or NVIDIA NIM API
 from __future__ import annotations
 
 import asyncio
-import logging
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -31,6 +30,7 @@ try:
         Reranker,
         SemanticChunker,
     )
+
     RAG_BLUEPRINT_AVAILABLE = True
     logger.info("rag_blueprint_available", msg="NVIDIA RAG Blueprint enabled")
 except ImportError:
@@ -41,8 +41,7 @@ except ImportError:
 
         def __init__(self, *args: Any, **kwargs: Any) -> None:
             raise ImportError(
-                "NVIDIA RAG Blueprint not installed. "
-                "Install with: pip install nvidia-rag"
+                "NVIDIA RAG Blueprint not installed. Install with: pip install nvidia-rag"
             )
 
     Reranker = _Stub  # type: ignore[assignment,misc]
@@ -136,9 +135,7 @@ class RAGBlueprintSearch:
         if self._available:
             try:
                 rerank_cfg = self._config.get("reranking", {})
-                model_name = rerank_cfg.get(
-                    "model", "nvidia/nv-rerankqa-mistral-4b-v3"
-                )
+                model_name = rerank_cfg.get("model", "nvidia/nv-rerankqa-mistral-4b-v3")
                 self._reranker = Reranker(model=model_name)
                 logger.info("rag_reranker_initialized", model=model_name)
             except Exception as exc:
@@ -395,9 +392,7 @@ class RAGBlueprintSearch:
 
         return enriched
 
-    async def _fetch_context(
-        self, store: str, record_id: str
-    ) -> str:
+    async def _fetch_context(self, store: str, record_id: str) -> str:
         """Fetch expanded context for a record from the database."""
         assert self._recall._db is not None
 

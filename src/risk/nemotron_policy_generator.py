@@ -16,7 +16,6 @@ Requires: NVIDIA NIM API (NVIDIA_API_KEY env var)
 from __future__ import annotations
 
 import json
-import logging
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -25,6 +24,7 @@ from src.utils.logging import get_logger
 logger = get_logger(__name__)
 
 # ── Nemotron availability check ─────────────────────────────
+
 
 def _check_nemotron_available() -> bool:
     """Check if Nemotron NIM is reachable.
@@ -174,16 +174,20 @@ class NemotronPolicyGenerator:
         self._min_backtest_sharpe = val_cfg.get("min_backtest_sharpe", 0.5)
 
         # Policy categories
-        self._categories = self._config.get("categories", [
-            "position_limits",
-            "drawdown_rules",
-            "correlation_limits",
-            "volatility_adjustments",
-            "regime_adaptive_rules",
-        ])
+        self._categories = self._config.get(
+            "categories",
+            [
+                "position_limits",
+                "drawdown_rules",
+                "correlation_limits",
+                "volatility_adjustments",
+                "regime_adaptive_rules",
+            ],
+        )
 
         # Check for API key
         import os
+
         self._api_key = os.environ.get("NVIDIA_API_KEY", "")
 
         if not self._available:
@@ -232,9 +236,7 @@ class NemotronPolicyGenerator:
         assert NEMOTRON_AVAILABLE
 
         # Build prompt
-        prompt = self._build_generation_prompt(
-            market_context, performance_data, existing_policies
-        )
+        prompt = self._build_generation_prompt(market_context, performance_data, existing_policies)
 
         try:
             # Call NVIDIA NIM API
@@ -252,7 +254,7 @@ class NemotronPolicyGenerator:
                         p.approved = True
 
             policy_set = PolicySet(
-                policies=policies[:self._max_policies],
+                policies=policies[: self._max_policies],
                 generation_method="nemotron",
                 total_generated=len(policies),
                 approved_count=sum(1 for p in policies if p.approved),
@@ -297,7 +299,7 @@ Recent Trading Performance:
 Existing Risk Policies:
 {existing_str}
 
-Generate risk policies for the following categories: {', '.join(self._categories)}
+Generate risk policies for the following categories: {", ".join(self._categories)}
 
 For each policy, provide:
 1. Category (from the list above)
@@ -439,109 +441,125 @@ Be conservative. Err on the side of caution. Trading capital preservation is par
         policies = []
 
         # Position limits
-        policies.append(RiskPolicy(
-            policy_id="static_pos_001",
-            category="position_limits",
-            name="Max Single Position",
-            description="Maximum notional value per position as % of equity",
-            rule={"max_single_position_pct": 0.15},
-            confidence=1.0,
-            source="static",
-            approved=True,
-        ))
+        policies.append(
+            RiskPolicy(
+                policy_id="static_pos_001",
+                category="position_limits",
+                name="Max Single Position",
+                description="Maximum notional value per position as % of equity",
+                rule={"max_single_position_pct": 0.15},
+                confidence=1.0,
+                source="static",
+                approved=True,
+            )
+        )
 
-        policies.append(RiskPolicy(
-            policy_id="static_pos_002",
-            category="position_limits",
-            name="Max Open Positions",
-            description="Maximum number of concurrent open positions",
-            rule={"max_open_positions": 10},
-            confidence=1.0,
-            source="static",
-            approved=True,
-        ))
+        policies.append(
+            RiskPolicy(
+                policy_id="static_pos_002",
+                category="position_limits",
+                name="Max Open Positions",
+                description="Maximum number of concurrent open positions",
+                rule={"max_open_positions": 10},
+                confidence=1.0,
+                source="static",
+                approved=True,
+            )
+        )
 
         # Drawdown rules
-        policies.append(RiskPolicy(
-            policy_id="static_dd_001",
-            category="drawdown_rules",
-            name="Daily Loss Limit",
-            description="Maximum daily loss before halting trading",
-            rule={"daily_loss_flatten": -0.02, "daily_loss_kill": -0.03},
-            confidence=1.0,
-            source="static",
-            approved=True,
-        ))
+        policies.append(
+            RiskPolicy(
+                policy_id="static_dd_001",
+                category="drawdown_rules",
+                name="Daily Loss Limit",
+                description="Maximum daily loss before halting trading",
+                rule={"daily_loss_flatten": -0.02, "daily_loss_kill": -0.03},
+                confidence=1.0,
+                source="static",
+                approved=True,
+            )
+        )
 
-        policies.append(RiskPolicy(
-            policy_id="static_dd_002",
-            category="drawdown_rules",
-            name="Max Drawdown",
-            description="Maximum drawdown from high water mark",
-            rule={"max_drawdown_halt": -0.05, "max_drawdown_flatten": -0.15},
-            confidence=1.0,
-            source="static",
-            approved=True,
-        ))
+        policies.append(
+            RiskPolicy(
+                policy_id="static_dd_002",
+                category="drawdown_rules",
+                name="Max Drawdown",
+                description="Maximum drawdown from high water mark",
+                rule={"max_drawdown_halt": -0.05, "max_drawdown_flatten": -0.15},
+                confidence=1.0,
+                source="static",
+                approved=True,
+            )
+        )
 
         # Correlation limits
-        policies.append(RiskPolicy(
-            policy_id="static_corr_001",
-            category="correlation_limits",
-            name="Max Correlation",
-            description="Maximum correlation between positions",
-            rule={"max_correlation": 0.7, "max_sector_concentration_pct": 0.30},
-            confidence=0.9,
-            source="static",
-            approved=True,
-        ))
+        policies.append(
+            RiskPolicy(
+                policy_id="static_corr_001",
+                category="correlation_limits",
+                name="Max Correlation",
+                description="Maximum correlation between positions",
+                rule={"max_correlation": 0.7, "max_sector_concentration_pct": 0.30},
+                confidence=0.9,
+                source="static",
+                approved=True,
+            )
+        )
 
         # Volatility adjustments
         regime = (market_context or {}).get("regime", "normal")
         if regime == "high_volatility":
-            policies.append(RiskPolicy(
-                policy_id="static_vol_001",
-                category="volatility_adjustments",
-                name="High Volatility Position Reduction",
-                description="Reduce position sizes during high volatility",
-                rule={
-                    "size_multiplier": 0.5,
-                    "trigger": "atr_above_2x_average",
-                },
-                confidence=0.85,
-                source="static",
-                approved=True,
-            ))
+            policies.append(
+                RiskPolicy(
+                    policy_id="static_vol_001",
+                    category="volatility_adjustments",
+                    name="High Volatility Position Reduction",
+                    description="Reduce position sizes during high volatility",
+                    rule={
+                        "size_multiplier": 0.5,
+                        "trigger": "atr_above_2x_average",
+                    },
+                    confidence=0.85,
+                    source="static",
+                    approved=True,
+                )
+            )
 
         # Regime-adaptive rules
         if regime == "trending":
-            policies.append(RiskPolicy(
-                policy_id="static_regime_001",
-                category="regime_adaptive_rules",
-                name="Trending Market Momentum Bias",
-                description="Favor momentum strategies in trending markets",
-                rule={
-                    "strategy_weight_boost": {"momentum": 1.5, "mean_reversion": 0.7},
-                    "stop_loss_pct": 0.03,  # Wider stops in trends
-                },
-                confidence=0.7,
-                source="static",
-                approved=True,
-            ))
+            policies.append(
+                RiskPolicy(
+                    policy_id="static_regime_001",
+                    category="regime_adaptive_rules",
+                    name="Trending Market Momentum Bias",
+                    description="Favor momentum strategies in trending markets",
+                    rule={
+                        "strategy_weight_boost": {"momentum": 1.5, "mean_reversion": 0.7},
+                        "stop_loss_pct": 0.03,  # Wider stops in trends
+                    },
+                    confidence=0.7,
+                    source="static",
+                    approved=True,
+                )
+            )
         elif regime == "ranging":
-            policies.append(RiskPolicy(
-                policy_id="static_regime_002",
-                category="regime_adaptive_rules",
-                name="Range-Bound Mean Reversion Bias",
-                description="Favor mean reversion in range-bound markets",
-                rule={
-                    "strategy_weight_boost": {"mean_reversion": 1.5, "momentum": 0.7},
-                    "stop_loss_pct": 0.015,  # Tighter stops in ranges
-                },
-                confidence=0.7,
-                source="static",
-                approved=True,
-            ))
+            policies.append(
+                RiskPolicy(
+                    policy_id="static_regime_002",
+                    category="regime_adaptive_rules",
+                    name="Range-Bound Mean Reversion Bias",
+                    description="Favor mean reversion in range-bound markets",
+                    rule={
+                        "strategy_weight_boost": {"mean_reversion": 1.5, "momentum": 0.7},
+                        "stop_loss_pct": 0.015,  # Tighter stops in ranges
+                    },
+                    confidence=0.7,
+                    source="static",
+                    approved=True,
+                )
+            )
 
         return PolicySet(
             policies=policies,

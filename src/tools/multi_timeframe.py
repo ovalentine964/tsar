@@ -21,13 +21,13 @@ Usage:
 from __future__ import annotations
 
 import logging
-from dataclasses import dataclass, field
-from typing import Any
+from dataclasses import dataclass
+from typing import TYPE_CHECKING, Any
 
 import numpy as np
-import pandas as pd
 
-from src.interfaces.types import OHLCV
+if TYPE_CHECKING:
+    from src.interfaces.types import OHLCV
 
 logger = logging.getLogger(__name__)
 
@@ -193,9 +193,14 @@ class MultiTimeframeAnalyzer:
             except Exception as exc:
                 logger.debug("MTF analysis failed for %s %s: %s", symbol, tf, exc)
                 signals[tf] = TimeframeSignal(
-                    timeframe=tf, direction="neutral", strength=0.0,
-                    rsi=50.0, macd_histogram=0.0, trend="flat",
-                    key_levels={}, weight=self._tf_weights.get(tf, 0.5),
+                    timeframe=tf,
+                    direction="neutral",
+                    strength=0.0,
+                    rsi=50.0,
+                    macd_histogram=0.0,
+                    trend="flat",
+                    key_levels={},
+                    weight=self._tf_weights.get(tf, 0.5),
                 )
 
         # Weighted aggregation
@@ -210,14 +215,17 @@ class MultiTimeframeAnalyzer:
         # Confluence score
         if signals:
             agree_count = sum(
-                1 for s in signals.values()
+                1
+                for s in signals.values()
                 if s.direction == weighted_dir or s.direction == "neutral"
             )
             confluence = agree_count / len(signals)
         else:
             confluence = 0.0
 
-        summary = self._build_summary(symbol, signals, weighted_dir, weighted_str, confluence, zones)
+        summary = self._build_summary(
+            symbol, signals, weighted_dir, weighted_str, confluence, zones
+        )
 
         return MultiTimeframeResult(
             symbol=symbol,
@@ -250,9 +258,14 @@ class MultiTimeframeAnalyzer:
         """
         if len(ohlcv) < 26:
             return TimeframeSignal(
-                timeframe=tf, direction="neutral", strength=0.0,
-                rsi=50.0, macd_histogram=0.0, trend="flat",
-                key_levels={}, weight=self._tf_weights.get(tf, 0.5),
+                timeframe=tf,
+                direction="neutral",
+                strength=0.0,
+                rsi=50.0,
+                macd_histogram=0.0,
+                trend="flat",
+                key_levels={},
+                weight=self._tf_weights.get(tf, 0.5),
             )
 
         closes = np.array([c.close for c in ohlcv], dtype=float)
@@ -295,11 +308,19 @@ class MultiTimeframeAnalyzer:
         # MACD contribution
         if histogram > 0:
             bull_score += 0.3
-            if len(macd_line) >= 2 and macd_line[-2] < signal_line[-2] and macd_line[-1] > signal_line[-1]:
+            if (
+                len(macd_line) >= 2
+                and macd_line[-2] < signal_line[-2]
+                and macd_line[-1] > signal_line[-1]
+            ):
                 bull_score += 0.1  # Bullish crossover
         elif histogram < 0:
             bear_score += 0.3
-            if len(macd_line) >= 2 and macd_line[-2] > signal_line[-2] and macd_line[-1] < signal_line[-1]:
+            if (
+                len(macd_line) >= 2
+                and macd_line[-2] > signal_line[-2]
+                and macd_line[-1] < signal_line[-1]
+            ):
                 bear_score += 0.1  # Bearish crossover
 
         # Trend contribution
@@ -397,7 +418,9 @@ class MultiTimeframeAnalyzer:
         all_levels: list[tuple[str, str, float]] = []  # (tf, level_type, price)
         for tf, sig in signals.items():
             for level_name, level_price in sig.key_levels.items():
-                level_type = "support" if "support" in level_name or "pivot" in level_name else "resistance"
+                level_type = (
+                    "support" if "support" in level_name or "pivot" in level_name else "resistance"
+                )
                 all_levels.append((tf, level_type, level_price))
 
         if not all_levels:
@@ -412,7 +435,7 @@ class MultiTimeframeAnalyzer:
             cluster_prices = [price_a]
             cluster_type = type_a
 
-            for j, (tf_b, type_b, price_b) in enumerate(all_levels):
+            for j, (tf_b, _type_b, price_b) in enumerate(all_levels):
                 if j == i or j in used:
                     continue
                 if price_a > 0 and abs(price_a - price_b) / price_a < 0.01:
@@ -427,15 +450,17 @@ class MultiTimeframeAnalyzer:
                 center = float(np.mean(cluster_prices))
                 strength = min(1.0, len(cluster_tfs) / max(len(signals), 1))
 
-                zones.append(ConfluenceZone(
-                    zone_type=cluster_type,
-                    price_low=round(low_p, 8),
-                    price_high=round(high_p, 8),
-                    center=round(center, 8),
-                    strength=round(strength, 3),
-                    timeframes_involved=tuple(cluster_tfs),
-                    touches=len(cluster_tfs),
-                ))
+                zones.append(
+                    ConfluenceZone(
+                        zone_type=cluster_type,
+                        price_low=round(low_p, 8),
+                        price_high=round(high_p, 8),
+                        center=round(center, 8),
+                        strength=round(strength, 3),
+                        timeframes_involved=tuple(cluster_tfs),
+                        touches=len(cluster_tfs),
+                    )
+                )
 
         # Sort by strength descending
         zones.sort(key=lambda z: z.strength, reverse=True)
@@ -517,7 +542,7 @@ class MultiTimeframeAnalyzer:
         ema[:period] = np.mean(data[:period])
         for i in range(period, len(data)):
             ema[i] = alpha * data[i] + (1 - alpha) * ema[i - 1]
-        return ema[period - 1:]
+        return ema[period - 1 :]
 
     @staticmethod
     def _compute_key_levels(
@@ -574,11 +599,15 @@ class MultiTimeframeAnalyzer:
         # Per-TF summary
         for tf, sig in sorted(signals.items()):
             arrow = "🟢" if sig.direction == "buy" else "🔴" if sig.direction == "sell" else "⚪"
-            parts.append(f"  {arrow} {tf}: {sig.direction.upper()} (str={sig.strength:.2f}, RSI={sig.rsi:.1f}, trend={sig.trend})")
+            parts.append(
+                f"  {arrow} {tf}: {sig.direction.upper()} (str={sig.strength:.2f}, RSI={sig.rsi:.1f}, trend={sig.trend})"
+            )
 
         # Consensus
         emoji = "🟢" if direction == "buy" else "🔴" if direction == "sell" else "⚪"
-        parts.append(f"\n{emoji} Consensus: {direction.upper()} (strength={strength:.2f}, confluence={confluence:.0%})")
+        parts.append(
+            f"\n{emoji} Consensus: {direction.upper()} (strength={strength:.2f}, confluence={confluence:.0%})"
+        )
 
         # Confluence zones
         if zones:

@@ -122,10 +122,7 @@ class TakeProfitCalculator:
 
         reward_per_unit = risk_per_unit * target
 
-        if side == "buy":
-            tp_price = entry_price + reward_per_unit
-        else:
-            tp_price = entry_price - reward_per_unit
+        tp_price = entry_price + reward_per_unit if side == "buy" else entry_price - reward_per_unit
 
         # Ensure TP is positive
         tp_price = max(0.0001, tp_price)
@@ -297,10 +294,7 @@ class TakeProfitCalculator:
         # If R:R is below minimum, extend TP to meet it
         if not meets_min_rr:
             min_reward = risk_per_unit * self._min_rr_ratio
-            if side == "buy":
-                tp_price = entry_price + min_reward
-            else:
-                tp_price = entry_price - min_reward
+            tp_price = entry_price + min_reward if side == "buy" else entry_price - min_reward
 
             reward_per_unit = abs(tp_price - entry_price)
             rr_ratio = self._min_rr_ratio

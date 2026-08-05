@@ -17,9 +17,8 @@ from __future__ import annotations
 import logging
 import time
 from collections import deque
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from enum import StrEnum
-from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -28,9 +27,9 @@ class LiquidityState(StrEnum):
     """Current liquidity condition."""
 
     NORMAL = "NORMAL"
-    THIN = "THIN"           # Reduced depth, wider spreads
-    DEGRADED = "DEGRADE"    # Significantly reduced liquidity
-    CRITICAL = "CRITICAL"   # Dangerous — halt entries
+    THIN = "THIN"  # Reduced depth, wider spreads
+    DEGRADED = "DEGRADE"  # Significantly reduced liquidity
+    CRITICAL = "CRITICAL"  # Dangerous — halt entries
 
 
 @dataclass(frozen=True)
@@ -38,24 +37,24 @@ class LiquidityConfig:
     """Immutable configuration for liquidity monitoring."""
 
     # Depth thresholds
-    min_depth_usd: float = 100_000.0     # Min $100k within 2% of mid
-    depth_warning_usd: float = 200_000.0 # Warning below $200k
-    depth_pct_from_mid: float = 0.02     # Measure depth within 2% of mid-price
+    min_depth_usd: float = 100_000.0  # Min $100k within 2% of mid
+    depth_warning_usd: float = 200_000.0  # Warning below $200k
+    depth_pct_from_mid: float = 0.02  # Measure depth within 2% of mid-price
 
     # Spread thresholds
-    max_spread_bps: float = 50.0         # 50 bps max spread (0.5%)
-    warning_spread_bps: float = 30.0     # 30 bps warning
-    spread_lookback: int = 100           # Historical spread samples for baseline
+    max_spread_bps: float = 50.0  # 50 bps max spread (0.5%)
+    warning_spread_bps: float = 30.0  # 30 bps warning
+    spread_lookback: int = 100  # Historical spread samples for baseline
 
     # Position size adjustments
-    thin_liquidity_size_mult: float = 0.5   # 50% size in thin liquidity
-    degraded_size_mult: float = 0.25        # 25% size in degraded
-    critical_size_mult: float = 0.0         # Block in critical
+    thin_liquidity_size_mult: float = 0.5  # 50% size in thin liquidity
+    degraded_size_mult: float = 0.25  # 25% size in degraded
+    critical_size_mult: float = 0.0  # Block in critical
 
     # Anomaly detection
     depth_drop_threshold_pct: float = 0.5  # 50% drop in depth = anomaly
-    spread_spike_multiplier: float = 3.0   # 3x normal spread = anomaly
-    anomaly_window_seconds: int = 60       # Track anomalies over 1 min
+    spread_spike_multiplier: float = 3.0  # 3x normal spread = anomaly
+    anomaly_window_seconds: int = 60  # Track anomalies over 1 min
 
 
 @dataclass
@@ -63,8 +62,8 @@ class OrderBookSnapshot:
     """Simplified order book snapshot for liquidity analysis."""
 
     symbol: str
-    bid_depth_usd: float   # Total bid volume in USD within range
-    ask_depth_usd: float   # Total ask volume in USD within range
+    bid_depth_usd: float  # Total bid volume in USD within range
+    ask_depth_usd: float  # Total ask volume in USD within range
     best_bid: float
     best_ask: float
     spread_bps: float
@@ -77,7 +76,7 @@ class LiquidityAnomaly:
 
     symbol: str
     anomaly_type: str  # "depth_drop", "spread_spike", "book_imbalance"
-    severity: str      # "WARNING", "CRITICAL"
+    severity: str  # "WARNING", "CRITICAL"
     details: str
     detected_at: float
 
@@ -182,12 +181,8 @@ class LiquidityMonitor:
         # Initialize if needed
         if symbol not in self._snapshots:
             self._snapshots[symbol] = deque(maxlen=1000)
-            self._spread_history[symbol] = deque(
-                maxlen=self._config.spread_lookback
-            )
-            self._depth_history[symbol] = deque(
-                maxlen=self._config.spread_lookback
-            )
+            self._spread_history[symbol] = deque(maxlen=self._config.spread_lookback)
+            self._depth_history[symbol] = deque(maxlen=self._config.spread_lookback)
             self._states[symbol] = LiquidityState.NORMAL
             self._anomalies[symbol] = deque(maxlen=1000)
 
@@ -282,9 +277,7 @@ class LiquidityMonitor:
             anomalies_24h=recent_anomalies,
         )
 
-    def get_recent_anomalies(
-        self, symbol: str, hours: float = 24.0
-    ) -> list[LiquidityAnomaly]:
+    def get_recent_anomalies(self, symbol: str, hours: float = 24.0) -> list[LiquidityAnomaly]:
         """Get recent liquidity anomalies for a symbol.
 
         Args:
@@ -318,9 +311,7 @@ class LiquidityMonitor:
     # Internal evaluation
     # ------------------------------------------------------------------
 
-    def _evaluate(
-        self, symbol: str, snapshot: OrderBookSnapshot, now: float
-    ) -> LiquidityState:
+    def _evaluate(self, symbol: str, snapshot: OrderBookSnapshot, now: float) -> LiquidityState:
         """Evaluate liquidity state from current snapshot and history."""
         total_depth = snapshot.bid_depth_usd + snapshot.ask_depth_usd
 
@@ -345,9 +336,7 @@ class LiquidityMonitor:
 
         return LiquidityState.NORMAL
 
-    def _check_anomalies(
-        self, symbol: str, snapshot: OrderBookSnapshot, now: float
-    ) -> None:
+    def _check_anomalies(self, symbol: str, snapshot: OrderBookSnapshot, now: float) -> None:
         """Check for liquidity anomalies and record them."""
         depth_history = self._depth_history.get(symbol, deque())
         spread_history = self._spread_history.get(symbol, deque())
@@ -390,13 +379,11 @@ class LiquidityMonitor:
 
         # Book imbalance anomaly
         if snapshot.bid_depth_usd > 0 and snapshot.ask_depth_usd > 0:
-            imbalance = abs(
-                snapshot.bid_depth_usd - snapshot.ask_depth_usd
-            ) / max(snapshot.bid_depth_usd, snapshot.ask_depth_usd)
+            imbalance = abs(snapshot.bid_depth_usd - snapshot.ask_depth_usd) / max(
+                snapshot.bid_depth_usd, snapshot.ask_depth_usd
+            )
             if imbalance > 0.8:
-                heavier = (
-                    "bid" if snapshot.bid_depth_usd > snapshot.ask_depth_usd else "ask"
-                )
+                heavier = "bid" if snapshot.bid_depth_usd > snapshot.ask_depth_usd else "ask"
                 anomaly = LiquidityAnomaly(
                     symbol=symbol,
                     anomaly_type="book_imbalance",

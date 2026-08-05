@@ -13,9 +13,9 @@ class LeverageGuard(Guard):
                 cfg = yaml.safe_load(f)
         except FileNotFoundError:
             cfg = {}
-        self.max_leverage = cfg.get("max_leverage", {
-            "crypto_perp": 3, "forex_major": 20, "gold": 10
-        })
+        self.max_leverage = cfg.get(
+            "max_leverage", {"crypto_perp": 3, "forex_major": 20, "gold": 10}
+        )
 
     def check(self, order) -> GuardResult:
         leverage = getattr(order, "leverage", 1.0)
@@ -27,6 +27,6 @@ class LeverageGuard(Guard):
                 passed=False,
                 guard_name=self.name,
                 reason=f"Leverage {leverage}x exceeds max {max_lev}x for {asset_type}",
-                severity="CRITICAL"
+                severity="CRITICAL",
             )
         return GuardResult(passed=True, guard_name=self.name)

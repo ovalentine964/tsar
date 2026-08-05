@@ -97,7 +97,9 @@ def stochastic_k(df: pd.DataFrame, period: int = 14, **kwargs: object) -> pd.Ser
     return ((df["close"] - low_min) / denom.replace(0, np.nan)) * 100.0
 
 
-def stochastic_d(df: pd.DataFrame, period: int = 14, smooth: int = 3, **kwargs: object) -> pd.Series:
+def stochastic_d(
+    df: pd.DataFrame, period: int = 14, smooth: int = 3, **kwargs: object
+) -> pd.Series:
     """Stochastic %D (SMA of %K). Signal line for stochastic oscillator."""
     k = stochastic_k(df, period=period)
     return _sma(k, smooth)
@@ -139,9 +141,7 @@ def cci(df: pd.DataFrame, period: int = 20, **kwargs: object) -> pd.Series:
     """
     tp = (df["high"] + df["low"] + df["close"]) / 3.0
     sma_tp = _sma(tp, period)
-    mean_dev = tp.rolling(window=period).apply(
-        lambda x: np.mean(np.abs(x - x.mean())), raw=True
-    )
+    mean_dev = tp.rolling(window=period).apply(lambda x: np.mean(np.abs(x - x.mean())), raw=True)
     return (tp - sma_tp) / (0.015 * mean_dev.replace(0, np.nan))
 
 
@@ -349,7 +349,9 @@ def chaikin_money_flow(df: pd.DataFrame, period: int = 20, **kwargs: object) -> 
     hl_range = (df["high"] - df["low"]).replace(0, np.nan)
     mfm = ((df["close"] - df["low"]) - (df["high"] - df["close"])) / hl_range
     mfv = mfm * df["volume"]
-    return mfv.rolling(window=period).sum() / df["volume"].rolling(window=period).sum().replace(0, np.nan)
+    return mfv.rolling(window=period).sum() / df["volume"].rolling(window=period).sum().replace(
+        0, np.nan
+    )
 
 
 # ═══════════════════════════════════════════════════════════════════════
@@ -421,7 +423,9 @@ def ichimoku(
     tenkan_sen = (high.rolling(tenkan).max() + low.rolling(tenkan).min()) / 2.0
     kijun_sen = (high.rolling(kijun).max() + low.rolling(kijun).min()) / 2.0
     senkou_a = ((tenkan_sen + kijun_sen) / 2.0).shift(kijun)
-    senkou_b_line = ((high.rolling(senkou_b).max() + low.rolling(senkou_b).min()) / 2.0).shift(kijun)
+    senkou_b_line = ((high.rolling(senkou_b).max() + low.rolling(senkou_b).min()) / 2.0).shift(
+        kijun
+    )
 
     score = pd.Series(0.0, index=df.index)
     # Price above cloud
@@ -461,13 +465,19 @@ def supertrend(
 
     for i in range(1, len(df)):
         # Lower band: ratchet up
-        if lower_band.iloc[i] > final_lower.iloc[i - 1] or df["close"].iloc[i - 1] < final_lower.iloc[i - 1]:
+        if (
+            lower_band.iloc[i] > final_lower.iloc[i - 1]
+            or df["close"].iloc[i - 1] < final_lower.iloc[i - 1]
+        ):
             final_lower.iloc[i] = lower_band.iloc[i]
         else:
             final_lower.iloc[i] = final_lower.iloc[i - 1]
 
         # Upper band: ratchet down
-        if upper_band.iloc[i] < final_upper.iloc[i - 1] or df["close"].iloc[i - 1] > final_upper.iloc[i - 1]:
+        if (
+            upper_band.iloc[i] < final_upper.iloc[i - 1]
+            or df["close"].iloc[i - 1] > final_upper.iloc[i - 1]
+        ):
             final_upper.iloc[i] = upper_band.iloc[i]
         else:
             final_upper.iloc[i] = final_upper.iloc[i - 1]
@@ -767,7 +777,9 @@ FACTOR_REGISTRY: dict[str, dict[str, object]] = {
         "universe": ["crypto", "equity"],
     },
     "vol_of_vol": {
-        "func": lambda df, period=20, **kw: historical_volatility(df, period=period).rolling(period).std(),
+        "func": lambda df, period=20, **kw: (
+            historical_volatility(df, period=period).rolling(period).std()
+        ),
         "category": "risk_factor",
         "description": "Volatility of volatility — regime instability indicator",
         "default_params": {"period": 20},

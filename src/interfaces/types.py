@@ -86,20 +86,20 @@ class TimeInForce(StrEnum):
 class VetoLevel(StrEnum):
     """Veto severity levels for risk decisions."""
 
-    NONE = "NONE"      # No veto — trade approved
-    SOFT = "SOFT"      # Advisory warning, trade proceeds
-    FIRM = "FIRM"      # Trade blocked, can be overridden
-    HARD = "HARD"      # Trade blocked, cannot override
+    NONE = "NONE"  # No veto — trade approved
+    SOFT = "SOFT"  # Advisory warning, trade proceeds
+    FIRM = "FIRM"  # Trade blocked, can be overridden
+    HARD = "HARD"  # Trade blocked, cannot override
     NUCLEAR = "NUCLEAR"  # Kill switch — halt all trading
 
 
 class DrawdownLevel(StrEnum):
     """Drawdown circuit breaker levels."""
 
-    GREEN = "GREEN"      # Drawdown < 2% — normal operation
-    YELLOW = "YELLOW"    # Drawdown 2-3% — reduce position sizes
-    ORANGE = "ORANGE"    # Drawdown 3-5% — no new entries
-    RED = "RED"          # Drawdown > 5% — kill switch
+    GREEN = "GREEN"  # Drawdown < 2% — normal operation
+    YELLOW = "YELLOW"  # Drawdown 2-3% — reduce position sizes
+    ORANGE = "ORANGE"  # Drawdown 3-5% — no new entries
+    RED = "RED"  # Drawdown > 5% — kill switch
 
 
 # ═══════════════════════════════════════════════════════════════════════

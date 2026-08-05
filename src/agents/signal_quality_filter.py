@@ -21,21 +21,18 @@ Architecture:
 
 from __future__ import annotations
 
-import json
 import logging
-import time
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from enum import StrEnum
 from typing import Any
 
+from src.agents.adaptive_filter import AdaptiveFilter
 from src.agents.base import BaseAgent
 from src.agents.false_signal_detectors import (
     FalseSignalDetector,
-    FalseSignalFlag,
 )
 from src.agents.signal_quality_db import SignalQualityDB
-from src.agents.adaptive_filter import AdaptiveFilter, AdaptiveState
 
 logger = logging.getLogger(__name__)
 
@@ -86,9 +83,9 @@ class PositionTier(StrEnum):
     """Position sizing tier based on signal quality score."""
 
     NO_TRADE = "no_trade"
-    SMALL = "small"        # 50% of normal
-    NORMAL = "normal"      # 100%
-    LARGE = "large"        # 150%
+    SMALL = "small"  # 50% of normal
+    NORMAL = "normal"  # 100%
+    LARGE = "large"  # 150%
 
 
 @dataclass(frozen=True)
@@ -131,9 +128,9 @@ class FactorScore:
     """Score for a single quality factor."""
 
     name: str
-    score: float       # [0, 1]
+    score: float  # [0, 1]
     weight: float
-    weighted: float    # score × weight
+    weighted: float  # score × weight
     reason: str = ""
     confirmed: bool = False  # score > min_factor_score
 
@@ -246,7 +243,9 @@ class FactorScorer:
             score = proximity_score * 0.6 + nearest_level_strength * 0.4
         elif proximity_pct <= 5.0:
             # Linear decay from threshold to 5%
-            decay = 1.0 - (proximity_pct - proximity_pct_threshold) / (5.0 - proximity_pct_threshold)
+            decay = 1.0 - (proximity_pct - proximity_pct_threshold) / (
+                5.0 - proximity_pct_threshold
+            )
             score = decay * 0.3 * nearest_level_strength
         else:
             score = 0.0
@@ -433,7 +432,7 @@ class FactorScorer:
     @staticmethod
     def score_onchain_confirmation(
         whale_direction: str,  # "accumulating", "distributing", "neutral"
-        exchange_flow: str,    # "inflow", "outflow", "neutral"
+        exchange_flow: str,  # "inflow", "outflow", "neutral"
         large_tx_count: int,
         side: str,
     ) -> tuple[float, str]:
@@ -600,8 +599,8 @@ class SignalQualityFilter(BaseAgent):
         self._pricing_engine = get_pricing_engine()
 
         # Initialize tools
-        from src.tools.sentiment import SentimentTools
         from src.tools.on_chain import OnChainTools
+        from src.tools.sentiment import SentimentTools
 
         self._sentiment_tools = SentimentTools(config=self.config)
         self._onchain_tools = OnChainTools(config=self.config)
@@ -655,13 +654,17 @@ class SignalQualityFilter(BaseAgent):
         self._total_signals_processed += 1
         logger.info(
             "SQF: Processing signal %s %s %s (raw_score=%.3f)",
-            signal_id, symbol, side, score,
+            signal_id,
+            symbol,
+            side,
+            score,
         )
 
         # ── GATE 1: Regime Check ────────────────────────────────
         if self._regime_must_be_favorable and self._current_regime == "volatile":
             await self._reject_signal(
-                signal_data, ["Unfavorable regime: volatile"],
+                signal_data,
+                ["Unfavorable regime: volatile"],
                 regime=self._current_regime,
             )
             return
@@ -677,6 +680,7 @@ class SignalQualityFilter(BaseAgent):
 
         # ── GATE: Trading Hours ─────────────────────────────────
         from datetime import UTC as _UTC
+
         current_hour = datetime.now(_UTC).hour
         if current_hour in self._low_liquidity_hours:
             await self._reject_signal(
@@ -692,7 +696,8 @@ class SignalQualityFilter(BaseAgent):
         except Exception as e:
             logger.warning("SQF: Failed to gather market context for %s: %s", symbol, e)
             await self._reject_signal(
-                signal_data, [f"Market context unavailable: {e}"],
+                signal_data,
+                [f"Market context unavailable: {e}"],
                 regime=self._current_regime,
             )
             return
@@ -707,7 +712,11 @@ class SignalQualityFilter(BaseAgent):
 
         logger.info(
             "SQF: %s %s factors=%d/%d confirmed, composite=%.3f",
-            symbol, side, confirmed_count, len(factors), composite,
+            symbol,
+            side,
+            confirmed_count,
+            len(factors),
+            composite,
         )
 
         # ── GATE 2: Minimum Factor Count ────────────────────────
@@ -722,13 +731,12 @@ class SignalQualityFilter(BaseAgent):
         # ── GATE 3: Conflict Detection ─────────────────────────
         scores = [f.score for f in factors]
         if min(scores) < 0.1 and max(scores) > 0.9:
-            conflicting = [
-                f.name for f in factors if f.score < 0.1 or f.score > 0.9
-            ]
+            conflicting = [f.name for f in factors if f.score < 0.1 or f.score > 0.9]
             await self._reject_signal(
                 signal_data,
                 [f"Conflicting signals detected: {conflicting}"],
-                factors=factors, composite=composite,
+                factors=factors,
+                composite=composite,
             )
             return
 
@@ -741,7 +749,8 @@ class SignalQualityFilter(BaseAgent):
                     await self._reject_signal(
                         signal_data,
                         [f"Price moved {price_move:.1f}% but volume not confirmed"],
-                        factors=factors, composite=composite,
+                        factors=factors,
+                        composite=composite,
                     )
                     return
 
@@ -757,7 +766,8 @@ class SignalQualityFilter(BaseAgent):
                 await self._reject_signal(
                     signal_data,
                     [f"False signal detected: {flag_names}"],
-                    factors=factors, composite=composite,
+                    factors=factors,
+                    composite=composite,
                     false_signal_flags=flag_names,
                 )
                 return
@@ -769,7 +779,9 @@ class SignalQualityFilter(BaseAgent):
             effective_threshold = max(effective_threshold, self._cold_start_min_score)
             logger.info(
                 "SQF: Cold start (%d/%d trades), threshold raised to %.2f",
-                total_trades, self._cold_start_trades, effective_threshold,
+                total_trades,
+                self._cold_start_trades,
+                effective_threshold,
             )
 
         # ── Adaptive Filter Adjustment ──────────────────────────
@@ -782,7 +794,8 @@ class SignalQualityFilter(BaseAgent):
             await self._reject_signal(
                 signal_data,
                 [f"Score {composite:.3f} below adaptive threshold {effective_threshold:.3f}"],
-                factors=factors, composite=composite,
+                factors=factors,
+                composite=composite,
                 adaptive_state=adaptive_state.__dict__,
             )
             return
@@ -790,8 +803,11 @@ class SignalQualityFilter(BaseAgent):
         if confirmed_count < effective_min_factors:
             await self._reject_signal(
                 signal_data,
-                [f"Only {confirmed_count} factors confirmed (adaptive minimum: {effective_min_factors})"],
-                factors=factors, composite=composite,
+                [
+                    f"Only {confirmed_count} factors confirmed (adaptive minimum: {effective_min_factors})"
+                ],
+                factors=factors,
+                composite=composite,
                 adaptive_state=adaptive_state.__dict__,
             )
             return
@@ -805,7 +821,8 @@ class SignalQualityFilter(BaseAgent):
             await self._reject_signal(
                 signal_data,
                 [f"Spread {spread_pct:.2f}% exceeds maximum {self._max_spread_pct}%"],
-                factors=factors, composite=composite,
+                factors=factors,
+                composite=composite,
             )
             return
 
@@ -825,7 +842,8 @@ class SignalQualityFilter(BaseAgent):
                     await self._reject_signal(
                         signal_data,
                         [f"R:R after fees {effective_rr:.2f} < minimum {self._min_rr_after_fees}"],
-                        factors=factors, composite=composite,
+                        factors=factors,
+                        composite=composite,
                     )
                     return
 
@@ -855,7 +873,11 @@ class SignalQualityFilter(BaseAgent):
 
         logger.info(
             "✅ SQF APPROVED: %s %s composite=%.3f tier=%s size_factor=%.1f",
-            symbol, side, composite, tier.value, size_factor,
+            symbol,
+            side,
+            composite,
+            tier.value,
+            size_factor,
         )
 
         await self.publish_event(
@@ -882,16 +904,21 @@ class SignalQualityFilter(BaseAgent):
         rsi = metadata.get("rsi", 50)
         vol_ratio = market_context.get("volume_ratio", 1.0)
         f1_score, f1_reason = FactorScorer.score_rsi_confirmation(
-            rsi, side, vol_ratio, self.config.get("strategies", {}).get("mean_reversion", {}).get("params", {})
+            rsi,
+            side,
+            vol_ratio,
+            self.config.get("strategies", {}).get("mean_reversion", {}).get("params", {}),
         )
-        factors.append(FactorScore(
-            name="rsi_confirmation",
-            score=f1_score,
-            weight=self._weights.rsi_confirmation,
-            weighted=f1_score * self._weights.rsi_confirmation,
-            reason=f1_reason,
-            confirmed=f1_score > self._min_factor_score,
-        ))
+        factors.append(
+            FactorScore(
+                name="rsi_confirmation",
+                score=f1_score,
+                weight=self._weights.rsi_confirmation,
+                weighted=f1_score * self._weights.rsi_confirmation,
+                reason=f1_reason,
+                confirmed=f1_score > self._min_factor_score,
+            )
+        )
 
         # Factor 2: S/R Proximity
         nearest_support = market_context.get("nearest_support")
@@ -907,88 +934,110 @@ class SignalQualityFilter(BaseAgent):
             level_strength = 0.0
 
         f2_score, f2_reason = FactorScorer.score_sr_proximity(
-            entry_price, level_price, level_strength,
+            entry_price,
+            level_price,
+            level_strength,
         )
-        factors.append(FactorScore(
-            name="sr_proximity",
-            score=f2_score,
-            weight=self._weights.sr_proximity,
-            weighted=f2_score * self._weights.sr_proximity,
-            reason=f2_reason,
-            confirmed=f2_score > self._min_factor_score,
-        ))
+        factors.append(
+            FactorScore(
+                name="sr_proximity",
+                score=f2_score,
+                weight=self._weights.sr_proximity,
+                weighted=f2_score * self._weights.sr_proximity,
+                reason=f2_reason,
+                confirmed=f2_score > self._min_factor_score,
+            )
+        )
 
         # Factor 3: Volume Confirmation
         current_vol = market_context.get("current_volume", 0)
         avg_vol = market_context.get("avg_volume", 1)
         f3_score, f3_reason = FactorScorer.score_volume_confirmation(current_vol, avg_vol)
-        factors.append(FactorScore(
-            name="volume_confirmation",
-            score=f3_score,
-            weight=self._weights.volume_confirmation,
-            weighted=f3_score * self._weights.volume_confirmation,
-            reason=f3_reason,
-            confirmed=f3_score > self._min_factor_score,
-        ))
+        factors.append(
+            FactorScore(
+                name="volume_confirmation",
+                score=f3_score,
+                weight=self._weights.volume_confirmation,
+                weighted=f3_score * self._weights.volume_confirmation,
+                reason=f3_reason,
+                confirmed=f3_score > self._min_factor_score,
+            )
+        )
 
         # Factor 4: Trend Alignment
         mtf_confluence = market_context.get("mtf_confluence", 0.5)
         ema_aligned = market_context.get("ema_aligned", False)
         macd_aligned = market_context.get("macd_aligned", False)
         f4_score, f4_reason = FactorScorer.score_trend_alignment(
-            mtf_confluence, ema_aligned, macd_aligned,
+            mtf_confluence,
+            ema_aligned,
+            macd_aligned,
         )
-        factors.append(FactorScore(
-            name="trend_alignment",
-            score=f4_score,
-            weight=self._weights.trend_alignment,
-            weighted=f4_score * self._weights.trend_alignment,
-            reason=f4_reason,
-            confirmed=f4_score > self._min_factor_score,
-        ))
+        factors.append(
+            FactorScore(
+                name="trend_alignment",
+                score=f4_score,
+                weight=self._weights.trend_alignment,
+                weighted=f4_score * self._weights.trend_alignment,
+                reason=f4_reason,
+                confirmed=f4_score > self._min_factor_score,
+            )
+        )
 
         # Factor 5: Regime Filter
         f5_score, f5_reason = FactorScorer.score_regime_filter(self._current_regime, side)
-        factors.append(FactorScore(
-            name="regime_filter",
-            score=f5_score,
-            weight=self._weights.regime_filter,
-            weighted=f5_score * self._weights.regime_filter,
-            reason=f5_reason,
-            confirmed=f5_score > self._min_factor_score,
-        ))
+        factors.append(
+            FactorScore(
+                name="regime_filter",
+                score=f5_score,
+                weight=self._weights.regime_filter,
+                weighted=f5_score * self._weights.regime_filter,
+                reason=f5_reason,
+                confirmed=f5_score > self._min_factor_score,
+            )
+        )
 
         # Factor 6: Sentiment Alignment
         fg_index = self._current_sentiment.get("fear_greed_index", 50)
         news_sent = self._current_sentiment.get("news_sentiment", 0.0)
         funding = self._current_sentiment.get("funding_rate", 0.0)
         f6_score, f6_reason = FactorScorer.score_sentiment_alignment(
-            fg_index, news_sent, funding, side,
+            fg_index,
+            news_sent,
+            funding,
+            side,
         )
-        factors.append(FactorScore(
-            name="sentiment_alignment",
-            score=f6_score,
-            weight=self._weights.sentiment_alignment,
-            weighted=f6_score * self._weights.sentiment_alignment,
-            reason=f6_reason,
-            confirmed=f6_score > self._min_factor_score,
-        ))
+        factors.append(
+            FactorScore(
+                name="sentiment_alignment",
+                score=f6_score,
+                weight=self._weights.sentiment_alignment,
+                weighted=f6_score * self._weights.sentiment_alignment,
+                reason=f6_reason,
+                confirmed=f6_score > self._min_factor_score,
+            )
+        )
 
         # Factor 7: On-Chain Confirmation
         whale_dir = market_context.get("whale_direction", "neutral")
         exch_flow = market_context.get("exchange_flow", "neutral")
         large_txs = market_context.get("large_tx_count", 0)
         f7_score, f7_reason = FactorScorer.score_onchain_confirmation(
-            whale_dir, exch_flow, large_txs, side,
+            whale_dir,
+            exch_flow,
+            large_txs,
+            side,
         )
-        factors.append(FactorScore(
-            name="onchain_confirmation",
-            score=f7_score,
-            weight=self._weights.onchain_confirmation,
-            weighted=f7_score * self._weights.onchain_confirmation,
-            reason=f7_reason,
-            confirmed=f7_score > self._min_factor_score,
-        ))
+        factors.append(
+            FactorScore(
+                name="onchain_confirmation",
+                score=f7_score,
+                weight=self._weights.onchain_confirmation,
+                weighted=f7_score * self._weights.onchain_confirmation,
+                reason=f7_reason,
+                confirmed=f7_score > self._min_factor_score,
+            )
+        )
 
         return tuple(factors)
 
@@ -1051,7 +1100,10 @@ class SignalQualityFilter(BaseAgent):
 
         logger.warning(
             "❌ SQF REJECTED: %s %s %s — %s",
-            signal_id, symbol, side, "; ".join(reasons),
+            signal_id,
+            symbol,
+            side,
+            "; ".join(reasons),
         )
 
         # Record rejection for tracking
@@ -1108,7 +1160,9 @@ class SignalQualityFilter(BaseAgent):
 
         logger.info(
             "SQF: Recorded outcome for %s: pnl=%.2f%%, win=%s",
-            signal_id, pnl_pct, win,
+            signal_id,
+            pnl_pct,
+            win,
         )
 
     async def _gather_market_context(
@@ -1132,7 +1186,9 @@ class SignalQualityFilter(BaseAgent):
         if volumes and len(volumes) >= 20:
             context["current_volume"] = volumes[-1]
             context["avg_volume"] = sum(volumes[-20:]) / 20
-            context["volume_ratio"] = volumes[-1] / context["avg_volume"] if context["avg_volume"] > 0 else 1.0
+            context["volume_ratio"] = (
+                volumes[-1] / context["avg_volume"] if context["avg_volume"] > 0 else 1.0
+            )
         else:
             context["current_volume"] = 0
             context["avg_volume"] = 1
@@ -1149,14 +1205,17 @@ class SignalQualityFilter(BaseAgent):
         # EMA and MACD alignment
         ema_trend = metadata.get("ema_trend", 0)
         context["ema_aligned"] = (
-            (side == "buy" and entry_price > ema_trend) or
-            (side == "sell" and entry_price < ema_trend)
-        ) if ema_trend > 0 else False
+            (
+                (side == "buy" and entry_price > ema_trend)
+                or (side == "sell" and entry_price < ema_trend)
+            )
+            if ema_trend > 0
+            else False
+        )
 
         macd_hist = metadata.get("macd_histogram", 0)
-        context["macd_aligned"] = (
-            (side == "buy" and macd_hist > 0) or
-            (side == "sell" and macd_hist < 0)
+        context["macd_aligned"] = (side == "buy" and macd_hist > 0) or (
+            side == "sell" and macd_hist < 0
         )
 
         # Spread (if available from orderbook)

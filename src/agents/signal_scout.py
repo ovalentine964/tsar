@@ -39,18 +39,18 @@ from src.interfaces.types import (
     SRLevels,
     Timeframe,
 )
-from src.strategy.factor_library import FactorLibrary
 
 # SECURITY (H-009): Import prompt sanitization for market data
-from src.llm.prompts import sanitize_field, validate_llm_output
+from src.llm.prompts import sanitize_field
+from src.strategy.factor_library import FactorLibrary
+from src.tools.correlation import CorrelationAnalyzer
 
 # ── Domain Tools (Tools-to-Agents Wiring) ──────────────────────────
 from src.tools.market_data import MarketDataTools
-from src.tools.technical_analysis import TechnicalAnalysisTools
 from src.tools.multi_timeframe import MultiTimeframeAnalyzer
-from src.tools.volatility import VolatilityAnalyzer
-from src.tools.correlation import CorrelationAnalyzer
 from src.tools.pattern_recognition import PatternRecognitionTools
+from src.tools.technical_analysis import TechnicalAnalysisTools
+from src.tools.volatility import VolatilityAnalyzer
 
 if TYPE_CHECKING:
     from src.comms.events import CloudEvent
@@ -146,8 +146,8 @@ class SignalScout(BaseAgent):
     ) -> None:
         super().__init__(config, trading_mode, **kwargs)
         self._symbols = config.get("exchange", {}).get("symbols", ["BTC/USDT"])
-        self._cycle_interval = config.get("agents", {}).get("signal_scout", {}).get(
-            "cycle_interval_s", 300
+        self._cycle_interval = (
+            config.get("agents", {}).get("signal_scout", {}).get("cycle_interval_s", 300)
         )
         self._last_scan_time: dict[str, float] = {}
 
@@ -162,7 +162,9 @@ class SignalScout(BaseAgent):
             sr_proximity=weights_config.get("sr_proximity", self.DEFAULT_WEIGHTS.sr_proximity),
             volume=weights_config.get("volume", self.DEFAULT_WEIGHTS.volume),
             trend=weights_config.get("trend", self.DEFAULT_WEIGHTS.trend),
-            multi_timeframe=weights_config.get("multi_timeframe", self.DEFAULT_WEIGHTS.multi_timeframe),
+            multi_timeframe=weights_config.get(
+                "multi_timeframe", self.DEFAULT_WEIGHTS.multi_timeframe
+            ),
         )
         self._weights.validate()
 
@@ -173,9 +175,7 @@ class SignalScout(BaseAgent):
         # Factor library integration (G5)
         factor_config = config.get("factor_library", {})
         if factor_config.get("enabled", False):
-            self._factor_library = FactorLibrary(
-                db_path=factor_config.get("db_path", ":memory:")
-            )
+            self._factor_library = FactorLibrary(db_path=factor_config.get("db_path", ":memory:"))
             self._use_factors = True
             logger.info(
                 "FactorLibrary enabled with %d factors",
@@ -210,7 +210,8 @@ class SignalScout(BaseAgent):
 
         # Initialize domain tools
         self._market_data_tools = MarketDataTools(
-            gateway=self._gateway, config=self.config.get("market_data", {}),
+            gateway=self._gateway,
+            config=self.config.get("market_data", {}),
         )
         self._ta_tools = TechnicalAnalysisTools(config=self.config)
         self._mtf_analyzer = MultiTimeframeAnalyzer(config=self.config)
@@ -221,7 +222,8 @@ class SignalScout(BaseAgent):
         logger.info(
             "SignalScout initialized: symbols=%s, cycle_interval=%ds, "
             "tools=[market_data, ta, mtf, volatility, correlation, pattern_recognition]",
-            self._symbols, self._cycle_interval,
+            self._symbols,
+            self._cycle_interval,
         )
 
     async def handle_event(self, stream: str, event: CloudEvent) -> None:
@@ -268,6 +270,7 @@ class SignalScout(BaseAgent):
         # ── Entry Optimization: Session Timing Gate ──────────────
         if self._params.get("session_timing_enabled", True):
             from src.agents.trade_manager import SessionTiming
+
             session_allowed, session_reason = SessionTiming.is_entry_allowed()
             if not session_allowed:
                 logger.info("  %s: Skipping — %s", symbol, session_reason)
@@ -277,9 +280,11 @@ class SignalScout(BaseAgent):
         if self._params.get("news_blackout_enabled", True):
             try:
                 from src.tools.market_calendar import MarketCalendar
+
                 calendar = MarketCalendar(config=self.config.get("market_calendar", {}))
                 snapshot = await calendar.get_calendar(days_ahead=1)
                 from src.agents.trade_manager import NewsProximity
+
                 blocked, reason, risk_mult = NewsProximity.check_news_blackout(snapshot)
                 if blocked:
                     logger.info("  %s: Skipping — %s", symbol, reason)
@@ -288,9 +293,7 @@ class SignalScout(BaseAgent):
                 logger.debug("News blackout check failed for %s", symbol, exc_info=True)
 
         # Fetch OHLCV data (1h candles, 100 bars)
-        ohlcv: list[OHLCV] = await self._gateway.get_ohlcv(
-            symbol, Timeframe.H1, limit=100
-        )
+        ohlcv: list[OHLCV] = await self._gateway.get_ohlcv(symbol, Timeframe.H1, limit=100)
         if len(ohlcv) < 50:
             logger.warning("Insufficient data for %s: %d candles", symbol, len(ohlcv))
             return
@@ -313,12 +316,8 @@ class SignalScout(BaseAgent):
             closes, self._params["bb_period"], self._params["bb_std_dev"]
         )
         sr_levels: SRLevels = self._pricing_engine.detect_support_resistance(ohlcv)
-        atr = self._pricing_engine.calculate_atr(
-            highs, lows, closes, self._params["atr_period"]
-        )
-        ema_trend = self._pricing_engine.calculate_ema(
-            closes, self._params["ema_trend_period"]
-        )
+        atr = self._pricing_engine.calculate_atr(highs, lows, closes, self._params["atr_period"])
+        ema_trend = self._pricing_engine.calculate_ema(closes, self._params["ema_trend_period"])
 
         # ── Advanced Analysis via Domain Tools ──────────────────────
         # Volatility regime analysis
@@ -328,7 +327,9 @@ class SignalScout(BaseAgent):
                 vol_regime = self._volatility_analyzer.classify_volatility_regime(ohlcv)
                 logger.info(
                     "  %s: volatility regime=%s (factor=%.2f)",
-                    symbol, vol_regime.regime, vol_regime.recommended_position_size_factor,
+                    symbol,
+                    vol_regime.regime,
+                    vol_regime.recommended_position_size_factor,
                 )
             except Exception:
                 logger.debug("Volatility regime analysis failed for %s", symbol, exc_info=True)
@@ -341,10 +342,14 @@ class SignalScout(BaseAgent):
                 candle_patterns = self._pattern_tools.detect_candlestick_patterns(ohlcv)
                 for p in chart_patterns:
                     if p.confidence > 0.6:
-                        patterns_detected.append(f"chart:{p.pattern}({p.direction},{p.confidence:.2f})")
+                        patterns_detected.append(
+                            f"chart:{p.pattern}({p.direction},{p.confidence:.2f})"
+                        )
                 for p in candle_patterns:
                     if p.reliability > 0.5:
-                        patterns_detected.append(f"candle:{p.pattern}({p.direction},{p.reliability:.2f})")
+                        patterns_detected.append(
+                            f"candle:{p.pattern}({p.direction},{p.reliability:.2f})"
+                        )
                 if patterns_detected:
                     logger.info("  %s: patterns detected: %s", symbol, patterns_detected)
             except Exception:
@@ -352,7 +357,10 @@ class SignalScout(BaseAgent):
 
         logger.info(
             "  %s: price=%.2f rsi=%.1f atr=%.2f",
-            symbol, current_price, rsi, atr,
+            symbol,
+            current_price,
+            rsi,
+            atr,
         )
 
         # ── Determine Signal Direction ────────────────────────────
@@ -363,9 +371,7 @@ class SignalScout(BaseAgent):
 
         if rsi < self._params["rsi_oversold"]:
             # Check if near support
-            nearest_support = self._find_nearest_level(
-                current_price, sr_levels.supports, "support"
-            )
+            nearest_support = self._find_nearest_level(current_price, sr_levels.supports, "support")
             if nearest_support:
                 proximity_pct = abs(current_price - nearest_support.price) / current_price * 100
                 if proximity_pct <= self._params["sr_proximity_pct"]:
@@ -463,11 +469,18 @@ class SignalScout(BaseAgent):
         # ── Factor-Enhanced Scoring (G5) ───────────────────────────
         if self._use_factors and self._factor_library:
             try:
-                ohlcv_df = pd.DataFrame([
-                    {"open": b.open, "high": b.high, "low": b.low,
-                     "close": b.close, "volume": b.volume}
-                    for b in ohlcv
-                ])
+                ohlcv_df = pd.DataFrame(
+                    [
+                        {
+                            "open": b.open,
+                            "high": b.high,
+                            "low": b.low,
+                            "close": b.close,
+                            "volume": b.volume,
+                        }
+                        for b in ohlcv
+                    ]
+                )
                 factor_adj = self._compute_factor_adjustment(ohlcv_df, signal_side)
                 adjusted_score = score * (1.0 + 0.2 * factor_adj)
                 adjusted_score = max(0.0, min(1.0, adjusted_score))
@@ -475,20 +488,28 @@ class SignalScout(BaseAgent):
                 score = adjusted_score
                 logger.info(
                     "  %s: Factor adjustment=%.4f, score %.3f → %.3f",
-                    symbol, factor_adj, score / (1.0 + 0.2 * factor_adj), score,
+                    symbol,
+                    factor_adj,
+                    score / (1.0 + 0.2 * factor_adj),
+                    score,
                 )
             except Exception:
                 logger.warning("Factor computation failed for %s", symbol, exc_info=True)
 
         logger.info(
             "  %s: Signal candidate %s score=%.3f breakdown=%s",
-            symbol, signal_side.value, score, score_breakdown,
+            symbol,
+            signal_side.value,
+            score,
+            score_breakdown,
         )
 
         if score < self._params["min_signal_score"]:
             logger.info(
                 "  %s: Score %.3f below threshold %.3f — skipping",
-                symbol, score, self._params["min_signal_score"],
+                symbol,
+                score,
+                self._params["min_signal_score"],
             )
             return
 
@@ -535,7 +556,9 @@ class SignalScout(BaseAgent):
                 "ema_trend": ema_trend[-1] if ema_trend else 0,
                 "timeframe": "1h",
                 "volatility_regime": vol_regime.regime if vol_regime else "unknown",
-                "vol_position_factor": vol_regime.recommended_position_size_factor if vol_regime else 1.0,
+                "vol_position_factor": vol_regime.recommended_position_size_factor
+                if vol_regime
+                else 1.0,
                 "patterns_detected": patterns_detected,
             },
             timestamp=datetime.now(UTC),
@@ -556,13 +579,19 @@ class SignalScout(BaseAgent):
         if not validation["passed"]:
             logger.warning(
                 "  %s: Signal REJECTED by validation: %s",
-                symbol, validation["reasons"],
+                symbol,
+                validation["reasons"],
             )
             return
 
         logger.info(
             "🎯 SIGNAL DETECTED: %s %s score=%.3f entry=%.2f sl=%.2f tp=%.2f",
-            symbol, signal_side.value, score, entry_price, stop_loss, take_profit,
+            symbol,
+            signal_side.value,
+            score,
+            entry_price,
+            stop_loss,
+            take_profit,
         )
 
         # Publish signal.detected event
@@ -613,9 +642,17 @@ class SignalScout(BaseAgent):
         # BUY: RSI 30→0 maps to 0→1
         # SELL: RSI 70→100 maps to 0→1
         if side == OrderSide.BUY:
-            rsi_score = max(0, min(1, (self._params["rsi_oversold"] - rsi) / self._params["rsi_oversold"]))
+            rsi_score = max(
+                0, min(1, (self._params["rsi_oversold"] - rsi) / self._params["rsi_oversold"])
+            )
         else:
-            rsi_score = max(0, min(1, (rsi - self._params["rsi_overbought"]) / (100 - self._params["rsi_overbought"])))
+            rsi_score = max(
+                0,
+                min(
+                    1,
+                    (rsi - self._params["rsi_overbought"]) / (100 - self._params["rsi_overbought"]),
+                ),
+            )
         breakdown["rsi"] = rsi_score * self._weights.rsi
 
         # ── S/R Proximity Score (30%) ─────────────────────────────
@@ -643,7 +680,12 @@ class SignalScout(BaseAgent):
                 vol_ratio = volumes[-1] / avg_vol
                 if vol_ratio >= self._params["volume_multiplier"]:
                     # Score: 0 at multiplier, 1 at 2x multiplier
-                    volume_score = min(1.0, (vol_ratio - self._params["volume_multiplier"]) / self._params["volume_multiplier"] + 0.5)
+                    volume_score = min(
+                        1.0,
+                        (vol_ratio - self._params["volume_multiplier"])
+                        / self._params["volume_multiplier"]
+                        + 0.5,
+                    )
         breakdown["volume"] = volume_score * self._weights.volume
 
         # ── Trend Score (15%) ─────────────────────────────────────
@@ -771,9 +813,12 @@ class SignalScout(BaseAgent):
                     prev = ema_short[-5]
                     if prev > 0:
                         slope = (ema_short[-1] - prev) / prev * 100
-                        if side == OrderSide.BUY and slope > 0.1:
-                            tf_score += 0.15
-                        elif side == OrderSide.SELL and slope < -0.1:
+                        if (
+                            side == OrderSide.BUY
+                            and slope > 0.1
+                            or side == OrderSide.SELL
+                            and slope < -0.1
+                        ):
                             tf_score += 0.15
 
                 # RSI confirmation (0.3 weight)
@@ -803,9 +848,9 @@ class SignalScout(BaseAgent):
         if total_weight == 0:
             return 0.0
 
-        confluence = sum(
-            tf_signals[tf] * tf_weights.get(tf, 0.2) for tf in tf_signals
-        ) / total_weight
+        confluence = (
+            sum(tf_signals[tf] * tf_weights.get(tf, 0.2) for tf in tf_signals) / total_weight
+        )
 
         # Bonus for agreement: if all timeframes agree, boost score
         all_bullish = all(v > 0.5 for v in tf_signals.values())
@@ -855,7 +900,9 @@ class SignalScout(BaseAgent):
             if confirmed:
                 logger.info(
                     "  Pullback confirmed: low=%.2f, threshold=%.2f, price=%.2f",
-                    recent_low, bounce_threshold, current_price,
+                    recent_low,
+                    bounce_threshold,
+                    current_price,
                 )
             return confirmed
 
@@ -868,7 +915,9 @@ class SignalScout(BaseAgent):
             if confirmed:
                 logger.info(
                     "  Pullback confirmed: high=%.2f, threshold=%.2f, price=%.2f",
-                    recent_high, bounce_threshold, current_price,
+                    recent_high,
+                    bounce_threshold,
+                    current_price,
                 )
             return confirmed
 
@@ -913,8 +962,7 @@ class SignalScout(BaseAgent):
 
         if not consecutive_above:
             logger.debug(
-                "Volume not confirmed: need %d consecutive above avg, "
-                "recent=%s, avg=%.2f",
+                "Volume not confirmed: need %d consecutive above avg, recent=%s, avg=%.2f",
                 confirmation_candles,
                 [f"{v:.2f}" for v in recent_vols],
                 avg_vol,
@@ -966,9 +1014,9 @@ class SignalScout(BaseAgent):
         adx_val = float(lib.compute("adx", ohlcv_df).iloc[-1])
 
         # Normalize to [-1, 1]
-        rsi_signal = (rsi_val - 50.0) / 50.0       # -1 oversold, +1 overbought
-        bb_signal = (bb_val - 0.5) * 2.0            # -1 lower band, +1 upper band
-        mfi_signal = (mfi_val - 50.0) / 50.0        # -1 oversold, +1 overbought
+        rsi_signal = (rsi_val - 50.0) / 50.0  # -1 oversold, +1 overbought
+        bb_signal = (bb_val - 0.5) * 2.0  # -1 lower band, +1 upper band
+        mfi_signal = (mfi_val - 50.0) / 50.0  # -1 oversold, +1 overbought
 
         # For mean reversion: contrarian signals are bullish for BUY
         # ADX > 25 means trending (bad for mean reversion) → penalize
@@ -1025,22 +1073,14 @@ class SignalScout(BaseAgent):
         # 4. Stop-loss on correct side of entry
         if signal_side == OrderSide.BUY:
             if stop_loss >= entry_price:
-                reasons.append(
-                    f"BUY stop-loss {stop_loss:.2f} >= entry {entry_price:.2f}"
-                )
+                reasons.append(f"BUY stop-loss {stop_loss:.2f} >= entry {entry_price:.2f}")
             if take_profit <= entry_price:
-                reasons.append(
-                    f"BUY take-profit {take_profit:.2f} <= entry {entry_price:.2f}"
-                )
+                reasons.append(f"BUY take-profit {take_profit:.2f} <= entry {entry_price:.2f}")
         else:
             if stop_loss <= entry_price:
-                reasons.append(
-                    f"SELL stop-loss {stop_loss:.2f} <= entry {entry_price:.2f}"
-                )
+                reasons.append(f"SELL stop-loss {stop_loss:.2f} <= entry {entry_price:.2f}")
             if take_profit >= entry_price:
-                reasons.append(
-                    f"SELL take-profit {take_profit:.2f} >= entry {entry_price:.2f}"
-                )
+                reasons.append(f"SELL take-profit {take_profit:.2f} >= entry {entry_price:.2f}")
 
         # 5. Risk:Reward ratio must be >= 1.0
         risk = abs(entry_price - stop_loss)
@@ -1048,16 +1088,18 @@ class SignalScout(BaseAgent):
         if risk > 0:
             rr_ratio = reward / risk
             if rr_ratio < 1.0:
-                reasons.append(f"R:R ratio {rr_ratio:.2f} < 1.0 (risk={risk:.2f}, reward={reward:.2f})")
+                reasons.append(
+                    f"R:R ratio {rr_ratio:.2f} < 1.0 (risk={risk:.2f}, reward={reward:.2f})"
+                )
 
         # 6. Stop-loss/take-profit not unreasonably far (> 20% of price)
         if entry_price > 0:
             sl_pct = abs(entry_price - stop_loss) / entry_price
             tp_pct = abs(take_profit - entry_price) / entry_price
             if sl_pct > 0.20:
-                reasons.append(f"Stop-loss {sl_pct*100:.1f}% from entry (max 20%)")
+                reasons.append(f"Stop-loss {sl_pct * 100:.1f}% from entry (max 20%)")
             if tp_pct > 0.50:
-                reasons.append(f"Take-profit {tp_pct*100:.1f}% from entry (max 50%)")
+                reasons.append(f"Take-profit {tp_pct * 100:.1f}% from entry (max 50%)")
 
         # 7. Statistical bound check — entry price within 3σ of recent mean
         if len(closes) >= 20:
@@ -1067,15 +1109,13 @@ class SignalScout(BaseAgent):
             if std_price > 0:
                 z_score = abs(entry_price - mean_price) / std_price
                 if z_score > 3.0:
-                    reasons.append(
-                        f"Entry price z-score {z_score:.1f} > 3σ from 20-bar mean"
-                    )
+                    reasons.append(f"Entry price z-score {z_score:.1f} > 3σ from 20-bar mean")
 
         # 8. ATR reasonableness — ATR shouldn't exceed 15% of price
         if entry_price > 0 and atr > 0:
             atr_pct = atr / entry_price
             if atr_pct > 0.15:
-                reasons.append(f"ATR {atr_pct*100:.1f}% of price (max 15%)")
+                reasons.append(f"ATR {atr_pct * 100:.1f}% of price (max 15%)")
 
         return {"passed": len(reasons) == 0, "reasons": reasons}
 

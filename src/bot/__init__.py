@@ -22,7 +22,7 @@ Security:
   - Chat ID whitelist for authorization
 """
 
-from src.bot.bot import TelegramBot, TsarBot, TradeProposal
+from src.bot.bot import TelegramBot, TradeProposal, TsarBot
 from src.bot.commands import COMMANDS, handle_command
 from src.bot.conversation import ConversationManager, ConversationState
 from src.bot.credentials import (

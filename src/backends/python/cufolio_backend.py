@@ -16,7 +16,6 @@ GPU: NVIDIA GPU with CUDA 12.x+
 from __future__ import annotations
 
 import asyncio
-import logging
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -47,9 +46,7 @@ except ImportError:
         """Stub for missing cuFOLIO classes."""
 
         def __init__(self, *args: Any, **kwargs: Any) -> None:
-            raise ImportError(
-                "cuFOLIO not installed. Install with: pip install nvidia-cufolio"
-            )
+            raise ImportError("cuFOLIO not installed. Install with: pip install nvidia-cufolio")
 
     MeanCVaROptimizer = _Stub  # type: ignore[assignment,misc]
     EfficientFrontier = _Stub  # type: ignore[assignment,misc]
@@ -301,9 +298,7 @@ class CuFOLIOBackend:
             # Objective: minimize negative Sharpe ratio
             def neg_sharpe(weights: np.ndarray) -> float:
                 port_return = np.dot(weights, mean_returns) * 252
-                port_vol = np.sqrt(
-                    np.dot(weights.T, np.dot(cov_matrix * 252, weights))
-                )
+                port_vol = np.sqrt(np.dot(weights.T, np.dot(cov_matrix * 252, weights)))
                 if port_vol == 0:
                     return 0.0
                 return -(port_return - risk_free_rate) / port_vol
@@ -323,9 +318,7 @@ class CuFOLIOBackend:
 
             weights = result.x
             weight_dict = {
-                symbols[i]: float(weights[i])
-                for i in range(num_assets)
-                if weights[i] > 1e-6
+                symbols[i]: float(weights[i]) for i in range(num_assets) if weights[i] > 1e-6
             }
 
             port_return = np.dot(weights, mean_returns) * 252
@@ -394,11 +387,7 @@ class CuFOLIOBackend:
 
             for i in range(len(frontier_result.weights)):
                 w = cp.asnumpy(frontier_result.weights[i])
-                weight_dict = {
-                    symbols[j]: float(w[j])
-                    for j in range(len(symbols))
-                    if w[j] > 1e-6
-                }
+                weight_dict = {symbols[j]: float(w[j]) for j in range(len(symbols)) if w[j] > 1e-6}
                 portfolios.append(
                     PortfolioAllocation(
                         weights=weight_dict,
@@ -451,15 +440,17 @@ class CuFOLIOBackend:
                 x0 = np.ones(num_assets) / num_assets
 
                 result = minimize(
-                    portfolio_vol, x0, method="SLSQP",
-                    bounds=bounds, constraints=constraints,
+                    portfolio_vol,
+                    x0,
+                    method="SLSQP",
+                    bounds=bounds,
+                    constraints=constraints,
                 )
 
                 if result.success:
                     w = result.x
                     weight_dict = {
-                        symbols[i]: float(w[i])
-                        for i in range(num_assets) if w[i] > 1e-6
+                        symbols[i]: float(w[i]) for i in range(num_assets) if w[i] > 1e-6
                     }
                     vol = np.sqrt(portfolio_vol(w))
                     sharpe = (target - 0.04) / vol if vol > 0 else 0.0
@@ -543,9 +534,7 @@ class CuFOLIOBackend:
             cov = np.cov(returns.T)
 
             # Parametric bootstrap from multivariate normal
-            scenarios = np.random.multivariate_normal(
-                mean, cov, size=num_scenarios
-            )
+            scenarios = np.random.multivariate_normal(mean, cov, size=num_scenarios)
             return scenarios.tolist()
 
         return await asyncio.get_event_loop().run_in_executor(None, _run)
@@ -637,9 +626,7 @@ class CuFOLIOBackend:
 
         def _run() -> BacktestResult:
             returns = np.array(returns_matrix)
-            weights = np.array(
-                [initial_weights.get(s, 0.0) for s in symbols]
-            )
+            weights = np.array([initial_weights.get(s, 0.0) for s in symbols])
 
             # Rebalance interval in periods (assume daily data)
             freq_map = {"daily": 1, "weekly": 5, "monthly": 21}
@@ -657,9 +644,7 @@ class CuFOLIOBackend:
 
                 # Rebalance
                 if (i + 1) % interval == 0:
-                    weights = np.array(
-                        [initial_weights.get(s, 0.0) for s in symbols]
-                    )
+                    weights = np.array([initial_weights.get(s, 0.0) for s in symbols])
 
             port_returns = np.array(portfolio_returns)
             cumulative = np.cumprod(1 + port_returns)

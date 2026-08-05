@@ -86,6 +86,7 @@ class TradingRule:
     winning (or losing) trades. The conditions are predicates that
     must be true for the action to trigger.
     """
+
     rule_id: str = field(default_factory=_ulid)
     conditions: list[dict[str, Any]] = field(default_factory=list)
     action: str = "buy"  # "buy" or "sell"
@@ -105,6 +106,7 @@ class TradingRule:
 @dataclass
 class ExtractionResult:
     """Result of a single extraction run."""
+
     result_id: str = field(default_factory=_ulid)
     rules: list[TradingRule] = field(default_factory=list)
     source_trade_count: int = 0
@@ -171,6 +173,7 @@ class ShadowExtractor:
         since = None
         if lookback_days > 0:
             from datetime import timedelta
+
             since = (datetime.now(UTC) - timedelta(days=lookback_days)).strftime(
                 "%Y-%m-%dT%H:%M:%S.%fZ"
             )
@@ -356,10 +359,12 @@ class ShadowExtractor:
         if regimes:
             most_common_regime = max(set(regimes), key=regimes.count)
             if regimes.count(most_common_regime) >= len(trades) * 0.6:
-                conditions.append({
-                    "type": "regime_match",
-                    "value": most_common_regime,
-                })
+                conditions.append(
+                    {
+                        "type": "regime_match",
+                        "value": most_common_regime,
+                    }
+                )
 
         # Check for signal score patterns
         scores = [t.signal_score for t in trades if t.signal_score is not None]
@@ -373,10 +378,12 @@ class ShadowExtractor:
         if vol_regimes:
             most_common_vol = max(set(vol_regimes), key=vol_regimes.count)
             if vol_regimes.count(most_common_vol) >= len(trades) * 0.6:
-                conditions.append({
-                    "type": "volatility_regime_match",
-                    "value": most_common_vol,
-                })
+                conditions.append(
+                    {
+                        "type": "volatility_regime_match",
+                        "value": most_common_vol,
+                    }
+                )
 
         # Check for holding period patterns
         holding_periods = [t.holding_period_hours for t in trades if t.holding_period_hours]
@@ -399,6 +406,7 @@ class ShadowExtractor:
         self, winners: list[TradeRecord], losers: list[TradeRecord]
     ) -> dict[str, Any]:
         """Create a structured summary of trade groups for the LLM."""
+
         def _trade_to_summary(t: TradeRecord) -> dict[str, Any]:
             return {
                 "trade_id": t.trade_id,
@@ -435,9 +443,7 @@ class ShadowExtractor:
             ),
         }
 
-    def _build_extraction_prompt(
-        self, trade_summaries: dict[str, Any], group_key: str
-    ) -> str:
+    def _build_extraction_prompt(self, trade_summaries: dict[str, Any], group_key: str) -> str:
         """Build the LLM prompt for rule extraction."""
         return get_prompt(
             "t3_shadow_rule_extraction",
@@ -445,9 +451,7 @@ class ShadowExtractor:
             trade_data=json.dumps(trade_summaries, indent=2, default=str),
         )
 
-    def _parse_rules(
-        self, llm_output: str, source_trades: list[TradeRecord]
-    ) -> list[TradingRule]:
+    def _parse_rules(self, llm_output: str, source_trades: list[TradeRecord]) -> list[TradingRule]:
         """Parse LLM JSON output into TradingRule objects."""
         try:
             data = json.loads(llm_output)

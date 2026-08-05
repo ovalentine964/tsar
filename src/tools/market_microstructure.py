@@ -24,8 +24,8 @@ import logging
 import time
 from collections import defaultdict
 from dataclasses import dataclass, field
-from datetime import UTC, datetime, timedelta
-from enum import Enum
+from datetime import UTC, datetime
+from enum import StrEnum
 from typing import Any
 
 import httpx
@@ -38,8 +38,9 @@ logger = logging.getLogger(__name__)
 # ═══════════════════════════════════════════════════════════════════════
 
 
-class PressureType(str, Enum):
+class PressureType(StrEnum):
     """Order book pressure classification."""
+
     BUY_PRESSURE = "buy_pressure"
     SELL_PRESSURE = "sell_pressure"
     BALANCED = "balanced"
@@ -338,9 +339,15 @@ class MarketMicrostructureTools:
 
         # Return a placeholder if all sources fail
         return SpreadAnalysis(
-            symbol=symbol, bid=0.0, ask=0.0, spread=0.0,
-            spread_bps=0.0, spread_pct=0.0, mid_price=0.0,
-            liquidity_score=0.0, timestamp=datetime.now(UTC),
+            symbol=symbol,
+            bid=0.0,
+            ask=0.0,
+            spread=0.0,
+            spread_bps=0.0,
+            spread_pct=0.0,
+            mid_price=0.0,
+            liquidity_score=0.0,
+            timestamp=datetime.now(UTC),
         )
 
     def _compute_spread(self, symbol: str, bid: float, ask: float) -> SpreadAnalysis:
@@ -435,14 +442,16 @@ class MarketMicrostructureTools:
 
         # Fallback
         return OrderBookImbalance(
-            symbol=symbol, bid_volume=0.0, ask_volume=0.0,
-            imbalance_ratio=1.0, pressure="balanced",
-            pressure_strength=0.0, timestamp=datetime.now(UTC),
+            symbol=symbol,
+            bid_volume=0.0,
+            ask_volume=0.0,
+            imbalance_ratio=1.0,
+            pressure="balanced",
+            pressure_strength=0.0,
+            timestamp=datetime.now(UTC),
         )
 
-    def _analyze_order_book(
-        self, symbol: str, data: dict, levels: int
-    ) -> OrderBookImbalance:
+    def _analyze_order_book(self, symbol: str, data: dict, levels: int) -> OrderBookImbalance:
         """Analyze raw order book data."""
         bids = [(float(p), float(q)) for p, q in data.get("bids", [])]
         asks = [(float(p), float(q)) for p, q in data.get("asks", [])]
@@ -532,19 +541,25 @@ class MarketMicrostructureTools:
             logger.debug("Volume profile fetch failed for %s: %s", symbol, e)
 
         return VolumeProfile(
-            symbol=symbol, poc_price=0.0, poc_volume=0.0,
-            vah=0.0, val=0.0, timeframe=interval,
+            symbol=symbol,
+            poc_price=0.0,
+            poc_volume=0.0,
+            vah=0.0,
+            val=0.0,
+            timeframe=interval,
             timestamp=datetime.now(UTC),
         )
 
-    def _build_volume_profile(
-        self, symbol: str, klines: list, interval: str
-    ) -> VolumeProfile:
+    def _build_volume_profile(self, symbol: str, klines: list, interval: str) -> VolumeProfile:
         """Build volume profile from kline data."""
         if not klines:
             return VolumeProfile(
-                symbol=symbol, poc_price=0.0, poc_volume=0.0,
-                vah=0.0, val=0.0, timeframe=interval,
+                symbol=symbol,
+                poc_price=0.0,
+                poc_volume=0.0,
+                vah=0.0,
+                val=0.0,
+                timeframe=interval,
                 timestamp=datetime.now(UTC),
             )
 
@@ -584,13 +599,15 @@ class MarketMicrostructureTools:
         # Build levels
         levels = []
         for price, data in sorted(price_volumes.items()):
-            levels.append(VolumeLevel(
-                price=price,
-                volume=data["volume"],
-                buy_volume=data["buy"],
-                sell_volume=data["sell"],
-                num_trades=int(data["trades"]),
-            ))
+            levels.append(
+                VolumeLevel(
+                    price=price,
+                    volume=data["volume"],
+                    buy_volume=data["buy"],
+                    sell_volume=data["sell"],
+                    num_trades=int(data["trades"]),
+                )
+            )
 
         # Find POC (Point of Control)
         poc_level = max(levels, key=lambda l: l.volume)
@@ -624,8 +641,8 @@ class MarketMicrostructureTools:
 
         # Determine profile shape
         if len(levels) >= 3:
-            upper_vol = sum(l.volume for l in levels[len(levels)//2:])
-            lower_vol = sum(l.volume for l in levels[:len(levels)//2])
+            upper_vol = sum(l.volume for l in levels[len(levels) // 2 :])
+            lower_vol = sum(l.volume for l in levels[: len(levels) // 2])
             ratio = upper_vol / lower_vol if lower_vol > 0 else 2.0
 
             if 0.8 <= ratio <= 1.2:
@@ -640,8 +657,10 @@ class MarketMicrostructureTools:
             # Check for bimodal (two peaks)
             peaks = 0
             for i in range(1, len(levels) - 1):
-                if (levels[i].volume > levels[i-1].volume and
-                        levels[i].volume > levels[i+1].volume):
+                if (
+                    levels[i].volume > levels[i - 1].volume
+                    and levels[i].volume > levels[i + 1].volume
+                ):
                     peaks += 1
             if peaks >= 2:
                 shape = "bimodal"
@@ -654,17 +673,23 @@ class MarketMicrostructureTools:
             if level.volume > avg_vol * 2:
                 if level.price < poc_level.price:
                     level = VolumeLevel(
-                        price=level.price, volume=level.volume,
-                        buy_volume=level.buy_volume, sell_volume=level.sell_volume,
+                        price=level.price,
+                        volume=level.volume,
+                        buy_volume=level.buy_volume,
+                        sell_volume=level.sell_volume,
                         num_trades=level.num_trades,
-                        is_support=True, is_resistance=False,
+                        is_support=True,
+                        is_resistance=False,
                     )
                 elif level.price > poc_level.price:
                     level = VolumeLevel(
-                        price=level.price, volume=level.volume,
-                        buy_volume=level.buy_volume, sell_volume=level.sell_volume,
+                        price=level.price,
+                        volume=level.volume,
+                        buy_volume=level.buy_volume,
+                        sell_volume=level.sell_volume,
                         num_trades=level.num_trades,
-                        is_support=False, is_resistance=True,
+                        is_support=False,
+                        is_resistance=True,
                     )
 
         return VolumeProfile(
@@ -735,9 +760,10 @@ class MarketMicrostructureTools:
                     ask_depth = sum(q for p, q in asks if p <= current_price + range_abs)
 
                     # Find clusters (levels with unusually high volume)
-                    all_levels = [(p, q, "bid") for p, q in bids] + \
-                                 [(p, q, "ask") for p, q in asks]
-                    avg_qty = sum(q for _, q, _ in all_levels) / len(all_levels) if all_levels else 0
+                    all_levels = [(p, q, "bid") for p, q in bids] + [(p, q, "ask") for p, q in asks]
+                    avg_qty = (
+                        sum(q for _, q, _ in all_levels) / len(all_levels) if all_levels else 0
+                    )
 
                     for price, qty, side in all_levels:
                         if qty > avg_qty * 3:  # Cluster threshold
@@ -745,15 +771,17 @@ class MarketMicrostructureTools:
                             if side == "bid":
                                 cluster_type = "stop_sell"  # Stops below = sell stops
                             else:
-                                cluster_type = "stop_buy"   # Stops above = buy stops
+                                cluster_type = "stop_buy"  # Stops above = buy stops
 
-                            clusters.append(LiquidityCluster(
-                                price=price,
-                                volume=qty,
-                                cluster_type=cluster_type,
-                                distance_pct=distance_pct,
-                                significance=min(qty / (avg_qty * 5), 1.0),
-                            ))
+                            clusters.append(
+                                LiquidityCluster(
+                                    price=price,
+                                    volume=qty,
+                                    cluster_type=cluster_type,
+                                    distance_pct=distance_pct,
+                                    significance=min(qty / (avg_qty * 5), 1.0),
+                                )
+                            )
 
                     # Sort by significance
                     clusters.sort(key=lambda c: c.significance, reverse=True)
@@ -897,8 +925,8 @@ class MarketMicrostructureTools:
 
         # Micro-trend
         if len(prices) >= 10:
-            first_half_avg = sum(prices[:len(prices)//2]) / (len(prices)//2)
-            second_half_avg = sum(prices[len(prices)//2:]) / (len(prices) - len(prices)//2)
+            first_half_avg = sum(prices[: len(prices) // 2]) / (len(prices) // 2)
+            second_half_avg = sum(prices[len(prices) // 2 :]) / (len(prices) - len(prices) // 2)
             change_pct = (second_half_avg - first_half_avg) / first_half_avg * 100
             if change_pct > 0.05:
                 micro_trend = "bullish"

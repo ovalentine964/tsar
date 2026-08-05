@@ -136,10 +136,7 @@ class StopLossCalculator:
         mult = multiplier if multiplier is not None else self._default_atr_multiplier
         stop_distance = atr * mult
 
-        if side == "buy":
-            stop_price = entry_price - stop_distance
-        else:
-            stop_price = entry_price + stop_distance
+        stop_price = entry_price - stop_distance if side == "buy" else entry_price + stop_distance
 
         # Ensure stop is positive
         stop_price = max(0.0001, stop_price)

@@ -48,6 +48,7 @@ class ValidatedRule:
     historical replay. Only rules that pass minimum thresholds
     should be forwarded to the GenomeMutator.
     """
+
     # Identity
     rule_id: str = field(default_factory=_ulid)
     source_rule_id: str = ""
@@ -104,6 +105,7 @@ class ValidatedRule:
 @dataclass
 class OHLCVCandle:
     """A single OHLCV candle for backtesting."""
+
     timestamp: str = ""
     open: float = 0.0
     high: float = 0.0
@@ -284,25 +286,27 @@ class RuleValidator:
         for rule in rules:
             try:
                 validated = await self.validate(
-                    rule, symbol=symbol, timeframe=timeframe,
+                    rule,
+                    symbol=symbol,
+                    timeframe=timeframe,
                     lookback_candles=lookback_candles,
                 )
                 results.append(validated)
             except Exception as e:
                 logger.error("rule_validate_error", rule_id=rule.rule_id, error=str(e))
-                results.append(ValidatedRule(
-                    source_rule_id=rule.rule_id,
-                    conditions=rule.conditions,
-                    action=rule.action,
-                    validation_status="failed",
-                ))
+                results.append(
+                    ValidatedRule(
+                        source_rule_id=rule.rule_id,
+                        conditions=rule.conditions,
+                        action=rule.action,
+                        validation_status="failed",
+                    )
+                )
         return results
 
     # ── Replay Engine ────────────────────────────────────────
 
-    def _replay_rule(
-        self, rule: TradingRule, candles: list[OHLCVCandle]
-    ) -> list[dict[str, Any]]:
+    def _replay_rule(self, rule: TradingRule, candles: list[OHLCVCandle]) -> list[dict[str, Any]]:
         """Replay a rule against candle data, producing simulated trades.
 
         Walks through candles, checks if rule conditions are met,
@@ -325,14 +329,16 @@ class RuleValidator:
                 else:  # sell
                     pnl_pct = (entry_price - exit_price) / entry_price
 
-                trades.append({
-                    "entry_idx": i,
-                    "exit_idx": i + holding_period,
-                    "entry_price": entry_price,
-                    "exit_price": exit_price,
-                    "pnl_pct": pnl_pct,
-                    "holding_candles": holding_period,
-                })
+                trades.append(
+                    {
+                        "entry_idx": i,
+                        "exit_idx": i + holding_period,
+                        "entry_price": entry_price,
+                        "exit_price": exit_price,
+                        "pnl_pct": pnl_pct,
+                        "holding_candles": holding_period,
+                    }
+                )
 
         return trades
 
@@ -421,9 +427,7 @@ class RuleValidator:
     # ── Technical Indicators ─────────────────────────────────
 
     @staticmethod
-    def _compute_rsi(
-        candles: list[OHLCVCandle], idx: int, period: int = 14
-    ) -> float | None:
+    def _compute_rsi(candles: list[OHLCVCandle], idx: int, period: int = 14) -> float | None:
         """Compute RSI at a given candle index."""
         if idx < period:
             return None
@@ -445,9 +449,7 @@ class RuleValidator:
         return 100.0 - (100.0 / (1.0 + rs))
 
     @staticmethod
-    def _compute_sma(
-        candles: list[OHLCVCandle], idx: int, period: int
-    ) -> float | None:
+    def _compute_sma(candles: list[OHLCVCandle], idx: int, period: int) -> float | None:
         """Compute Simple Moving Average at a given candle index."""
         if idx < period - 1:
             return None
@@ -455,9 +457,7 @@ class RuleValidator:
         return total / period
 
     @staticmethod
-    def _compute_avg_volume(
-        candles: list[OHLCVCandle], idx: int, period: int = 20
-    ) -> float | None:
+    def _compute_avg_volume(candles: list[OHLCVCandle], idx: int, period: int = 20) -> float | None:
         """Compute average volume over a lookback period."""
         if idx < period:
             return None
@@ -471,10 +471,17 @@ class RuleValidator:
         """Compute backtest performance metrics from simulated trades."""
         if not trades:
             return {
-                "sharpe": 0.0, "win_rate": 0.0, "profit_factor": 0.0,
-                "max_drawdown": 0.0, "avg_return_pct": 0.0,
-                "total_trades": 0, "winning_trades": 0, "losing_trades": 0,
-                "avg_winner_pct": 0.0, "avg_loser_pct": 0.0, "expectancy": 0.0,
+                "sharpe": 0.0,
+                "win_rate": 0.0,
+                "profit_factor": 0.0,
+                "max_drawdown": 0.0,
+                "avg_return_pct": 0.0,
+                "total_trades": 0,
+                "winning_trades": 0,
+                "losing_trades": 0,
+                "avg_winner_pct": 0.0,
+                "avg_loser_pct": 0.0,
+                "expectancy": 0.0,
             }
 
         returns = [t["pnl_pct"] for t in trades]
@@ -493,8 +500,10 @@ class RuleValidator:
         # Profit factor = gross_profit / gross_loss
         gross_profit = sum(winners) if winners else 0.0
         gross_loss = abs(sum(losers)) if losers else 0.0
-        profit_factor = gross_profit / gross_loss if gross_loss > 0 else (
-            float("inf") if gross_profit > 0 else 0.0
+        profit_factor = (
+            gross_profit / gross_loss
+            if gross_loss > 0
+            else (float("inf") if gross_profit > 0 else 0.0)
         )
 
         # Sharpe ratio (annualized, assuming hourly candles → 8760 periods/year)

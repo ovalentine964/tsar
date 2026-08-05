@@ -16,15 +16,21 @@ BaseStrategy interface for registration in TSAR's StrategyRegistry.
 from __future__ import annotations
 
 import logging
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from src.strategy.base import BaseStrategy
-from src.strategy.genome import StrategyGenome
+from src.strategy.vmpm.entry_pipeline import EntryPipeline
+from src.strategy.vmpm.fundamental_analyzer import (
+    BiasDirection,
+    FundamentalAnalyzer,
+    FundamentalBias,
+)
+from src.strategy.vmpm.level_mapper import LevelMapper
 from src.strategy.vmpm.session_manager import SessionManager
-from src.strategy.vmpm.fundamental_analyzer import FundamentalAnalyzer, FundamentalBias, BiasDirection
-from src.strategy.vmpm.trend_detector import TrendDetector, TrendDirection, TrendState
-from src.strategy.vmpm.level_mapper import LevelMapper, MappedLevels
-from src.strategy.vmpm.entry_pipeline import EntryPipeline, PipelineResult
+from src.strategy.vmpm.trend_detector import TrendDetector, TrendDirection
+
+if TYPE_CHECKING:
+    from src.strategy.genome import StrategyGenome
 
 logger = logging.getLogger(__name__)
 
@@ -54,9 +60,7 @@ class VMPMStrategy(BaseStrategy):
             self._params = genome.params
             self._config = {
                 **genome.metadata,
-                "mutable_parameters": {
-                    k: {"current": v} for k, v in genome.params.items()
-                },
+                "mutable_parameters": {k: {"current": v} for k, v in genome.params.items()},
             }
         else:
             self._genome = None
@@ -164,7 +168,9 @@ class VMPMStrategy(BaseStrategy):
             if not pipeline_result.passed:
                 logger.info(
                     "VMPM %s: Pipeline REJECTED (score=%.3f) — %s",
-                    symbol, pipeline_result.total_score, pipeline_result.reasoning,
+                    symbol,
+                    pipeline_result.total_score,
+                    pipeline_result.reasoning,
                 )
                 return None
 
@@ -181,7 +187,9 @@ class VMPMStrategy(BaseStrategy):
                 "reasoning": pipeline_result.reasoning,
                 "components": {
                     "session_score": session_score,
-                    "session": session_info.primary_session.value if session_info.primary_session else "none",
+                    "session": session_info.primary_session.value
+                    if session_info.primary_session
+                    else "none",
                     "is_overlap": session_info.is_overlap,
                     "trend_direction": trend_state.direction.value,
                     "trend_aligned": trend_state.aligned,
@@ -189,8 +197,12 @@ class VMPMStrategy(BaseStrategy):
                     "trend_confluence": round(trend_state.confluence_score, 3),
                     "fundamental_bias": fundamental_bias.direction.value,
                     "fundamental_confidence": round(fundamental_bias.confidence, 3),
-                    "nearest_level_type": pipeline_result.nearest_level.level_type.value if pipeline_result.nearest_level else "none",
-                    "nearest_level_price": pipeline_result.nearest_level.price if pipeline_result.nearest_level else 0,
+                    "nearest_level_type": pipeline_result.nearest_level.level_type.value
+                    if pipeline_result.nearest_level
+                    else "none",
+                    "nearest_level_price": pipeline_result.nearest_level.price
+                    if pipeline_result.nearest_level
+                    else 0,
                     "candle_pattern": pipeline_result.candle_pattern.value,
                     "pipeline_stages": [
                         {"stage": s.stage.value, "passed": s.passed, "score": round(s.score, 4)}
@@ -201,9 +213,13 @@ class VMPMStrategy(BaseStrategy):
 
             logger.info(
                 "VMPM SIGNAL: %s %s score=%.3f entry=%.5f sl=%.5f tp=%.5f | %s",
-                symbol, side, pipeline_result.total_score,
-                pipeline_result.entry_price, pipeline_result.stop_loss,
-                pipeline_result.take_profit, pipeline_result.reasoning,
+                symbol,
+                side,
+                pipeline_result.total_score,
+                pipeline_result.entry_price,
+                pipeline_result.stop_loss,
+                pipeline_result.take_profit,
+                pipeline_result.reasoning,
             )
 
             return signal
@@ -399,7 +415,13 @@ class VMPMStrategy(BaseStrategy):
 
             def ohlcv_to_dicts(bars):
                 return [
-                    {"open": b.open, "high": b.high, "low": b.low, "close": b.close, "volume": b.volume}
+                    {
+                        "open": b.open,
+                        "high": b.high,
+                        "low": b.low,
+                        "close": b.close,
+                        "volume": b.volume,
+                    }
                     for b in bars
                 ]
 

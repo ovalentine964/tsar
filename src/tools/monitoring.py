@@ -17,7 +17,6 @@ Integrates with GuardStatePersistence, DrawdownMonitor, KillSwitch, and EventBus
 
 from __future__ import annotations
 
-import asyncio
 import json
 import logging
 import math
@@ -368,7 +367,10 @@ class PnLTracker:
 
         logger.info(
             "PnLTracker: recorded trade %s %s pnl=%.2f (%.2f%%)",
-            trade.symbol, trade.side, trade.realized_pnl, trade.realized_pnl_pct,
+            trade.symbol,
+            trade.side,
+            trade.realized_pnl,
+            trade.realized_pnl_pct,
         )
         self._save()
 
@@ -437,12 +439,8 @@ class PnLTracker:
 
         week_cutoff = (now - timedelta(days=7)).strftime("%Y-%m-%d")
         month_cutoff = (now - timedelta(days=30)).strftime("%Y-%m-%d")
-        realized_week = sum(
-            pnl for day, pnl in self._daily_pnl.items() if day >= week_cutoff
-        )
-        realized_month = sum(
-            pnl for day, pnl in self._daily_pnl.items() if day >= month_cutoff
-        )
+        realized_week = sum(pnl for day, pnl in self._daily_pnl.items() if day >= week_cutoff)
+        realized_month = sum(pnl for day, pnl in self._daily_pnl.items() if day >= month_cutoff)
 
         return PnLSnapshot(
             unrealized_pnl=round(unrealized, 4),
@@ -545,24 +543,27 @@ class PnLTracker:
             self._total_fees = state.get("total_fees", 0.0)
             self._daily_pnl = defaultdict(float, state.get("daily_pnl", {}))
             for t in state.get("trades", []):
-                self._completed_trades.append(TradeRecord(
-                    trade_id=t["trade_id"],
-                    symbol=t["symbol"],
-                    side=t["side"],
-                    strategy=t.get("strategy", ""),
-                    regime=t.get("regime", ""),
-                    entry_price=t.get("entry_price", 0.0),
-                    exit_price=t.get("exit_price", 0.0),
-                    quantity=t.get("quantity", 0.0),
-                    realized_pnl=t.get("realized_pnl", 0.0),
-                    realized_pnl_pct=t.get("realized_pnl_pct", 0.0),
-                    fees=t.get("fees", 0.0),
-                    entry_time=_parse_dt(t.get("entry_time")),
-                    exit_time=_parse_dt(t.get("exit_time")),
-                ))
+                self._completed_trades.append(
+                    TradeRecord(
+                        trade_id=t["trade_id"],
+                        symbol=t["symbol"],
+                        side=t["side"],
+                        strategy=t.get("strategy", ""),
+                        regime=t.get("regime", ""),
+                        entry_price=t.get("entry_price", 0.0),
+                        exit_price=t.get("exit_price", 0.0),
+                        quantity=t.get("quantity", 0.0),
+                        realized_pnl=t.get("realized_pnl", 0.0),
+                        realized_pnl_pct=t.get("realized_pnl_pct", 0.0),
+                        fees=t.get("fees", 0.0),
+                        entry_time=_parse_dt(t.get("entry_time")),
+                        exit_time=_parse_dt(t.get("exit_time")),
+                    )
+                )
             logger.info(
                 "PnLTracker: loaded %d trades, total_pnl=%.2f",
-                len(self._completed_trades), self._total_realized_pnl,
+                len(self._completed_trades),
+                self._total_realized_pnl,
             )
         except Exception as e:
             logger.error("PnLTracker: failed to load state: %s", e)
@@ -594,9 +595,7 @@ class WinRateTracker:
         self._max_history = max_history
 
         # Trade outcomes ring buffer: list of (is_win, pnl, strategy, symbol, regime)
-        self._outcomes: deque[tuple[bool, float, str, str, str]] = deque(
-            maxlen=max_history
-        )
+        self._outcomes: deque[tuple[bool, float, str, str, str]] = deque(maxlen=max_history)
 
     def record_outcome(
         self,
@@ -672,7 +671,8 @@ class WinRateTracker:
         gross_profit = sum(win_pnls)
         gross_loss = sum(loss_pnls)
         profit_factor = (
-            round(gross_profit / gross_loss, 4) if gross_loss > 0
+            round(gross_profit / gross_loss, 4)
+            if gross_loss > 0
             else (float("inf") if gross_profit > 0 else 0.0)
         )
         total_pnl = sum(o[1] for o in outcomes)
@@ -685,11 +685,7 @@ class WinRateTracker:
                 key = o[idx]
                 if key:
                     groups[key].append(o[0])
-            return {
-                k: round(sum(v) / len(v), 4)
-                for k, v in groups.items()
-                if v
-            }
+            return {k: round(sum(v) / len(v), 4) for k, v in groups.items() if v}
 
         return WinRateSnapshot(
             overall_win_rate=round(wins / total, 4) if total > 0 else 0.0,
@@ -697,8 +693,8 @@ class WinRateTracker:
             win_rate_50=_win_rate_window(50),
             win_rate_100=_win_rate_window(100),
             by_strategy=_breakdown(2),  # strategy
-            by_symbol=_breakdown(3),    # symbol
-            by_regime=_breakdown(4),    # regime
+            by_symbol=_breakdown(3),  # symbol
+            by_regime=_breakdown(4),  # regime
             total_trades=total,
             total_wins=wins,
             total_losses=losses,
@@ -801,12 +797,14 @@ class EquityCurve:
         # Initialize with starting equity if provided
         if initial_equity > 0:
             now = datetime.now(UTC)
-            self._equity_points.append(EquityPoint(
-                timestamp=now,
-                equity=initial_equity,
-                high_water_mark=initial_equity,
-                drawdown_pct=0.0,
-            ))
+            self._equity_points.append(
+                EquityPoint(
+                    timestamp=now,
+                    equity=initial_equity,
+                    high_water_mark=initial_equity,
+                    drawdown_pct=0.0,
+                )
+            )
 
     def update(
         self,
@@ -831,9 +829,7 @@ class EquityCurve:
             self._high_water_mark = equity
             # Close any open drawdown period
             if self._drawdown_start is not None:
-                self._drawdown_periods.append((
-                    self._drawdown_start, ts, self._max_drawdown_pct
-                ))
+                self._drawdown_periods.append((self._drawdown_start, ts, self._max_drawdown_pct))
                 self._drawdown_start = None
                 self._max_drawdown_pct = 0.0
 
@@ -886,9 +882,7 @@ class EquityCurve:
         cutoff = now - timedelta(days=lookback_days)
 
         # Filter points to lookback window
-        curve_points = tuple(
-            p for p in self._equity_points if p.timestamp >= cutoff
-        )
+        curve_points = tuple(p for p in self._equity_points if p.timestamp >= cutoff)
 
         # Close any open drawdown period
         dd_periods = list(self._drawdown_periods)
@@ -1099,9 +1093,7 @@ class RiskStateMonitor:
             recovery_active = recovery_state.get("active", False)
             recovery_level = recovery_state.get("level", "")
             if recovery_active:
-                recovery_allocation = self._risk_governor.get_recovery_allocation(
-                    recovery_level
-                )
+                recovery_allocation = self._risk_governor.get_recovery_allocation(recovery_level)
 
         return RiskStateSnapshot(
             risk_level=risk_level,
@@ -1389,8 +1381,7 @@ class AlertGenerator:
             severity=AlertSeverity.WARNING,
             title=f"🔴 Loss Streak: {consecutive_losses} consecutive losses",
             message=(
-                f"Consecutive losses: {consecutive_losses}\n"
-                f"Streak loss: {total_loss:+.2f} USDT"
+                f"Consecutive losses: {consecutive_losses}\nStreak loss: {total_loss:+.2f} USDT"
             ),
             key="loss_streak",
             data={
@@ -1418,8 +1409,7 @@ class AlertGenerator:
             severity=AlertSeverity.INFO,
             title=f"🟢 Win Streak: {consecutive_wins} consecutive wins",
             message=(
-                f"Consecutive wins: {consecutive_wins}\n"
-                f"Streak profit: {total_profit:+.2f} USDT"
+                f"Consecutive wins: {consecutive_wins}\nStreak profit: {total_profit:+.2f} USDT"
             ),
             key="win_streak",
             data={
@@ -1753,20 +1743,14 @@ class MonitoringTools:
         if streak["consecutive_losses"] >= 3:
             # Sum losses in current streak
             recent = list(self.win_rate._outcomes)
-            streak_loss = sum(
-                o[1] for o in reversed(recent)
-                if not o[0]
-            )
+            streak_loss = sum(o[1] for o in reversed(recent) if not o[0])
             await self.alerts.emit_loss_streak(
                 consecutive_losses=streak["consecutive_losses"],
                 total_loss=streak_loss,
             )
         if streak["consecutive_wins"] >= 5:
             recent = list(self.win_rate._outcomes)
-            streak_profit = sum(
-                o[1] for o in reversed(recent)
-                if o[0]
-            )
+            streak_profit = sum(o[1] for o in reversed(recent) if o[0])
             await self.alerts.emit_win_streak(
                 consecutive_wins=streak["consecutive_wins"],
                 total_profit=streak_profit,

@@ -27,10 +27,9 @@ from __future__ import annotations
 import logging
 import uuid
 from datetime import UTC, datetime
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from src.interfaces.execution_engine import ExecutionEngine
-from src.interfaces.exchange_gateway import ExchangeGateway
 from src.interfaces.types import (
     BracketOrder,
     ExecutionResult,
@@ -41,6 +40,9 @@ from src.interfaces.types import (
     OrderType,
     Price,
 )
+
+if TYPE_CHECKING:
+    from src.interfaces.exchange_gateway import ExchangeGateway
 
 logger = logging.getLogger(__name__)
 
@@ -321,17 +323,19 @@ class PaperExecutionEngine(ExecutionEngine):
             fill_notional = fill_qty * fill_price
             fill_fee = fill_notional * (self._fee_rate_bps / 10_000)
 
-            fills.append(Fill(
-                fill_id=f"{order_id}:fill:{i}",
-                order_id=order_id,
-                symbol=order.symbol,
-                side=order.side,
-                price=fill_price,
-                quantity=fill_qty,
-                fee=fill_fee,
-                fee_currency=self._quote_currency,
-                timestamp=_utcnow(),
-            ))
+            fills.append(
+                Fill(
+                    fill_id=f"{order_id}:fill:{i}",
+                    order_id=order_id,
+                    symbol=order.symbol,
+                    side=order.side,
+                    price=fill_price,
+                    quantity=fill_qty,
+                    fee=fill_fee,
+                    fee_currency=self._quote_currency,
+                    timestamp=_utcnow(),
+                )
+            )
 
             remaining_qty -= fill_qty
 
@@ -477,10 +481,7 @@ class PaperExecutionEngine(ExecutionEngine):
         Returns:
             List of open Order objects.
         """
-        return [
-            order for order in self._open_orders.values()
-            if order.symbol == symbol
-        ]
+        return [order for order in self._open_orders.values() if order.symbol == symbol]
 
     async def get_fills(self, order_id: str) -> list[Fill]:
         """Get fills for a paper order.
@@ -558,8 +559,7 @@ class PaperExecutionEngine(ExecutionEngine):
             order.price is None or order.price <= 0
         ):
             raise ValueError(
-                f"{order.order_type.value} order requires a positive price, "
-                f"got {order.price}"
+                f"{order.order_type.value} order requires a positive price, got {order.price}"
             )
 
         if order.order_type in (OrderType.STOP_MARKET, OrderType.STOP_LIMIT) and (
@@ -571,9 +571,7 @@ class PaperExecutionEngine(ExecutionEngine):
             )
 
         if not order.symbol or "/" not in order.symbol:
-            raise ValueError(
-                f"Invalid symbol format: '{order.symbol}' — expected 'BASE/QUOTE'"
-            )
+            raise ValueError(f"Invalid symbol format: '{order.symbol}' — expected 'BASE/QUOTE'")
 
     async def _get_current_price(self, symbol: str) -> Price | None:
         """Get current price from the gateway.
@@ -691,7 +689,8 @@ class PaperExecutionEngine(ExecutionEngine):
             if new_qty > 0:
                 avg_entry = (
                     (old_entry * old_qty + fill_price * order.quantity) / new_qty
-                    if old_qty > 0 else fill_price
+                    if old_qty > 0
+                    else fill_price
                 )
             else:
                 avg_entry = 0.0
